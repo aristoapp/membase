@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Membase Plugin/MCP Context Board</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --text: #1f2933;
+        --muted: #5f6b7a;
+        --border: #d9e1ea;
+        --accent: #116d6e;
+        --accent-soft: #e8f5f5;
+        --warn: #8a5a00;
+        --warn-soft: #fff4d6;
+        --done: #247a48;
+        --todo: #3451a4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      header {
+        margin-bottom: 24px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-size: 34px;
+        line-height: 1.15;
+      }
+
+      h2 {
+        margin-bottom: 12px;
+        font-size: 20px;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      p,
+      li {
+        color: var(--muted);
+      }
+
+      code {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: #f3f6f8;
+        color: var(--text);
+        padding: 1px 5px;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.92em;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .lede {
+        max-width: 780px;
+        font-size: 17px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--muted);
+        padding: 4px 10px;
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+      }
+
+      .card {
+        grid-column: span 6;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 18px;
+      }
+
+      .card.full {
+        grid-column: 1 / -1;
+      }
+
+      .callout {
+        border-color: #b7d7d7;
+        background: var(--accent-soft);
+      }
+
+      .warning {
+        border-color: #f0d48b;
+        background: var(--warn-soft);
+      }
+
+      .status-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .status-list li {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fbfcfd;
+        padding: 10px;
+      }
+
+      .status-label {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .done {
+        color: var(--done);
+      }
+
+      .todo {
+        color: var(--todo);
+      }
+
+      .warn {
+        color: var(--warn);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      td {
+        color: var(--muted);
+      }
+
+      .update-rule {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      @media (max-width: 760px) {
+        main {
+          padding: 24px 14px 36px;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+
+        .card {
+          grid-column: 1 / -1;
+        }
+
+        .status-list {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Membase Plugin/MCP 통합 레포 Context Board</h1>
+        <p class="lede">
+          이 파일은 사람과 자동화가 같은 맥락을 보도록 유지하는 단일 상태판이다.
+          출시 문서가 아니라 작업 동기화 문서이며, Linear 프로젝트
+          <strong>Plugin/MCP 통합 레포 출시</strong>를 그대로 source of truth로 둔다.
+        </p>
+        <div class="meta">
+          <span class="pill">Last updated: 2026-06-28 11:32 UTC</span>
+          <span class="pill">Repo: membase-plugin-mcp</span>
+          <span class="pill">Mode: local integration work</span>
+          <span class="pill">External mutation: none</span>
+        </div>
+      </header>
+
+      <section class="grid">
+        <article class="card callout">
+          <h2>한 줄 요약</h2>
+          <p>
+            지금 만드는 것은 SDK 단독 제품이 아니라, 공통 connector core/SDK,
+            Claude, Cursor, Hermes, OpenClaw adapter, manifest, install docs,
+            smoke tests, security guardrails, migration plan을 한 레포에 모으는
+            Plugin/MCP 통합 레포다.
+          </p>
+        </article>
+
+        <article class="card warning">
+          <h2>주의할 점</h2>
+          <p>
+            현재 adapter 내부 capability 이름은 최종 MCP tool 이름을 확정한 것이 아니다.
+            실제 tool naming은 기존 Membase MCP 호환성과 migration parity를 확인한 뒤
+            확정한다.
+          </p>
+        </article>
+
+        <article class="card full">
+          <h2>왜 하는가</h2>
+          <p>
+            기존 Claude, Cursor, Hermes, OpenClaw connector repo가 client별로 흩어져
+            있고 구조도 서로 다르다. 이 레포는 공통 설치, auth, MCP config, adapter
+            boundary를 한 곳에 두어 유지보수 비용을 낮추고, marketplace와 deprecation
+            계획을 일관되게 만들기 위한 통합 target이다.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Source of Truth</h2>
+          <ul>
+            <li>Linear project: <code>Plugin/MCP 통합 레포 출시</code></li>
+            <li><code>MEM-327</code>: architecture decision</li>
+            <li><code>MEM-328</code>: repo scaffolding</li>
+            <li><code>MEM-329</code>: shared auth, install, MCP core</li>
+            <li><code>MEM-330</code>: migrate four existing client repos</li>
+            <li><code>MEM-331</code>: README, install docs, marketplace assets</li>
+            <li><code>MEM-332</code>: old repo deprecation and star concentration</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Architecture Decision</h2>
+          <p>
+            Connectors expose stable capabilities and install/config artifacts.
+            Membase internal implementation details stay behind the product API.
+            Shared behavior belongs in <code>packages/core</code> and
+            <code>packages/connector-sdk</code>. Client-specific behavior belongs in
+            <code>clients/*</code>.
+          </p>
+          <p>
+            Canonical decision file:
+            <a href="adr/0001-integrated-connector-repo.md">ADR 0001</a>.
+          </p>
+        </article>
+
+        <article class="card full">
+          <h2>Current Implementation Status</h2>
+          <ul class="status-list">
+            <li>
+              <span class="status-label done">Done: repo scaffolding</span>
+              pnpm workspace, TypeScript configs, package layout, README, PLAN,
+              architecture docs, run log.
+            </li>
+            <li>
+              <span class="status-label done">Done: shared core</span>
+              Runtime config, endpoint/auth env, MCP config generation, validation,
+              redacted diagnostics.
+            </li>
+            <li>
+              <span class="status-label done">Done: connector SDK boundary</span>
+              <code>ClientAdapter</code> interface with manifest, MCP config, and
+              smoke command declarations.
+            </li>
+            <li>
+              <span class="status-label done">Done: Claude adapter skeleton</span>
+              TypeScript package, plugin metadata, MCP config, install doc.
+            </li>
+            <li>
+              <span class="status-label done">Done: Cursor adapter skeleton</span>
+              TypeScript package, Cursor plugin metadata, stdio MCP config,
+              install doc.
+            </li>
+            <li>
+              <span class="status-label done">Done: Hermes adapter skeleton</span>
+              TypeScript package, native plugin metadata placeholder, MCP config,
+              install doc.
+            </li>
+            <li>
+              <span class="status-label done">Done: OpenClaw adapter skeleton</span>
+              TypeScript package, native OpenClaw manifest placeholder, MCP config,
+              install doc.
+            </li>
+            <li>
+              <span class="status-label done">Done: migration inventory</span>
+              Existing Claude, Cursor, Hermes, and OpenClaw repos are inventoried
+              in <code>docs/migration-parity.md</code> with parity gaps.
+            </li>
+            <li>
+              <span class="status-label done">Done: artifact checks</span>
+              Generated adapter output is verified against committed manifest
+              and MCP config examples in <code>pnpm check</code>.
+            </li>
+            <li>
+              <span class="status-label done">Done: smoke harness</span>
+              Dry-run smoke coverage validates adapter MCP config, secret
+              redaction, declared commands, and the public contract stub.
+            </li>
+            <li>
+              <span class="status-label done">Done: secret handling docs</span>
+              <code>docs/security.md</code> documents local env setup, redaction
+              guarantees, and live MCP smoke prerequisites. <code>pnpm check</code>
+              now includes a secret-hygiene guard.
+            </li>
+            <li>
+              <span class="status-label done">Done: test parity mapping</span>
+              Old client repo tests are mapped in <code>docs/test-coverage-parity.md</code>
+              into shared connector-contract coverage versus client-native parity tests.
+            </li>
+            <li>
+              <span class="status-label done">Done: Claude/Cursor install docs</span>
+              Claude and Cursor install guides now cover config placement,
+              secret references, generated artifact checks, and local smoke
+              verification.
+            </li>
+            <li>
+              <span class="status-label done">Done: Hermes/OpenClaw install docs</span>
+              Hermes and OpenClaw install guides now cover native metadata
+              placement, MCP config translation, secret references, generated
+              artifact checks, local smoke verification, and review checklists.
+            </li>
+            <li>
+              <span class="status-label done">Done: marketplace asset checklist</span>
+              <code>docs/marketplace-assets.md</code> tracks reusable old assets,
+              rewritten connector-capability copy, and client-specific publishing
+              blockers.
+            </li>
+            <li>
+              <span class="status-label done">Done: old repo deprecation plan</span>
+              <code>docs/deprecation-plan.md</code> tracks non-mutating README
+              notice sequencing, archive prerequisites, star concentration, and
+              per-client compatibility handoffs.
+            </li>
+            <li>
+              <span class="status-label done">Done: review-readiness guard</span>
+              <code>scripts/check-review-readiness.mjs</code> now verifies the
+              required docs, install guides, manifests, client artifacts, and
+              <code>pnpm check</code> guard composition.
+            </li>
+            <li>
+              <span class="status-label todo">Next: final quality pass</span>
+              Prepare the Linear-ready summary, re-run local checks, and review
+              remaining runtime-parity decisions without publishing or mutating
+              old repos.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card full">
+          <h2>Existing Repos Snapshot</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Repo</th>
+                  <th>Current shape</th>
+                  <th>Integration status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>aristoapp/claude-membase</code></td>
+                  <td>TypeScript Claude plugin repo with plugin metadata, source, tests.</td>
+                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                </tr>
+                <tr>
+                  <td><code>aristoapp/cursor-membase</code></td>
+                  <td>Cursor plugin bundle with plugin metadata, MCP config, rules, skills.</td>
+                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                </tr>
+                <tr>
+                  <td><code>aristoapp/hermes-membase</code></td>
+                  <td>Python package style Hermes plugin repo.</td>
+                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                </tr>
+                <tr>
+                  <td><code>aristoapp/openclaw-membase</code></td>
+                  <td>TypeScript OpenClaw plugin repo with OpenClaw manifest.</td>
+                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>Verification</h2>
+          <p>
+            Latest check: <code>pnpm check</code> passed. It typechecks
+            <code>packages/core</code>, <code>packages/connector-sdk</code>,
+            <code>clients/claude</code>, <code>clients/cursor</code>, and
+            <code>clients/hermes</code>, and <code>clients/openclaw</code>, verifies
+            generated manifest/MCP examples, runs the dry-run client smoke harness,
+            runs the secret-hygiene guard, then runs
+            <code>scripts/check-public-surface.sh</code>.
+          </p>
+          <p>
+            GitHub, Linear, marketplace publication, old repo deprecation, and merge
+            actions have not been performed.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Open Questions</h2>
+          <ul>
+            <li>Final MCP tool names are not locked by the adapter capability names.</li>
+            <li>OpenClaw runtime hooks and tools still need parity implementation.</li>
+            <li>Hermes native plugin runtime migration still needs a package-path decision.</li>
+            <li>Old remote MCP URL compatibility still needs a per-client decision.</li>
+            <li>Live MCP smoke tests need the shared MCP server package or equivalent local command path.</li>
+            <li>Client-native parity tests still need implementation after runtime migration decisions.</li>
+            <li>Old repo deprecation is planned, but no old repo mutation has been performed.</li>
+          </ul>
+        </article>
+
+        <article class="card full">
+          <h2>Update Rule</h2>
+          <ol class="update-rule">
+            <li>Update this file when a run changes architecture, adapter status, verification status, or next steps.</li>
+            <li>Keep this file human-readable first. Link to detailed docs instead of duplicating everything.</li>
+            <li>Do not treat this as public launch copy. It is an internal context sync board.</li>
+            <li>Do not include secrets or private implementation details.</li>
+            <li>After editing, update the timestamp at the top and run the normal repo check when practical.</li>
+          </ol>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,68 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  clients/claude:
+    dependencies:
+      '@membase/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  clients/cursor:
+    dependencies:
+      '@membase/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  clients/hermes:
+    dependencies:
+      '@membase/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  clients/openclaw:
+    dependencies:
+      '@membase/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
+  packages/connector-sdk:
+    dependencies:
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/core: {}
+
+packages:
+
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+snapshots:
+
+  typescript@6.0.3: {}

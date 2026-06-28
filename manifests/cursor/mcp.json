@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "membase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@membase/mcp-server"
+      ],
+      "env": {
+        "MEMBASE_API_BASE_URL": "https://api.membase.com",
+        "MEMBASE_API_KEY": "${env:MEMBASE_API_KEY}",
+        "MEMBASE_CLIENT_ID": "cursor",
+        "MEMBASE_CLIENT_NAME": "Cursor",
+        "MEMBASE_CLIENT_VERSION": "0.0.0"
+      }
+    }
+  }
+}

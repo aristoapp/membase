@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "membase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@membase/mcp-server"
+      ],
+      "env": {
+        "MEMBASE_API_BASE_URL": "https://api.membase.com",
+        "MEMBASE_API_KEY": "${MEMBASE_API_KEY}",
+        "MEMBASE_CLIENT_ID": "claude",
+        "MEMBASE_CLIENT_NAME": "Claude Code",
+        "MEMBASE_CLIENT_VERSION": "0.0.0"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "membase-plugin-mcp",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Integrated Membase Plugin/MCP connector repo.",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw",
+    "check": "pnpm generated-artifacts && node smoke/client-smoke.mjs && pnpm secret-hygiene && pnpm public-surface && pnpm review-readiness",
+    "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --clean",
+    "generated-artifacts": "pnpm typecheck && node scripts/check-generated-artifacts.mjs",
+    "public-surface": "scripts/check-public-surface.sh",
+    "review-readiness": "node scripts/check-review-readiness.mjs",
+    "secret-hygiene": "node scripts/check-secret-hygiene.mjs",
+    "smoke:dry-run": "pnpm typecheck && node smoke/client-smoke.mjs",
+    "smoke:execute": "pnpm typecheck && node smoke/client-smoke.mjs --execute",
+    "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --pretty false"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "id": "openclaw-membase",
+  "kind": "memory",
+  "skills": [
+    "skills"
+  ],
+  "uiHints": {
+    "apiUrl": {
+      "label": "Membase API URL",
+      "placeholder": "https://api.membase.com",
+      "advanced": true
+    },
+    "apiKeyEnv": {
+      "label": "API key environment variable",
+      "placeholder": "MEMBASE_API_KEY",
+      "help": "Name of the environment variable OpenClaw should read at runtime.",
+      "advanced": true
+    },
+    "tokenFile": {
+      "label": "OAuth token file",
+      "placeholder": "~/.openclaw/credentials/openclaw-membase.json",
+      "help": "Native OpenClaw plugin token cache path for OAuth-based installs.",
+      "advanced": true
+    },
+    "autoRecall": {
+      "label": "Auto-recall",
+      "help": "Inject relevant Membase context before an agent turn."
+    },
+    "autoWikiRecall": {
+      "label": "Auto wiki recall",
+      "help": "Inject relevant wiki documents before an agent turn."
+    },
+    "autoCapture": {
+      "label": "Auto-capture",
+      "help": "Store selected conversation context after an agent turn."
+    },
+    "maxRecallChars": {
+      "label": "Max recall context size",
+      "placeholder": "4000",
+      "help": "Maximum context characters injected per turn.",
+      "advanced": true
+    },
+    "debug": {
+      "label": "Debug logging",
+      "help": "Enable verbose connector diagnostics.",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiUrl": {
+        "type": "string",
+        "default": "https://api.membase.com"
+      },
+      "apiKeyEnv": {
+        "type": "string",
+        "default": "MEMBASE_API_KEY"
+      },
+      "tokenFile": {
+        "type": "string"
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": false
+      },
+      "autoWikiRecall": {
+        "type": "boolean",
+        "default": false
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": false
+      },
+      "maxRecallChars": {
+        "type": "number",
+        "minimum": 500,
+        "maximum": 16000,
+        "default": 4000
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false
+      }
+    }
+  }
+}

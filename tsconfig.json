@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/connector-sdk"
+    },
+    {
+      "path": "./clients/claude"
+    },
+    {
+      "path": "./clients/cursor"
+    },
+    {
+      "path": "./clients/hermes"
+    },
+    {
+      "path": "./clients/openclaw"
+    }
+  ]
+}

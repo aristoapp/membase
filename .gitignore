@@ -1,0 +1,13 @@
+node_modules/
+dist/
+clients/*/dist/
+packages/*/dist/
+*.tsbuildinfo
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+automation/state.env
+automation/*.log
+.DS_Store

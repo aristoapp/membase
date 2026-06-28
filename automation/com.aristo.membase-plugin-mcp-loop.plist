@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.aristo.membase-plugin-mcp-loop</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/leejaehwan/.codex/automations/membase-plugin-mcp-loop/run-loop.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/leejaehwan/Library/Mobile Documents/com~apple~CloudDocs/handoff-20260618/membase-plugin-mcp</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/leejaehwan/Library/Mobile Documents/com~apple~CloudDocs/handoff-20260618/membase-plugin-mcp/automation/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/leejaehwan/Library/Mobile Documents/com~apple~CloudDocs/handoff-20260618/membase-plugin-mcp/automation/launchd.err.log</string>
+</dict>
+</plist>
