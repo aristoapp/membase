@@ -233,7 +233,7 @@
           <strong>Plugin/MCP 통합 레포 출시</strong>를 그대로 source of truth로 둔다.
         </p>
         <div class="meta">
-          <span class="pill">Last updated: 2026-06-28 11:32 UTC</span>
+          <span class="pill">Last updated: 2026-06-28 19:16 UTC</span>
           <span class="pill">Repo: membase-plugin-mcp</span>
           <span class="pill">Mode: local integration work</span>
           <span class="pill">External mutation: none</span>
@@ -392,10 +392,16 @@
               <code>pnpm check</code> guard composition.
             </li>
             <li>
-              <span class="status-label todo">Next: final quality pass</span>
-              Prepare the Linear-ready summary, re-run local checks, and review
-              remaining runtime-parity decisions without publishing or mutating
-              old repos.
+              <span class="status-label done">Done: Linear-ready summary</span>
+              <code>docs/review-summary.md</code> maps the Linear definition of
+              done to concrete repo evidence and records remaining runtime-parity
+              decisions without publishing or mutating old repos.
+            </li>
+            <li>
+              <span class="status-label done">Done: runtime decision ledger</span>
+              <code>docs/runtime-parity-decisions.md</code> now centralizes the
+              remaining public repo URL, MCP package path, transport precedence,
+              client-native parity, asset reuse, and live smoke decisions.
             </li>
           </ul>
         </article>
@@ -440,13 +446,17 @@
         <article class="card">
           <h2>Verification</h2>
           <p>
-            Latest check: <code>pnpm check</code> passed. It typechecks
+            Latest checks: <code>pnpm check</code> and
+            <code>pnpm smoke:execute</code> passed. The check path typechecks
             <code>packages/core</code>, <code>packages/connector-sdk</code>,
             <code>clients/claude</code>, <code>clients/cursor</code>, and
             <code>clients/hermes</code>, and <code>clients/openclaw</code>, verifies
             generated manifest/MCP examples, runs the dry-run client smoke harness,
-            runs the secret-hygiene guard, then runs
-            <code>scripts/check-public-surface.sh</code>.
+            runs the secret-hygiene guard, runs
+            <code>scripts/check-public-surface.sh</code>, then verifies review
+            artifacts including <code>docs/review-summary.md</code> and
+            <code>docs/runtime-parity-decisions.md</code>. The smoke execute path
+            runs the 8 adapter-declared local commands.
           </p>
           <p>
             GitHub, Linear, marketplace publication, old repo deprecation, and merge
@@ -463,6 +473,8 @@
             <li>Old remote MCP URL compatibility still needs a per-client decision.</li>
             <li>Live MCP smoke tests need the shared MCP server package or equivalent local command path.</li>
             <li>Client-native parity tests still need implementation after runtime migration decisions.</li>
+            <li>Remaining launch decisions are centralized in <code>docs/runtime-parity-decisions.md</code>.</li>
+            <li>Final Linear review can start from <code>docs/review-summary.md</code>.</li>
             <li>Old repo deprecation is planned, but no old repo mutation has been performed.</li>
           </ul>
         </article>

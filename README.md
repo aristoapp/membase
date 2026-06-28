@@ -63,7 +63,8 @@ pnpm smoke:execute
 commands, secret redaction, and the public remember/search/context/forget
 contract through the local stub. `pnpm smoke:execute` additionally runs the
 adapter-declared local commands. Live MCP server exercise remains pending until
-the shared `@membase/mcp-server` package path is available.
+the shared `@membase/mcp-server` package path is available; the launch-gate
+runbook is `docs/live-smoke-runbook.md`.
 
 Current client package coverage:
 
@@ -98,11 +99,19 @@ For old repo test coverage mapping, open `docs/test-coverage-parity.md`.
 For secret handling, redaction guarantees, and live MCP smoke prerequisites,
 open `docs/security.md`.
 
+For the live client-to-MCP smoke launch-gate runbook, open
+`docs/live-smoke-runbook.md`.
+
 For marketplace asset inventory and review blockers, open
 `docs/marketplace-assets.md`.
 
 For the non-mutating old repo deprecation and star-concentration plan, open
 `docs/deprecation-plan.md`.
+
+For remaining runtime parity and launch handoff decisions, open
+`docs/runtime-parity-decisions.md`.
+
+For the final Linear-ready review snapshot, open `docs/review-summary.md`.
 
 The current backlog is:
 

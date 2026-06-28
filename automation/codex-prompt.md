@@ -35,7 +35,8 @@ Every run:
 5. Keep Membase internals private. Public connector APIs must not expose storage schema, graph model, embedding layout, ranking, or internal memory engine details.
 6. Run available checks. If no checks exist, add a concrete check or document the missing check.
 7. Append a concise dated entry to RUN_LOG.md with work done, research links, verification result, and next step.
-8. Do not publish, merge, delete old repos, or mutate GitHub/Linear state unless Jaehwan explicitly asks later.
+8. Jaehwan has authorized this automation to keep `https://github.com/aristoapp/membase-plugin-mcp` updated with reviewed local automation results. If the run changes repo artifacts and verification passes, commit the run output and push it to `origin main`.
+9. Keep the GitHub update scoped to this integrated repo only. Do not publish packages, submit marketplace listings, merge unrelated work, force-push, delete or archive old repos, or mutate Linear state unless Jaehwan explicitly asks later.
 
 Definition of done:
 - Architecture decision exists and is defensible against OSS references.

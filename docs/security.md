@@ -72,6 +72,7 @@ pnpm smoke:execute
 
 Live client-to-MCP smoke tests should stay pending until a shared
 `@membase/mcp-server` package path or equivalent local command is available.
+The concrete launch-gate runbook is `docs/live-smoke-runbook.md`.
 When live smoke is added, it should:
 
 - require an explicit `MEMBASE_API_KEY`

@@ -13,8 +13,11 @@ const requiredFiles = [
   "docs/migration-parity.md",
   "docs/test-coverage-parity.md",
   "docs/security.md",
+  "docs/live-smoke-runbook.md",
   "docs/marketplace-assets.md",
   "docs/deprecation-plan.md",
+  "docs/runtime-parity-decisions.md",
+  "docs/review-summary.md",
   "packages/core/src/index.ts",
   "packages/connector-sdk/src/index.ts",
   "smoke/client-smoke.mjs",
@@ -90,8 +93,11 @@ const documentMarkers = [
       "docs/migration-parity.md",
       "docs/test-coverage-parity.md",
       "docs/security.md",
+      "docs/live-smoke-runbook.md",
       "docs/marketplace-assets.md",
-      "docs/deprecation-plan.md"
+      "docs/deprecation-plan.md",
+      "docs/runtime-parity-decisions.md",
+      "docs/review-summary.md"
     ]
   },
   {
@@ -102,6 +108,9 @@ const documentMarkers = [
       "Client Adapter Status",
       "Migration Parity Status",
       "Client Smoke Harness",
+      "Live MCP Smoke Runbook",
+      "Runtime Parity Decision Ledger",
+      "Linear-Ready Summary",
       "Secret Handling"
     ]
   },
@@ -118,12 +127,42 @@ const documentMarkers = [
     markers: ["MEMBASE_API_KEY", "redacted", "Live client-to-MCP smoke"]
   },
   {
+    path: "docs/live-smoke-runbook.md",
+    markers: [
+      "Live MCP Smoke Runbook",
+      "Required Inputs",
+      "Live Smoke Contract",
+      "Test Data Shape",
+      "Redaction Requirements",
+      "Non-Mutating Boundary"
+    ]
+  },
+  {
     path: "docs/marketplace-assets.md",
     markers: ["Before any marketplace submission review", "pnpm check", "pnpm smoke:execute"]
   },
   {
     path: "docs/deprecation-plan.md",
     markers: ["non-mutating review plan", "archive", "star"]
+  },
+  {
+    path: "docs/runtime-parity-decisions.md",
+    markers: [
+      "Runtime Parity Decision Ledger",
+      "Decision Rules",
+      "Decision Ledger",
+      "Verification Gate",
+      "No External Mutations"
+    ]
+  },
+  {
+    path: "docs/review-summary.md",
+    markers: [
+      "Linear-Ready Summary",
+      "Definition of Done Mapping",
+      "Remaining Review Decisions",
+      "No External Mutations"
+    ]
   }
 ];
 

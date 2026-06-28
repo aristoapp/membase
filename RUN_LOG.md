@@ -679,3 +679,148 @@ Next step:
   summary across architecture, scaffolding, shared core, four clients,
   migration parity, marketplace/deprecation docs, and remaining runtime-parity
   decisions.
+
+## 2026-06-28 18:46 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Continued from the recorded next step and completed the `PLAN.md` run 20
+  final quality pass.
+- Added `docs/review-summary.md` as the Linear-ready summary, mapping the
+  scheduled definition of done to concrete repo evidence and recording the
+  remaining runtime-parity decisions.
+- Wired `docs/review-summary.md` into `README.md`,
+  `docs/architecture.md`, `docs/context.html`, and
+  `scripts/check-review-readiness.mjs` so the final summary is part of local
+  review readiness.
+- Updated `docs/migration-parity.md` so the next step now points at review and
+  runtime-parity decisions rather than the completed run 19 verification pass.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, or
+  external mutation action was performed.
+
+Research/evidence:
+
+- Fresh OSS research was not needed for this run. The work consolidated local
+  review evidence from existing architecture, migration, test coverage,
+  marketplace, security, deprecation, and smoke-test artifacts.
+
+Verification:
+
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, secret-hygiene scan for
+  65 files, public-surface guard, and review-readiness guard for 17 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Start review from `docs/review-summary.md`, then decide final public repo URL,
+  MCP server command/package path, per-client transport precedence, client-native
+  runtime parity, and asset reuse before any external launch or deprecation
+  mutations.
+
+## 2026-06-28 19:16 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Continued from the recorded post-run-20 next step by making the remaining
+  runtime and launch decisions reviewable instead of leaving them scattered
+  across parity, security, marketplace, and install docs.
+- Added `docs/runtime-parity-decisions.md` with a non-mutating decision ledger
+  for final public repo URL, MCP server command/package path, per-client
+  transport precedence, client-native runtime parity, asset reuse, and live
+  client-to-MCP smoke.
+- Linked the ledger from `README.md`, `docs/architecture.md`,
+  `docs/review-summary.md`, `docs/migration-parity.md`, and
+  `docs/context.html`.
+- Updated `scripts/check-review-readiness.mjs` so `pnpm check` now requires the
+  runtime decision ledger and its review markers alongside the Linear-ready
+  summary.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, or
+  external mutation action was performed.
+
+Research/evidence:
+
+- Fresh OSS research was not needed for this run. The work consolidated
+  unresolved decisions already recorded in local docs from earlier OSS-backed
+  runs: `docs/review-summary.md`, `docs/migration-parity.md`,
+  `docs/test-coverage-parity.md`, `docs/security.md`,
+  `docs/marketplace-assets.md`, and `docs/deprecation-plan.md`.
+
+Verification:
+
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, secret-hygiene scan for
+  66 files, public-surface guard, and review-readiness guard for 18 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Review `docs/runtime-parity-decisions.md` and accept or defer D1-D6 before
+  any external launch, live MCP smoke, marketplace submission, or old repo
+  deprecation work.
+
+## 2026-06-28 19:48 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Continued from the recorded post-run-20 next step by making the future live
+  client-to-MCP smoke gate concrete without pretending it is runnable before
+  D2, D3, and D6 are accepted.
+- Added `docs/live-smoke-runbook.md` with required inputs, live smoke contract,
+  test data shape, per-client gate, redaction requirements, acceptance
+  checklist, and non-mutating boundary.
+- Linked the runbook from `README.md`, `docs/architecture.md`,
+  `docs/security.md`, `docs/runtime-parity-decisions.md`,
+  `docs/review-summary.md`, and `smoke/README.md`.
+- Updated `scripts/check-review-readiness.mjs` so `pnpm check` requires the
+  live smoke runbook and its review markers.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed.
+
+Research/evidence:
+
+- Fresh OSS research was not needed for this run. The work formalized the
+  pending live-smoke requirements already recorded in
+  `docs/runtime-parity-decisions.md`, `docs/security.md`, `smoke/README.md`,
+  and `docs/review-summary.md`.
+
+Verification:
+
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, secret-hygiene scan for
+  67 files, public-surface guard, and review-readiness guard for 19 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Review `docs/runtime-parity-decisions.md` and
+  `docs/live-smoke-runbook.md`; accept or defer D2, D3, and D6 before adding a
+  runnable live MCP smoke command.
+
+## 2026-06-28 20:01 UTC
+
+- Recorded Jaehwan's explicit GitHub update preference for future automation
+  runs: keep `https://github.com/aristoapp/membase-plugin-mcp` updated with
+  verified local automation results.
+- Updated `automation/codex-prompt.md` so future runs may commit and push
+  verified repo artifact changes to `origin main`.
+- Kept the external mutation boundary narrow: no package publishing,
+  marketplace submission, force-push, old-repo archive/delete, unrelated merge,
+  or Linear mutation is authorized by this policy.
+
+Verification:
+
+- GitHub repo access was verified with `gh repo view aristoapp/membase-plugin-mcp`.
+- `gh auth setup-git` was run so HTTPS git operations can use the existing
+  GitHub CLI credentials.
+
+Next step:
+
+- Commit and push the accumulated verified automation outputs to
+  `aristoapp/membase-plugin-mcp`.

@@ -22,7 +22,8 @@ exercises the public remember/search/context/delete flow through
 `smoke/public-contract-stub.mjs`.
 
 Secret handling expectations and live MCP smoke prerequisites are documented in
-`docs/security.md`.
+`docs/security.md`. The future live client-to-MCP smoke launch gate is defined
+in `docs/live-smoke-runbook.md`.
 
 Old repo test migration expectations are mapped in
 `docs/test-coverage-parity.md`.

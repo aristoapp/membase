@@ -123,7 +123,15 @@ commands, and the public remember/search/context/delete flow through
 
 The harness can execute adapter-declared local commands with
 `pnpm smoke:execute`. Live client-to-MCP runtime checks remain pending until the
-shared `@membase/mcp-server` package path is available.
+shared `@membase/mcp-server` package path is available. The launch-gate shape
+for that future check is documented in `docs/live-smoke-runbook.md`, including
+required decisions, test-only data, cleanup behavior, and redacted logging.
+
+## Live MCP Smoke Runbook
+
+`docs/live-smoke-runbook.md` defines the pending live smoke implementation
+contract for D2, D3, and D6. It keeps the future test limited to public
+remember, search, context, forget, diagnostics, and cleanup behavior.
 
 ## Test Coverage Parity
 
@@ -163,6 +171,21 @@ asset file is ported and checked locally.
 deprecation and star-concentration plan. It defines readiness gates, README
 notice PR sequencing, compatibility-window expectations, archive prerequisites,
 and per-client handoff blockers for Claude, Cursor, Hermes, and OpenClaw.
+
+## Runtime Parity Decision Ledger
+
+`docs/runtime-parity-decisions.md` now records the remaining public repo URL,
+MCP server path, transport precedence, client-native runtime parity, asset
+reuse, and live smoke decisions that must be accepted before any external
+launch or old-repo mutation work.
+
+## Linear-Ready Summary
+
+`docs/review-summary.md` is the current final review snapshot for the Linear
+project. It maps the scheduled definition of done to concrete repo evidence,
+records remaining runtime-parity decisions, and confirms that publication,
+marketplace, GitHub, Linear, merge, and old-repo mutation actions remain out of
+scope for this local loop.
 
 ## Secret Handling
 

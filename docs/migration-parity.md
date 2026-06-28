@@ -169,8 +169,8 @@ Integrated target:
 - Port hook/tool behavior only when it can call the shared connector core
   without exposing Membase internals.
 
-## Next Migration Step
+## Next Review Step
 
-Start `PLAN.md` run 19 with end-to-end local verification and a review-readiness
-gap pass across README, architecture docs, generated artifacts, smoke checks,
-marketplace assets, migration parity, and deprecation planning.
+Use `docs/review-summary.md` as the Linear-ready entry point, then decide the
+remaining runtime-parity questions in `docs/runtime-parity-decisions.md` before
+any publication, marketplace, GitHub, Linear, or old-repo mutation work.
