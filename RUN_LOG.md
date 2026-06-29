@@ -1732,6 +1732,8 @@ Verification:
 - `pnpm smoke:execute` passed: the smoke harness executed the 8
   adapter-declared local commands.
 - `git diff --check` passed.
+- Committed and pushed verified integrated-repo changes to `origin/main`:
+  `b3cea6b` (`chore: guard launch handoff consistency`).
 
 Next step:
 
