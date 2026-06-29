@@ -1,5 +1,5 @@
 import {
-  createMcpConfigDocument,
+  createHttpMcpConfigDocument,
   defineConnectorConfig,
   type ConnectorConfigInput,
   type ConnectorRuntimeConfig,
@@ -14,7 +14,7 @@ import {
 export const CURSOR_CLIENT_ID = "cursor";
 export const CURSOR_DISPLAY_NAME = "Cursor";
 export const CURSOR_MCP_SERVER_NAME = "membase";
-export const CURSOR_MCP_SERVER_PACKAGE = "@membase/mcp-server";
+export const CURSOR_MCP_SERVER_URL = "https://mcp.membase.so/mcp";
 
 export interface CursorPluginManifest {
   name: string;
@@ -84,20 +84,12 @@ export function generateCursorPluginManifest(
 }
 
 export function generateCursorMcpConfig(
-  config: ConnectorRuntimeConfig
+  _config: ConnectorRuntimeConfig
 ): McpConfigDocument {
-  return createMcpConfigDocument(
-    CURSOR_MCP_SERVER_NAME,
-    config,
-    {
-      type: "stdio",
-      command: "npx",
-      args: ["-y", CURSOR_MCP_SERVER_PACKAGE]
-    },
-    {
-      envReferenceStyle: "cursor"
-    }
-  );
+  return createHttpMcpConfigDocument(CURSOR_MCP_SERVER_NAME, {
+    url: CURSOR_MCP_SERVER_URL,
+    headers: {}
+  });
 }
 
 export function generateCursorArtifacts(

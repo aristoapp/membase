@@ -233,10 +233,11 @@
           <strong>Plugin/MCP 통합 레포 출시</strong>를 그대로 source of truth로 둔다.
         </p>
         <div class="meta">
-          <span class="pill">Last updated: 2026-06-28 19:16 UTC</span>
+          <span class="pill">Last updated: 2026-06-29 09:22 UTC</span>
           <span class="pill">Repo: membase-plugin-mcp</span>
           <span class="pill">Mode: local integration work</span>
-          <span class="pill">External mutation: none</span>
+          <span class="pill">GitHub sync: origin/main updated</span>
+          <span class="pill">Blocked: Linear, marketplace, old repos</span>
         </div>
       </header>
 
@@ -312,6 +313,12 @@
               redacted diagnostics.
             </li>
             <li>
+              <span class="status-label done">Done: core contract guard</span>
+              <code>pnpm core:contract</code> validates shared config defaults,
+              env-derived config, MCP env references, HTTP MCP shape, validation
+              errors, and diagnostic redaction.
+            </li>
+            <li>
               <span class="status-label done">Done: connector SDK boundary</span>
               <code>ClientAdapter</code> interface with manifest, MCP config, and
               smoke command declarations.
@@ -322,7 +329,7 @@
             </li>
             <li>
               <span class="status-label done">Done: Cursor adapter skeleton</span>
-              TypeScript package, Cursor plugin metadata, stdio MCP config,
+              TypeScript package, Cursor plugin metadata, HTTP MCP config,
               install doc.
             </li>
             <li>
@@ -400,8 +407,123 @@
             <li>
               <span class="status-label done">Done: runtime decision ledger</span>
               <code>docs/runtime-parity-decisions.md</code> now centralizes the
-              remaining public repo URL, MCP package path, transport precedence,
-              client-native parity, asset reuse, and live smoke decisions.
+              remaining public repo URL, client runtime package paths, transport
+              precedence, client-native parity, asset reuse, and live smoke
+              decisions.
+            </li>
+            <li>
+              <span class="status-label done">Done: runtime decision guard</span>
+              <code>pnpm runtime-decision-ledger</code> now verifies D1-D6
+              status, the blocked live-smoke state, and the non-mutating review
+              boundary inside <code>pnpm check</code>.
+            </li>
+            <li>
+              <span class="status-label done">Done: live smoke runbook</span>
+              <code>docs/live-smoke-runbook.md</code> defines the future live
+              client-to-MCP launch gate, required D2/D3/D6 decisions, test data
+              shape, redaction requirements, and non-mutating boundary.
+            </li>
+            <li>
+              <span class="status-label done">Done: GitHub sync record</span>
+              Verified local automation outputs were pushed to
+              <code>origin/main</code> after Jaehwan's explicit GitHub update
+              preference. Current remote head recorded in <code>RUN_LOG.md</code>.
+            </li>
+            <li>
+              <span class="status-label done">Done: review decisions recorded</span>
+              D1 is accepted, D5 asset reuse guidance now lives in each
+              <code>clients/*/README.md</code>, and D6 live smoke is accepted in
+              principle while D2/D3 remain implementation blockers for the
+              Hermes live API behavior, OpenClaw hook/tool behavior, and live
+              test inputs.
+            </li>
+            <li>
+              <span class="status-label done">Done: live smoke preflight</span>
+              <code>smoke/live-smoke-preflight.mjs</code> verifies that D2/D3
+              record Claude plugin-local, Cursor HTTP-first, Hermes provider
+              register path, and OpenClaw native entrypoint parity while Hermes
+              live API behavior stays pending, D6 stays pending those runtime
+              paths, and committed MCP examples do not claim live smoke is
+              runnable.
+            </li>
+            <li>
+              <span class="status-label done">Done: Claude plugin-local MCP</span>
+              <code>clients/claude/.mcp.json</code> and
+              <code>manifests/claude/mcp.json</code> now preserve the old
+              <code>node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs</code>
+              runtime shape with shared Membase env references.
+            </li>
+            <li>
+              <span class="status-label done">Done: Cursor transport parity gate</span>
+              <code>pnpm cursor:transport-parity</code> preserves the old
+              Cursor HTTP MCP endpoint and rejects generic stdio placeholder
+              regression.
+            </li>
+            <li>
+              <span class="status-label done">Done: Cursor native artifact snapshot</span>
+              <code>clients/cursor/native-artifacts.json</code> records old
+              Cursor rules, skills, logo, and changelog evidence as review-only
+              inventory, and <code>pnpm cursor:native-artifacts</code> prevents
+              premature asset or copy references.
+            </li>
+            <li>
+              <span class="status-label done">Done: packaging/action parity map</span>
+              <code>docs/packaging-action-parity.md</code> records the old
+              Claude, Cursor, Hermes, and OpenClaw package/workflow boundaries,
+              and <code>scripts/check-packaging-action-parity.mjs</code> keeps
+              publishing paths disabled in <code>pnpm check</code>.
+            </li>
+            <li>
+              <span class="status-label done">Done: version parity guard</span>
+              <code>pnpm version-parity</code> keeps package versions, public
+              plugin manifest versions, Hermes Python/YAML metadata, and MCP
+              client-version examples synchronized without deciding a release
+              tag or enabling publication.
+            </li>
+            <li>
+              <span class="status-label done">Done: Claude plugin parity gate</span>
+              <code>pnpm claude:plugin-parity</code> validates the integrated
+              Claude plugin metadata with the installed Claude Code CLI and
+              checks manifest/version/MCP secret-reference drift without
+              marketplace submission.
+            </li>
+            <li>
+              <span class="status-label done">Done: Claude native artifact snapshot</span>
+              <code>clients/claude/native-artifacts.json</code> records old
+              Claude commands, hooks, skills, agent, bundled runtime scripts,
+              and session-start evidence as review-only inventory, and
+              <code>pnpm claude:native-artifacts</code> prevents premature
+              native-behavior declarations or copied deferred files.
+            </li>
+            <li>
+              <span class="status-label done">Done: Hermes Python/provider parity gate</span>
+              <code>pnpm hermes:python-parity</code> now validates the local
+              Hermes Python package review scaffold, console script entrypoints,
+              native YAML package data, Python syntax, provider import/register
+              behavior, and non-publishing boundary.
+            </li>
+            <li>
+              <span class="status-label done">Done: Hermes native artifact snapshot</span>
+              <code>clients/hermes/native-artifacts.json</code> records old
+              Hermes provider, capture, CLI, OAuth, wiki, formatting, banner
+              asset, update-check, and runtime test evidence as review-only
+              inventory, and <code>pnpm hermes:native-artifacts</code> prevents
+              premature runtime module or asset copy.
+            </li>
+            <li>
+              <span class="status-label done">Done: OpenClaw native parity gate</span>
+              <code>pnpm openclaw:native-parity</code> now runs the integrated
+              OpenClaw typecheck/build path, imports the built native extension
+              entrypoint, and verifies the native manifest and package remain
+              private, non-publishing review artifacts.
+            </li>
+            <li>
+              <span class="status-label done">Done: OpenClaw native artifact snapshot</span>
+              <code>clients/openclaw/native-artifacts.json</code> records old
+              OpenClaw commands, hooks, tools, config helpers, update checks,
+              and runtime test evidence as review-only inventory, and
+              <code>pnpm openclaw:native-artifacts</code> prevents premature
+              native-behavior declarations or copied deferred files.
             </li>
           </ul>
         </article>
@@ -421,22 +543,22 @@
                 <tr>
                   <td><code>aristoapp/claude-membase</code></td>
                   <td>TypeScript Claude plugin repo with plugin metadata, source, tests.</td>
-                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                  <td>Adapter skeleton, plugin-local MCP config, Claude plugin parity gate, and native artifact snapshot exist here. Migration parity checklist created.</td>
                 </tr>
                 <tr>
                   <td><code>aristoapp/cursor-membase</code></td>
                   <td>Cursor plugin bundle with plugin metadata, MCP config, rules, skills.</td>
-                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                  <td>Adapter skeleton and HTTP transport parity gate exist here. Migration parity checklist created.</td>
                 </tr>
                 <tr>
                   <td><code>aristoapp/hermes-membase</code></td>
                   <td>Python package style Hermes plugin repo.</td>
-                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                  <td>Adapter skeleton and Python package/provider boundary parity scaffold exist here. Migration parity checklist created.</td>
                 </tr>
                 <tr>
                   <td><code>aristoapp/openclaw-membase</code></td>
                   <td>TypeScript OpenClaw plugin repo with OpenClaw manifest.</td>
-                  <td>Adapter skeleton exists here. Migration parity checklist created.</td>
+                  <td>Adapter skeleton, native extension entrypoint parity, and native artifact snapshot exist here. Migration parity checklist created.</td>
                 </tr>
               </tbody>
             </table>
@@ -446,21 +568,51 @@
         <article class="card">
           <h2>Verification</h2>
           <p>
-            Latest checks: <code>pnpm check</code> and
-            <code>pnpm smoke:execute</code> passed. The check path typechecks
+            Latest checks: <code>pnpm check</code>,
+            <code>pnpm core:contract</code>,
+            <code>pnpm smoke:execute</code>,
+            <code>pnpm claude:plugin-parity</code>,
+            <code>pnpm claude:native-artifacts</code>,
+            <code>pnpm cursor:transport-parity</code>,
+            <code>pnpm cursor:native-artifacts</code>,
+            <code>pnpm hermes:native-artifacts</code>, and
+            <code>pnpm openclaw:native-artifacts</code>,
+            <code>pnpm runtime-decision-ledger</code>,
+            <code>pnpm version-parity</code>,
+            <code>pnpm smoke:live:preflight</code> passed. The check path typechecks
             <code>packages/core</code>, <code>packages/connector-sdk</code>,
             <code>clients/claude</code>, <code>clients/cursor</code>, and
             <code>clients/hermes</code>, and <code>clients/openclaw</code>, verifies
-            generated manifest/MCP examples, runs the dry-run client smoke harness,
+            generated manifest/MCP examples, including the Claude plugin-local
+            <code>.mcp.json</code>, runs the shared core contract guard,
+            runs the dry-run client smoke harness,
+            runs the live-smoke preflight,
+            runs the runtime decision ledger guard,
+            runs the packaging/action parity guard,
+            runs the version parity guard,
+            runs the Claude plugin parity gate,
+            runs the Claude native artifact snapshot gate,
+            runs the Cursor transport parity gate,
+            runs the Cursor native artifact snapshot gate,
+            runs the Hermes Python/provider parity gate,
+            runs the Hermes native artifact snapshot gate,
+            runs the OpenClaw native artifact snapshot gate,
+            runs the OpenClaw native parity gate,
             runs the secret-hygiene guard, runs
             <code>scripts/check-public-surface.sh</code>, then verifies review
             artifacts including <code>docs/review-summary.md</code> and
-            <code>docs/runtime-parity-decisions.md</code>. The smoke execute path
-            runs the 8 adapter-declared local commands.
+            <code>docs/runtime-parity-decisions.md</code>,
+            <code>docs/live-smoke-runbook.md</code>,
+            <code>docs/packaging-action-parity.md</code>, the Claude, Cursor,
+            Hermes, and OpenClaw parity scripts, and this context
+            board. The smoke execute path runs the 8 adapter-declared local
+            commands.
           </p>
           <p>
-            GitHub, Linear, marketplace publication, old repo deprecation, and merge
-            actions have not been performed.
+            GitHub <code>origin/main</code> was updated after Jaehwan's explicit
+            preference for verified automation-result pushes. Linear,
+            marketplace publication, old repo deprecation, and merge actions
+            have not been performed.
           </p>
         </article>
 
@@ -468,10 +620,14 @@
           <h2>Open Questions</h2>
           <ul>
             <li>Final MCP tool names are not locked by the adapter capability names.</li>
-            <li>OpenClaw runtime hooks and tools still need parity implementation.</li>
-            <li>Hermes native plugin runtime migration still needs a package-path decision.</li>
-            <li>Old remote MCP URL compatibility still needs a per-client decision.</li>
-            <li>Live MCP smoke tests need the shared MCP server package or equivalent local command path.</li>
+            <li>OpenClaw native artifacts are snapshot-guarded; runtime hooks and tools still need parity implementation after an explicit migration decision.</li>
+            <li>Hermes provider import/register behavior and native artifact evidence are guarded; live API behavior still needs a migration decision.</li>
+            <li>Cursor HTTP MCP compatibility is now the primary path to preserve, not a generic fallback.</li>
+            <li>Claude plugin-local MCP compatibility and native artifact evidence are now guarded; commands/hooks/skills still need an explicit migration decision before any behavior is ported.</li>
+            <li>Live MCP smoke tests still need Hermes live API behavior, OpenClaw hook/tool behavior, and test credentials rather than one forced generic package.</li>
+            <li><code>pnpm smoke:live:preflight</code> now guards the blocked live-smoke state until D2/D3 are implemented.</li>
+            <li><code>@membase/mcp-server</code> currently returned 404 from public npm lookup, so it remains only a Hermes/OpenClaw placeholder unless separately accepted.</li>
+            <li>Claude plugin/native snapshots, Cursor transport/native snapshot, Hermes provider/native snapshot, and OpenClaw native snapshot/entrypoint parity have local checks; Claude native behavior, Cursor rules/skills/assets copy, Hermes live behavior, and OpenClaw hook/tool copy are still pending.</li>
             <li>Client-native parity tests still need implementation after runtime migration decisions.</li>
             <li>Remaining launch decisions are centralized in <code>docs/runtime-parity-decisions.md</code>.</li>
             <li>Final Linear review can start from <code>docs/review-summary.md</code>.</li>

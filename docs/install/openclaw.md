@@ -33,6 +33,28 @@ The manifest follows OpenClaw's plugin shape: a canonical plugin `id`, optional
 exclusive `kind`, skill directory references, UI hints, and strict
 `configSchema` validation.
 
+`clients/openclaw/package.json` also declares the native OpenClaw extension
+entrypoint:
+
+```json
+{
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  }
+}
+```
+
+`pnpm openclaw:native-parity` builds that entrypoint and imports the default
+extension export locally. The entrypoint is a review-safe connector boundary;
+old hook, command, tool, and skill behavior still needs explicit migration
+before live OpenClaw runtime exercise.
+
+`clients/openclaw/native-artifacts.json` records the old OpenClaw command,
+hook, tool, config, update-check, and runtime-test files as review-only
+evidence. `pnpm openclaw:native-artifacts` verifies that snapshot and prevents
+old runtime directories from being copied before a migration decision accepts
+them.
+
 ## Local Plugin Install
 
 For a local checkout, install the OpenClaw connector package path and restart
@@ -108,6 +130,7 @@ config describes the shared connector server launch shape.
 
 ```bash
 pnpm check
+pnpm openclaw:native-artifacts
 pnpm smoke:execute
 ```
 
@@ -117,14 +140,21 @@ public connector surface. `pnpm smoke:execute` additionally runs the
 adapter-declared local commands without publishing, installing a global
 OpenClaw plugin, or calling the Membase API.
 
-Host-level OpenClaw runtime checks remain pending until migration parity and
-the shared `@membase/mcp-server` package path are checked.
+Host-level OpenClaw runtime checks remain pending until hook/tool migration
+parity and live test inputs are accepted. The native package entrypoint is now
+checked locally; the shared `@membase/mcp-server` MCP example remains a
+fallback placeholder until explicitly accepted.
 
 ## Review Checklist
 
 - `clients/openclaw/openclaw.plugin.json` has connector capability copy only.
 - `clients/openclaw/mcp.json` and `manifests/openclaw/mcp.json` contain
   `mcpServers.membase`.
+- `clients/openclaw/package.json` declares `openclaw.extensions` for
+  `./dist/index.js`.
+- `clients/openclaw/native-artifacts.json` is present and
+  `pnpm openclaw:native-artifacts` passes before any old command, hook, tool,
+  or skill behavior is ported.
 - Native OpenClaw settings point at an environment variable name or token file,
   not a committed token value.
 - `MEMBASE_API_KEY` is an environment reference, not a raw token.

@@ -44,7 +44,46 @@ Primary evidence links:
 
 - TypeScript build for shared packages and all four client adapters.
 - Generated plugin and MCP artifacts match adapter output.
+- Shared core auth, endpoint, MCP config, environment-reference, validation,
+  and diagnostic redaction behavior through `pnpm core:contract`.
 - Dry-run client smoke coverage for four clients and their declared commands.
+- Runtime decision ledger drift through `pnpm runtime-decision-ledger`, keeping
+  D1-D6 status, blocked live-smoke state, and non-mutating launch boundaries
+  explicit.
+- Launch handoff consistency through `pnpm launch-handoff`, keeping the accepted
+  public repo URL synchronized while release tag or bundle selection stays
+  pending.
+- Packaging/action parity map coverage for old repo check and publish
+  boundaries.
+- Version parity across workspace package manifests, public plugin manifest
+  versions, Hermes Python/YAML package metadata, and MCP client-version
+  examples through `pnpm version-parity`.
+- Claude plugin manifest validation through `pnpm claude:plugin-parity`,
+  including local Claude Code CLI validation, plugin-local MCP command
+  preservation, and manifest/MCP secret-reference drift checks.
+- Claude native artifact snapshot-only parity through
+  `pnpm claude:native-artifacts`, including old command, hook, skill, agent,
+  bundled runtime script, and session-start evidence without copying deferred
+  artifacts into the integrated repo.
+- Cursor HTTP MCP transport parity through `pnpm cursor:transport-parity`,
+  including old endpoint preservation and placeholder stdio regression checks.
+- Cursor native artifact snapshot-only parity through
+  `pnpm cursor:native-artifacts`, including old rules, skills, logo, and
+  changelog evidence without copying deferred artifacts into the integrated
+  repo.
+- Hermes Python package metadata, console script, native YAML package data,
+  Python syntax, and provider import/register parity through
+  `pnpm hermes:python-parity`.
+- Hermes native artifact snapshot-only parity through
+  `pnpm hermes:native-artifacts`, including old provider, capture, CLI, OAuth,
+  wiki, formatting, banner asset, update-check, and runtime-test evidence
+  without copying deferred artifacts into the integrated repo.
+- OpenClaw native typecheck/build and extension entrypoint parity through
+  `pnpm openclaw:native-parity`.
+- OpenClaw native artifact snapshot-only parity through
+  `pnpm openclaw:native-artifacts`, including old command, hook, tool, config,
+  update-check, and runtime-test evidence without copying deferred artifacts
+  into the integrated repo.
 - Public remember, search, context, and forget flow through
   `smoke/public-contract-stub.mjs`.
 - Secret redaction and secret-hygiene scanning for committed connector
@@ -52,8 +91,9 @@ Primary evidence links:
 - Public-surface wording guard against private Membase implementation details.
 
 `pnpm smoke:execute` additionally executes adapter-declared local smoke
-commands. Live client-to-MCP runtime checks remain pending until the shared MCP
-server package path or equivalent local command is available.
+commands. Live client-to-MCP runtime checks remain pending until Hermes live
+API behavior, OpenClaw hook/tool behavior, and accepted live test inputs are
+available.
 
 ## Routing Rules
 
@@ -87,26 +127,38 @@ Deferred or excluded coverage:
 
 | Old coverage area | Old evidence | Integrated target | Current status |
 | --- | --- | --- | --- |
-| Manifest and MCP config validation | Claude `manifest:check` and plugin validation, Cursor plugin/MCP artifacts, Hermes plugin YAML, OpenClaw native manifest | `scripts/check-generated-artifacts.mjs` plus future client-native validators where host CLIs are available | Partial. Generated artifact drift is covered; host CLI validation is still pending. |
-| Auth, endpoint, and profile safety | Claude config/profile/OAuth tests, Hermes CLI config tests, OpenClaw profile path tests | Shared core unit tests plus smoke coverage for env references and redaction | Partial. Smoke covers safe references; focused core unit tests are still pending. |
+| Manifest and MCP config validation | Claude `manifest:check` and plugin validation, Cursor plugin/MCP artifacts, Hermes plugin YAML, OpenClaw native manifest | `scripts/check-generated-artifacts.mjs`, `scripts/check-version-parity.mjs`, plus client-native validators where host CLIs are available | Partial. Generated artifact drift is covered, shared version drift is guarded, Claude CLI plugin validation runs locally, and Cursor HTTP MCP transport parity is guarded; Cursor host live validation remains pending. |
+| Auth, endpoint, and profile safety | Claude config/profile/OAuth tests, Hermes CLI config tests, OpenClaw profile path tests | Shared core contract checks plus smoke coverage for env references and redaction | Partial. `pnpm core:contract` covers config defaults, env-derived config, MCP env references, validation errors, HTTP MCP shape, and diagnostic redaction. Client-native profile/OAuth behavior remains pending. |
 | Public memory contract | Claude recall/remember/project/wiki-adjacent tests, Hermes provider tool tests, OpenClaw tool schema tests | `smoke/public-contract-stub.mjs` and future contract fixtures for public operations only | Partial. Core remember/search/context/forget is covered; richer result formatting fixtures are pending. |
 | Secret and content safety | Claude sanitize tests, Hermes sensitive-content rejection test, current repo secret-hygiene scan | `scripts/check-secret-hygiene.mjs`, `scripts/check-public-surface.sh`, and future unit fixtures for client payload filtering | Partial. Static guards exist; client-specific sensitive payload behavior is still pending. |
 | Formatting and truncation | Claude format/wiki formatting, Hermes preview truncation, OpenClaw formatters | Shared public formatting fixtures if the integrated repo owns display output; otherwise client-native parity tests | Pending. No display formatting fixture exists yet. |
-| Hooks, capture, and session lifecycle | Claude transcript/session/spool tests, Hermes capture buffering/flushing tests, OpenClaw auto-capture tests | Client-native parity tests with a stubbed public connector client | Pending. Runtime hook/provider migration decisions are still required. |
-| Commands, tools, and schemas | Claude plugin runtime tests, Hermes provider tool schema tests, OpenClaw CLI/tool schema tests | Adapter smoke commands now; deeper client-native schema tests after commands/tools are migrated | Partial. Command existence is covered; host-specific schema behavior is pending. |
+| Hooks, capture, and session lifecycle | Claude transcript/session/spool tests, Hermes capture buffering/flushing tests, OpenClaw auto-capture tests | Client-native parity tests with a stubbed public connector client | Partial. The Claude native artifact snapshot records old hook and session-start evidence, the Hermes native artifact snapshot records old capture evidence, and the OpenClaw native artifact snapshot records old hook/capture evidence, but runtime hook/provider migration decisions are still required. |
+| Commands, tools, and schemas | Claude plugin runtime tests, Hermes provider tool schema tests, OpenClaw CLI/tool schema tests | Adapter smoke commands now; deeper client-native schema tests after commands/tools are migrated | Partial. Command existence, Hermes review-safe provider tool schemas, Hermes native artifact snapshot, and OpenClaw command/tool evidence snapshots are covered; host-specific schema behavior is pending. |
 | Update checks and launch prompts | Claude update-check tests, OpenClaw update/star prompt tests | Launch/deprecation decision. Add only if the integrated repo keeps these behaviors | Deferred. Not required for the current public connector contract. |
-| Cursor rules and skills | Cursor repo has rules, skills, logo, changelog, plugin metadata, and MCP config but no obvious tests | Snapshot/review checks if rules or skills are ported into this repo | Pending. Cursor artifacts exist, but rules/skills migration is not started. |
+| Cursor rules and skills | Cursor repo has rules, skills, logo, changelog, plugin metadata, and MCP config but no obvious tests | Snapshot/review checks before rules or skills are ported into this repo | Partial. `pnpm cursor:native-artifacts` guards the snapshot-only inventory and prevents premature deferred artifact copy; rules/skills migration is not started. |
 | Wiki and project flows | Claude wiki/project tests, Hermes wiki tool tests, OpenClaw wiki client tests | Needs product-scope decision before becoming public connector tests | Pending. Keep out of shared contract tests until scope is explicit. |
+
+## Packaging and Action Parity
+
+`docs/packaging-action-parity.md` is the local handoff point before old
+GitHub Action behavior is moved into this repo. It records Claude and OpenClaw
+non-publishing check workflows, Cursor's missing workflow, and Hermes' publish
+workflow as disabled review evidence. Claude, Cursor, Hermes, and OpenClaw now
+have parity checks wired into `pnpm check`; Claude command/hook/skill/agent
+evidence and Cursor rules/skills/assets remain pending for actual porting, but
+their old repo paths, blob SHAs, and deferred status are now guarded by
+`pnpm claude:native-artifacts`, `pnpm cursor:native-artifacts`,
+`pnpm hermes:native-artifacts`, and `pnpm openclaw:native-artifacts`.
 
 ## Next Test Work
 
-1. Add focused `packages/core` unit coverage for config validation, env
-   reference generation, and diagnostic redaction after a repo test runner is
-   selected.
+1. Extend `pnpm core:contract` when new shared core auth, endpoint, MCP config,
+   or diagnostic behavior is added.
 2. Add client-native parity fixtures only after each old command, hook, skill,
    provider, or tool is explicitly accepted into the integrated repo.
-3. Add host CLI validation checks for Claude, Cursor, Hermes, and OpenClaw only
-   when the check can run locally without publishing, installing globally, or
-   using production secrets.
+3. Add remaining host CLI or runtime validation checks for Hermes live API
+   behavior, OpenClaw runtime behavior, and any accepted Cursor artifact ports
+   only when the check can run locally without publishing, installing globally,
+   or using production secrets.
 4. Keep `smoke/public-contract-stub.mjs` as the shared contract boundary until
    the live MCP server package path is available.

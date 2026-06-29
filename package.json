@@ -10,15 +10,29 @@
   },
   "scripts": {
     "build": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw",
-    "check": "pnpm generated-artifacts && node smoke/client-smoke.mjs && pnpm secret-hygiene && pnpm public-surface && pnpm review-readiness",
+    "check": "pnpm generated-artifacts && pnpm core:contract && node smoke/client-smoke.mjs && pnpm smoke:live:preflight && pnpm runtime-decision-ledger && pnpm launch-handoff && pnpm packaging-action-parity && pnpm version-parity && pnpm claude:plugin-parity && pnpm claude:native-artifacts && pnpm cursor:transport-parity && pnpm cursor:native-artifacts && pnpm hermes:python-parity && pnpm hermes:native-artifacts && pnpm openclaw:native-artifacts && pnpm openclaw:native-parity && pnpm secret-hygiene && pnpm public-surface && pnpm review-readiness",
+    "claude:plugin-parity": "node scripts/check-claude-plugin-parity.mjs",
+    "claude:native-artifacts": "node scripts/check-claude-native-artifacts.mjs",
     "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --clean",
+    "core:contract": "node scripts/check-core-contract.mjs",
+    "cursor:native-artifacts": "node scripts/check-cursor-native-artifacts.mjs",
+    "cursor:transport-parity": "node scripts/check-cursor-transport-parity.mjs",
     "generated-artifacts": "pnpm typecheck && node scripts/check-generated-artifacts.mjs",
+    "hermes:native-artifacts": "node scripts/check-hermes-native-artifacts.mjs",
+    "hermes:python-parity": "node scripts/check-hermes-python-parity.mjs",
+    "launch-handoff": "node scripts/check-launch-handoff-consistency.mjs",
+    "openclaw:native-artifacts": "node scripts/check-openclaw-native-artifacts.mjs",
+    "openclaw:native-parity": "node scripts/check-openclaw-native-parity.mjs",
+    "packaging-action-parity": "node scripts/check-packaging-action-parity.mjs",
     "public-surface": "scripts/check-public-surface.sh",
     "review-readiness": "node scripts/check-review-readiness.mjs",
+    "runtime-decision-ledger": "node scripts/check-runtime-decision-ledger.mjs",
     "secret-hygiene": "node scripts/check-secret-hygiene.mjs",
     "smoke:dry-run": "pnpm typecheck && node smoke/client-smoke.mjs",
     "smoke:execute": "pnpm typecheck && node smoke/client-smoke.mjs --execute",
-    "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --pretty false"
+    "smoke:live:preflight": "node smoke/live-smoke-preflight.mjs",
+    "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --pretty false",
+    "version-parity": "node scripts/check-version-parity.mjs"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

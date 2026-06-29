@@ -42,13 +42,20 @@ export interface ConnectorConfigInput {
   headers?: Record<string, string>;
 }
 
-export interface McpServerConfig {
+export interface StdioMcpServerConfig {
   type?: "stdio";
   command: string;
   args: string[];
   env: Record<string, string>;
   cwd?: string;
 }
+
+export interface HttpMcpServerConfig {
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export type McpServerConfig = StdioMcpServerConfig | HttpMcpServerConfig;
 
 export interface McpConfigDocument {
   mcpServers: Record<string, McpServerConfig>;
@@ -130,7 +137,9 @@ export function defineConnectorConfigFromEnv(
 export function createMcpConfigDocument(
   serverName: string,
   runtime: ConnectorRuntimeConfig,
-  server: Pick<McpServerConfig, "command" | "args" | "cwd" | "type">,
+  server: Pick<StdioMcpServerConfig, "command" | "args" | "cwd" | "type"> & {
+    env?: Record<string, string>;
+  },
   options: McpConfigDocumentOptions = {}
 ): McpConfigDocument {
   return {
@@ -140,7 +149,24 @@ export function createMcpConfigDocument(
         command: server.command,
         args: server.args,
         ...(server.cwd ? { cwd: server.cwd } : {}),
-        env: createMcpEnvironment(runtime, options)
+        env: {
+          ...(server.env ?? {}),
+          ...createMcpEnvironment(runtime, options)
+        }
+      }
+    }
+  };
+}
+
+export function createHttpMcpConfigDocument(
+  serverName: string,
+  server: HttpMcpServerConfig
+): McpConfigDocument {
+  return {
+    mcpServers: {
+      [serverName]: {
+        url: server.url,
+        ...(server.headers !== undefined ? { headers: server.headers } : {})
       }
     }
   };

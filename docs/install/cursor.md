@@ -8,14 +8,17 @@ publish a marketplace entry or deprecate the old Cursor repo.
 
 - Node.js 20 or newer.
 - `pnpm install` run at the repo root.
-- A Membase API key available as `MEMBASE_API_KEY` in the shell or Cursor
-  environment.
+- No raw API key in the Cursor MCP JSON. If a later local fallback uses
+  `MEMBASE_API_KEY`, keep it as an environment reference instead of committing
+  a token value.
 
 ## Build And Sync Check
 
 ```bash
 pnpm --filter @membase/client-cursor build
 pnpm generated-artifacts
+pnpm cursor:transport-parity
+pnpm cursor:native-artifacts
 ```
 
 `pnpm generated-artifacts` verifies that the adapter output still matches
@@ -24,24 +27,16 @@ pnpm generated-artifacts
 
 ## MCP Config Placement
 
-Use `manifests/cursor/mcp.json` as the canonical local MCP example. Cursor
-supports project config at `.cursor/mcp.json` and global config at
-`~/.cursor/mcp.json`.
+Use `manifests/cursor/mcp.json` as the canonical local MCP example. It
+preserves the old Cursor connector's HTTP MCP-first path. Cursor supports
+project config at `.cursor/mcp.json` and global config at `~/.cursor/mcp.json`.
 
 ```json
 {
   "mcpServers": {
     "membase": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@membase/mcp-server"],
-      "env": {
-        "MEMBASE_API_BASE_URL": "https://api.membase.com",
-        "MEMBASE_API_KEY": "${env:MEMBASE_API_KEY}",
-        "MEMBASE_CLIENT_ID": "cursor",
-        "MEMBASE_CLIENT_NAME": "Cursor",
-        "MEMBASE_CLIENT_VERSION": "0.0.0"
-      }
+      "url": "https://mcp.membase.so/mcp",
+      "headers": {}
     }
   }
 }
@@ -59,9 +54,10 @@ For an all-projects local install, place the same JSON in `~/.cursor/mcp.json`.
 For plugin-local review, keep `clients/cursor/.cursor-plugin/plugin.json` and
 `clients/cursor/mcp.json` together at the Cursor plugin root.
 
-Do not paste raw API keys into any config file. Keep `MEMBASE_API_KEY` as
-`${env:MEMBASE_API_KEY}` and set the real value in the shell or Cursor
-environment:
+Do not paste raw API keys into any config file. The current HTTP MCP config has
+no `MEMBASE_API_KEY` field. If a later accepted local stdio fallback adds one,
+keep `MEMBASE_API_KEY` as `${env:MEMBASE_API_KEY}` and set the real value in
+the shell or Cursor environment:
 
 ```bash
 export MEMBASE_API_KEY="<membase-api-key>"
@@ -77,29 +73,41 @@ manifest copies in `manifests/cursor/` are the reviewable launch artifacts.
 The current Cursor manifest intentionally omits logo/marketplace assets until
 the marketplace asset pass. If a relative `logo` or `icon` path is added later,
 `pnpm generated-artifacts` verifies the referenced file exists.
+`clients/cursor/native-artifacts.json` records the old Cursor rules, skills,
+logo, and changelog as review-only evidence. It does not copy those artifacts
+into the integrated repo.
 
 ## Local Verification
 
 ```bash
 pnpm check
 pnpm smoke:execute
+pnpm cursor:transport-parity
+pnpm cursor:native-artifacts
 ```
 
 `pnpm check` typechecks the adapter, verifies generated artifacts, runs the
 dry-run smoke harness, scans for raw secret-looking values, and checks the
-public connector surface. `pnpm smoke:execute` additionally runs the
+public connector surface. `pnpm cursor:transport-parity` verifies that Cursor's
+committed MCP examples keep the HTTP MCP endpoint and do not regress to the
+generic stdio placeholder. `pnpm smoke:execute` additionally runs the
 adapter-declared local commands without publishing or calling the Membase API.
+`pnpm cursor:native-artifacts` verifies the old Cursor artifact snapshot and
+keeps logo/rule/skill/changelog files deferred until review.
 
-Host-level Cursor MCP connection checks remain pending until the shared
-`@membase/mcp-server` package path is available.
+Host-level Cursor MCP connection checks remain pending until the live-smoke D6
+test credential, endpoint/profile, and cleanup decisions are accepted.
 
 ## Review Checklist
 
 - `clients/cursor/.cursor-plugin/plugin.json` has connector capability copy
   only.
 - `clients/cursor/mcp.json` and `manifests/cursor/mcp.json` contain
-  `type: "stdio"` and `mcpServers.membase`.
-- `MEMBASE_API_KEY` is a Cursor environment reference, not a raw token.
+  `mcpServers.membase.url` set to `https://mcp.membase.so/mcp`.
+- `MEMBASE_API_KEY` is absent from the HTTP config, or, if a later fallback is
+  accepted, represented only as a Cursor environment reference.
+- `clients/cursor/native-artifacts.json` lists old Cursor rules, skills, logo,
+  and changelog evidence without copying deferred content.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
   private memory-engine details.
 

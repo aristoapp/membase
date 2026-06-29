@@ -16,14 +16,26 @@ local commands:
 ```bash
 pnpm check
 pnpm smoke:execute
+pnpm smoke:live:preflight
+pnpm cursor:transport-parity
 ```
 
 Live smoke can only be enabled after `docs/runtime-parity-decisions.md` has
 accepted at least:
 
-- `D2`: shared MCP server command or package path
+- `D2`: client runtime package or command path
 - `D3`: per-client transport precedence
 - `D6`: live client-to-MCP smoke gate
+
+Until then, `pnpm smoke:live:preflight` verifies the blocked state and fails if
+the docs or package scripts start claiming runnable live smoke before the
+remaining D2/D3 paths and D6 test inputs are accepted. Cursor HTTP MCP config
+is preserved locally, Claude plugin-local stdio config is now preserved in
+`clients/claude/.mcp.json`, Hermes provider import/register behavior is
+represented locally, and OpenClaw native extension metadata now points at the
+built local entrypoint. Live remote exercise is still blocked on the D6
+credential, endpoint/profile, cleanup decisions, Hermes live API behavior, and
+OpenClaw hook/tool runtime behavior.
 
 ## Required Inputs
 
@@ -31,10 +43,10 @@ Before implementing `pnpm smoke:live` or equivalent CI coverage, confirm:
 
 | Input | Required decision |
 | --- | --- |
-| MCP runtime | Package name, local command, version pinning, and whether the check may run `npx` or must use a local path. |
+| MCP runtime | Per-client runtime path: Claude plugin-local stdio, Cursor HTTP MCP, Hermes Python package/native provider, and OpenClaw native extension package. |
 | Credentials | Test-only `MEMBASE_API_KEY` policy, rotation owner, and whether CI can access the secret. |
 | Endpoint | Test endpoint or explicit test profile. The default must not target a user's production context. |
-| Transport | Per-client support for local stdio, remote MCP URL, or both. |
+| Transport | Per-client precedence plus any explicitly accepted fallback path. |
 | Cleanup | Whether test memories are deleted immediately, marked forgotten, or cleaned by a scheduled test profile policy. |
 | Logging | Redacted diagnostics format and whether generated config shape may be printed. |
 
@@ -79,10 +91,10 @@ without exposing secrets.
 
 | Client | Live smoke precondition | First acceptable live check |
 | --- | --- | --- |
-| Claude Code | Confirm whether launch uses the shared MCP package directly or a Claude plugin wrapper. | Validate generated Claude MCP config launches the Membase MCP runtime and completes remember/search/context/forget. |
-| Cursor | Confirm local stdio versus remote URL precedence. | Validate `.cursor/mcp.json`-compatible config with Cursor env interpolation and the same public operation flow. |
-| Hermes Agent | Confirm whether Hermes keeps a native provider package, translates MCP config, or uses MCP-only runtime. | Validate the accepted Hermes path without moving MCP server config into native plugin metadata. |
-| OpenClaw | Confirm native extension entrypoint and whether the first launch is MCP-only or plugin-plus-MCP. | Validate accepted OpenClaw config placement and the same public operation flow. |
+| Claude Code | Preserve plugin-local stdio unless a later review accepts a generic MCP package. | Validate the Claude plugin-local runtime completes remember/search/context/forget. |
+| Cursor | Preserve HTTP MCP first unless a later review accepts local stdio as primary. | Validate the old HTTP MCP path or accepted fallback with the same public operation flow. |
+| Hermes Agent | Preserve the Python package/native provider path unless MCP-only is accepted as equivalent. | Validate the accepted Hermes package/provider path without moving MCP config into native plugin metadata prematurely. |
+| OpenClaw | Preserve native extension package path before adding MCP-only fallback behavior. | Validate accepted OpenClaw extension/config placement, hook/tool behavior, and the same public operation flow. |
 
 ## Redaction Requirements
 

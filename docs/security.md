@@ -33,8 +33,9 @@ Supported public environment variables:
 Client-specific generated config uses the safest reference syntax available:
 
 - Claude, Hermes, and OpenClaw examples use `${MEMBASE_API_KEY}`.
-- Cursor examples use `${env:MEMBASE_API_KEY}` because Cursor supports explicit
-  environment interpolation in MCP config.
+- Cursor's current HTTP MCP example has no local `MEMBASE_API_KEY` field. If a
+  later local fallback is accepted, it should use `${env:MEMBASE_API_KEY}`
+  because Cursor supports explicit environment interpolation in MCP config.
 
 ## Local Setup
 
@@ -56,6 +57,8 @@ files may be committed, and they must not contain real credentials.
   `redactEnvironment`
 - generated MCP config documents use environment references rather than raw
   secret values
+- `pnpm core:contract` validates environment-reference generation and
+  diagnostic redaction at the shared core boundary
 - `smoke/client-smoke.mjs` injects a fake sentinel secret and fails if adapter
   diagnostics or MCP config include that raw value
 - `scripts/check-secret-hygiene.mjs` scans committed connector artifacts for
@@ -70,8 +73,11 @@ pnpm smoke:dry-run
 pnpm smoke:execute
 ```
 
-Live client-to-MCP smoke tests should stay pending until a shared
-`@membase/mcp-server` package path or equivalent local command is available.
+Live client-to-MCP smoke tests should stay pending until the remaining
+client-specific runtime behavior and live test inputs are accepted. Claude
+plugin-local stdio, Cursor HTTP MCP config, Hermes provider register behavior,
+and OpenClaw native entrypoint metadata are preserved, but live exercise still
+needs explicit test credentials, endpoint/profile, and cleanup policy.
 The concrete launch-gate runbook is `docs/live-smoke-runbook.md`.
 When live smoke is added, it should:
 

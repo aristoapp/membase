@@ -1,0 +1,204 @@
+{
+  "source": {
+    "repo": "aristoapp/openclaw-membase",
+    "branch": "main",
+    "treeSha": "b5e2838cd053ab833426aaaf03b47a8b9921ad25",
+    "checkedAt": "2026-06-29T06:47:40Z",
+    "treeUrl": "https://api.github.com/repos/aristoapp/openclaw-membase/git/trees/main?recursive=1"
+  },
+  "policy": {
+    "status": "review-only",
+    "summary": "Snapshot old OpenClaw-native commands, hooks, tools, config, update checks, and runtime tests before any behavior is ported.",
+    "copyRule": "Do not copy old OpenClaw commands, hooks, tools, config helpers, update checks, or test fixtures until each behavior is accepted and rewritten to the public connector-capability boundary.",
+    "forbiddenRuntimeDirectoriesUntilNativeArtifactsPorted": [
+      "commands",
+      "hooks",
+      "tools",
+      "skills"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "package.json",
+      "kind": "package-metadata",
+      "status": "represented",
+      "sha": "59a348b00a2a7078cc542aa0626fe22b57d59026",
+      "size": 1252
+    },
+    {
+      "path": ".github/workflows/check.yml",
+      "kind": "workflow",
+      "status": "represented",
+      "sha": "f962dffdf855e260c7676d54e0f79a0d91e84a16",
+      "size": 409
+    },
+    {
+      "path": "openclaw.plugin.json",
+      "kind": "plugin-metadata",
+      "status": "represented",
+      "sha": "90eb3a3d973d71a5785c073c6f1341d4db53a1ee",
+      "size": 2102
+    },
+    {
+      "path": "index.ts",
+      "kind": "native-entrypoint",
+      "status": "represented",
+      "sha": "f8c56ab650224354989feb1d4c33e0a6fa60d7c8",
+      "size": 39
+    },
+    {
+      "path": "src/index.ts",
+      "kind": "native-runtime",
+      "status": "deferred-review-only",
+      "sha": "7f2d10aca74cdb744d7db5edb0f3f240b6876897",
+      "size": 12932
+    },
+    {
+      "path": "src/config.ts",
+      "kind": "native-config",
+      "status": "deferred-review-only",
+      "sha": "f352ee03f895ff60794cc2bdc2f6ba4be2b0aa4b",
+      "size": 6140
+    },
+    {
+      "path": "src/client.ts",
+      "kind": "runtime-client",
+      "status": "deferred-review-only",
+      "sha": "c80f589eb49183d9ce8d6841f9f544fefae6f2a4",
+      "size": 10773
+    },
+    {
+      "path": "src/commands/cli.ts",
+      "kind": "openclaw-command",
+      "status": "deferred-review-only",
+      "sha": "3f9d237a85d548a749728ca533a9b636e0cbb96d",
+      "size": 26663
+    },
+    {
+      "path": "src/hooks/capture.ts",
+      "kind": "openclaw-hook",
+      "status": "deferred-review-only",
+      "sha": "51221171274ad2217f5298268b552f09f2e39c3e",
+      "size": 9860
+    },
+    {
+      "path": "src/hooks/recall.ts",
+      "kind": "openclaw-hook",
+      "status": "deferred-review-only",
+      "sha": "5026e37ee37b7682e59ddf5bd3e76ac12131893a",
+      "size": 4127
+    },
+    {
+      "path": "src/tools/add-wiki.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "b9b1016902a1147f1216a2a93fdfe5c2e819da2f",
+      "size": 3318
+    },
+    {
+      "path": "src/tools/current-date.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "5b89a2c151114c384e9bba559191c30fb4bdecce",
+      "size": 1745
+    },
+    {
+      "path": "src/tools/delete-wiki.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "c1e46102619cfe741ba12b756f38b52245d0517a",
+      "size": 2803
+    },
+    {
+      "path": "src/tools/forget.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "789ac4bd9ca5d270596a8815ef908b809d5a627e",
+      "size": 2612
+    },
+    {
+      "path": "src/tools/profile.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "bc740451bc66b49e88f7dc1dcabb74022ba809b8",
+      "size": 2562
+    },
+    {
+      "path": "src/tools/search-wiki.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "81776482954967d3aeb25a1c586f670effff87f0",
+      "size": 2546
+    },
+    {
+      "path": "src/tools/search.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "532535a484e73c0381343dfa94c4056dc1cf3a31",
+      "size": 5341
+    },
+    {
+      "path": "src/tools/store.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "64876943cd621cc74ff91a4f367824c5cfc3a7ec",
+      "size": 4212
+    },
+    {
+      "path": "src/tools/update-wiki.ts",
+      "kind": "openclaw-tool",
+      "status": "deferred-review-only",
+      "sha": "255c04bc3d7a1e34ad0d0288720820f5ecd18752",
+      "size": 4011
+    },
+    {
+      "path": "src/format.ts",
+      "kind": "display-formatting",
+      "status": "deferred-review-only",
+      "sha": "0cd349601b3a4d8f9c92ce2f37ab16bdb5e80da5",
+      "size": 10972
+    },
+    {
+      "path": "src/star-prompt.ts",
+      "kind": "launch-prompt",
+      "status": "deferred-review-only",
+      "sha": "e4a1bd201de970c9f18e7bbb619de04d4836e5cb",
+      "size": 5499
+    },
+    {
+      "path": "src/update-check.ts",
+      "kind": "update-check",
+      "status": "deferred-review-only",
+      "sha": "c0843a670bd1e79728cb37021b54ba47ab35a45b",
+      "size": 7680
+    },
+    {
+      "path": "src/wiki-project.ts",
+      "kind": "wiki-project",
+      "status": "deferred-review-only",
+      "sha": "223ec9fe324b40ebc11e624831af6b897cf0c802",
+      "size": 1249
+    },
+    {
+      "path": "src/membase-tools.test.ts",
+      "kind": "test-evidence",
+      "status": "deferred-review-only",
+      "sha": "8678cc3c1a75bd5f3355073f782a72dacef26aaf",
+      "size": 36576
+    },
+    {
+      "path": "src/star-prompt.test.ts",
+      "kind": "test-evidence",
+      "status": "deferred-review-only",
+      "sha": "680d61c10887ed795a9faf3a4011608f349e5c3f",
+      "size": 2020
+    },
+    {
+      "path": "src/update-check.test.ts",
+      "kind": "test-evidence",
+      "status": "deferred-review-only",
+      "sha": "82b1cc5552033dc2c8daf1b6f463bc4a113fbade",
+      "size": 7230
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-membase"
+version = "0.0.0"
+description = "Review scaffold for the Membase Hermes Agent connector runtime package."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+hermes-membase = "hermes_membase.cli:main"
+hermes-membase-install = "hermes_membase.installer:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hermes_membase = ["plugin/*.yaml"]

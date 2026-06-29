@@ -23,6 +23,11 @@ const adapterSpecs = [
         pick: (artifacts) => artifacts.plugin
       },
       {
+        path: "clients/claude/.mcp.json",
+        format: "json",
+        pick: (artifacts) => artifacts.mcp
+      },
+      {
         path: "manifests/claude/mcp.json",
         format: "json",
         pick: (artifacts) => artifacts.mcp

@@ -36,7 +36,9 @@ const textExtensions = new Set([
   ".json",
   ".md",
   ".mjs",
+  ".py",
   ".sh",
+  ".toml",
   ".ts",
   ".yaml",
   ".yml"

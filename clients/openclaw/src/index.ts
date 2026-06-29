@@ -57,6 +57,18 @@ export interface OpenClawConnectorArtifacts {
   mcp: McpConfigDocument;
 }
 
+export interface OpenClawExtensionRuntime {
+  logger?: {
+    info(message: string): void;
+  };
+}
+
+export interface OpenClawNativeExtension {
+  id: typeof OPENCLAW_PLUGIN_ID;
+  kind: typeof OPENCLAW_PLUGIN_KIND;
+  register(runtime?: OpenClawExtensionRuntime): void;
+}
+
 export function defineOpenClawRuntimeConfig(
   input: OpenClawRuntimeConfigInput = {}
 ): ConnectorRuntimeConfig {
@@ -199,3 +211,13 @@ export const openClawAdapter: ClientAdapter = defineAdapter({
     ];
   }
 });
+
+export const openClawNativeExtension: OpenClawNativeExtension = {
+  id: OPENCLAW_PLUGIN_ID,
+  kind: OPENCLAW_PLUGIN_KIND,
+  register(runtime?: OpenClawExtensionRuntime): void {
+    runtime?.logger?.info("Membase OpenClaw extension entrypoint loaded.");
+  }
+};
+
+export default openClawNativeExtension;

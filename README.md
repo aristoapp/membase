@@ -50,32 +50,66 @@ pnpm check
 
 `pnpm check` typechecks the shared packages and runs the public-surface guard.
 It also verifies that committed client manifest and MCP examples match the
-current adapter-generated output, then runs the client smoke harness in dry-run
-mode, the secret-hygiene guard, and the review-readiness guard for required
-docs, install guides, manifests, and client artifacts.
+current adapter-generated output, checks the shared core auth/env/MCP/redaction
+contract, then runs the client smoke harness in dry-run mode, the live-smoke
+preflight, the runtime-decision ledger guard, the launch handoff consistency
+guard, the packaging/action parity guard, the version parity guard, the Claude
+plugin validation parity gate, the Claude
+native artifact snapshot gate, the Cursor HTTP transport parity gate, the Cursor
+native artifact snapshot gate, the Hermes Python parity gate, the Hermes native
+artifact snapshot gate, the OpenClaw native artifact snapshot gate, the OpenClaw native
+typecheck/build parity gate, the secret-hygiene
+guard, and the review-readiness guard for required docs, install guides,
+manifests, and client artifacts.
 
 ```bash
+pnpm core:contract
 pnpm smoke:dry-run
 pnpm smoke:execute
+pnpm smoke:live:preflight
+pnpm runtime-decision-ledger
+pnpm launch-handoff
+pnpm version-parity
+pnpm claude:plugin-parity
+pnpm claude:native-artifacts
+pnpm cursor:transport-parity
+pnpm cursor:native-artifacts
+pnpm hermes:python-parity
+pnpm hermes:native-artifacts
+pnpm openclaw:native-artifacts
+pnpm openclaw:native-parity
 ```
 
 `pnpm smoke:dry-run` validates adapter MCP config shape, declared smoke
-commands, secret redaction, and the public remember/search/context/forget
-contract through the local stub. `pnpm smoke:execute` additionally runs the
-adapter-declared local commands. Live MCP server exercise remains pending until
-the shared `@membase/mcp-server` package path is available; the launch-gate
-runbook is `docs/live-smoke-runbook.md`.
+commands, secret redaction, Cursor HTTP MCP shape, and the public
+remember/search/context/forget contract through the local stub.
+`pnpm smoke:execute` additionally runs the adapter-declared local commands.
+Live MCP server exercise remains pending until the remaining client-specific
+runtime behavior replaces placeholder MCP examples: Hermes runtime API
+behavior and OpenClaw native hook/tool behavior. Claude's plugin-local stdio
+config, Cursor's HTTP MCP config, Hermes' provider import/register boundary,
+and OpenClaw's native extension entrypoint are already preserved from the old
+repos.
+The launch-gate runbook is
+`docs/live-smoke-runbook.md`. `pnpm smoke:live:preflight` verifies that this
+blocked state remains explicit until D2/D3 runtime decisions are implemented.
 
 Current client package coverage:
 
 - `@membase/client-claude`: adapter boundary, Claude plugin metadata, and MCP
-  config example.
-- `@membase/client-cursor`: adapter boundary, Cursor plugin metadata, and MCP
-  config example.
-- `@membase/client-hermes`: adapter boundary, Hermes plugin metadata, and MCP
-  config example.
-- `@membase/client-openclaw`: adapter boundary, OpenClaw plugin manifest, and
-  MCP config example.
+  plugin-local config example, plus local Claude Code plugin validation and
+  review-only native artifact snapshot parity gates.
+- `@membase/client-cursor`: adapter boundary, Cursor plugin metadata, HTTP MCP
+  config example, transport parity guard, and review-only native artifact
+  snapshot for old rules, skills, logo, and changelog evidence.
+- `@membase/client-hermes`: adapter boundary, Hermes plugin metadata, MCP
+  config example, non-publishing Python package/provider boundary parity
+  scaffold, and review-only native artifact snapshot for old provider, capture,
+  OAuth, wiki, formatting, asset, update-check, and test evidence.
+- `@membase/client-openclaw`: adapter boundary, OpenClaw plugin manifest,
+  native extension entrypoint, MCP config example, and review-only native
+  artifact snapshot for old commands, hooks, tools, config helpers, update
+  checks, and runtime test evidence.
 
 ## Current Source of Truth
 
@@ -95,6 +129,9 @@ For existing client repo inventory and migration parity status, open
 `docs/migration-parity.md`.
 
 For old repo test coverage mapping, open `docs/test-coverage-parity.md`.
+
+For old repo packaging and non-publishing GitHub Action parity mapping, open
+`docs/packaging-action-parity.md`.
 
 For secret handling, redaction guarantees, and live MCP smoke prerequisites,
 open `docs/security.md`.

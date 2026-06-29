@@ -844,3 +844,1066 @@ Next step:
 - Future automation runs should continue committing and pushing verified repo
   artifact changes to `origin main`, while keeping publishing, marketplace,
   old-repo, and Linear mutations blocked unless explicitly requested.
+
+## 2026-06-28 20:15 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Continued from the post-run-20 review-readiness phase by fixing a stale
+  internal context-board status: `docs/context.html` now reflects the live
+  smoke runbook, GitHub sync record, and current external-mutation boundary.
+- Added `docs/context.html` to `scripts/check-review-readiness.mjs` so future
+  `pnpm check` runs fail if the context board or its core status markers are
+  missing.
+- Updated `docs/review-summary.md` with the latest local verification time.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Fresh OSS research was not needed for this narrow status-consistency guard.
+  Evidence came from current local docs and the prior `RUN_LOG.md` GitHub sync
+  entry.
+
+Verification:
+
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, secret-hygiene scan for
+  67 files, public-surface guard, and review-readiness guard for 20 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Review `docs/runtime-parity-decisions.md` and `docs/live-smoke-runbook.md`;
+  accept or defer D2, D3, and D6 before adding a runnable live MCP smoke
+  command.
+
+## 2026-06-28 20:29 UTC
+
+- Recorded Jaehwan's review decisions in `docs/runtime-parity-decisions.md`:
+  D1 accepted as `https://github.com/aristoapp/membase-plugin-mcp`, D5 accepted
+  as client README-level asset reuse guidance, and D6 accepted in principle
+  pending D2/D3.
+- Expanded D2, D3, and D4 with detailed decision notes covering the MCP runtime
+  command/package path, local stdio versus remote transport precedence, and
+  client-native runtime parity scope.
+- Verified that `@membase/mcp-server` is not currently available from the
+  public npm registry, so D2 still needs either package publication, a different
+  package name, or a local runtime path before live smoke can run honestly.
+- Added `Marketplace Asset Reuse` sections to each client README and updated
+  `docs/marketplace-assets.md` so asset reuse guidance lives with the client
+  adapter docs while generated manifests remain asset-free until files are
+  copied and checked.
+- Tightened `scripts/check-review-readiness.mjs` so each client README must keep
+  its asset reuse guidance and `pnpm generated-artifacts` marker.
+- Updated `docs/context.html` and `docs/review-summary.md` with the latest
+  decision and verification state.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Local repo evidence: generated MCP examples in `manifests/*/mcp.json`,
+  adapter constants in `clients/*/src/index.ts`, and existing marketplace
+  asset notes in `docs/marketplace-assets.md`.
+- Registry check: `npm view @membase/mcp-server name version bin dist-tags
+  --json` returned npm 404 on 2026-06-28.
+
+Verification:
+
+- First `pnpm check` correctly failed because the new review-readiness marker
+  caught a missing `pnpm generated-artifacts` note in `clients/hermes/README.md`.
+- After fixing the Hermes README marker, `pnpm check` passed: generated
+  artifact comparison for 15 files, dry-run smoke harness for 4 clients and 8
+  declared commands, secret-hygiene scan for 67 files, public-surface guard,
+  and review-readiness guard for 20 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Decide D2 concretely: publish `@membase/mcp-server`, choose a different
+  package, provide a local runtime command, or choose a remote MCP endpoint.
+  Then D3 transport precedence can be locked and `pnpm smoke:live` can be
+  implemented under the accepted D6 gate.
+
+## 2026-06-28 20:49 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Continued from the D2/D3 blocker by adding a non-network live-smoke preflight
+  instead of pretending live MCP smoke is runnable before the runtime command
+  and transport path are accepted.
+- Added `smoke/live-smoke-preflight.mjs`, which verifies that D2 remains marked
+  as needing the MCP runtime command decision, D3 remains marked as needing
+  transport precedence, D6 remains accepted only in principle, and the committed
+  MCP examples still use the documented placeholder runtime with API-key env
+  references.
+- Wired `pnpm smoke:live:preflight` into `pnpm check` and
+  `scripts/check-review-readiness.mjs`.
+- Updated `README.md`, `docs/architecture.md`, `docs/live-smoke-runbook.md`,
+  `docs/runtime-parity-decisions.md`, `docs/review-summary.md`,
+  `docs/context.html`, and `smoke/README.md` so review docs consistently state
+  that live smoke is blocked but now guarded by preflight.
+- Corrected `docs/review-summary.md` so the previous explicitly authorized
+  GitHub `origin/main` sync is not described as if no GitHub mutation had ever
+  happened.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked the public npm registry for the placeholder package:
+  https://registry.npmjs.org/@membase%2fmcp-server
+- `npm view @membase/mcp-server name version bin dist-tags --json` still
+  returned npm 404 on 2026-06-28.
+- Local evidence: generated MCP examples under `manifests/*/mcp.json`,
+  `docs/runtime-parity-decisions.md`, and `docs/live-smoke-runbook.md`.
+
+Verification:
+
+- `pnpm smoke:live:preflight` passed: D2/D3 remain blocked, D6 is pending those
+  decisions, and 4 MCP configs keep the documented placeholder runtime.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  secret-hygiene scan for 68 files, public-surface guard, and review-readiness
+  guard for 22 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Decide D2 concretely: publish `@membase/mcp-server`, choose a different
+  package, provide a local runtime command, or choose a remote MCP endpoint.
+  Then lock D3 transport precedence and replace the blocked preflight with a
+  real `pnpm smoke:live` implementation under the accepted D6 gate.
+
+## 2026-06-28 21:10 UTC
+
+- Updated `PLAN.md` with the post-20 runtime parity plan.
+- Changed the plan from a single generic MCP package path to preserving the
+  existing client-specific runtime and packaging paths first:
+  - Claude Code: plugin-local stdio runtime and Claude plugin validation.
+  - Cursor: HTTP MCP endpoint first, with local stdio only as an explicit
+    secondary path.
+  - Hermes Agent: Python package/native provider path and build/test/verify-dist
+    checks, with publish disabled until requested.
+  - OpenClaw: native extension package path, Bun typecheck/build, and manifest
+    parity.
+- Updated `docs/runtime-parity-decisions.md` so D2/D3/D4 now reflect
+  client-specific runtime package paths, per-client transport precedence, and a
+  packaging/action parity-first migration order.
+- Updated `docs/migration-parity.md`, `README.md`, `docs/architecture.md`,
+  `docs/live-smoke-runbook.md`, `docs/review-summary.md`,
+  `docs/context.html`, and `smoke/README.md` so summary docs no longer imply
+  that `@membase/mcp-server` should be the forced default for every client.
+- Confirmed the current worktree now includes `docs/packaging-action-parity.md`
+  and `scripts/check-packaging-action-parity.mjs`, with the parity guard wired
+  into `pnpm check`.
+- Updated `smoke/live-smoke-preflight.mjs` so it guards the new state: D2/D3
+  remain implementation-pending, D6 remains pending those runtime paths, and
+  current placeholder MCP examples are still honestly marked as placeholders.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old repo packaging and workflow evidence:
+  - `aristoapp/claude-membase`: Bun `check` workflow, Claude plugin validation,
+    plugin-local `scripts/mcp-server.cjs`.
+  - `aristoapp/cursor-membase`: `.cursor-plugin/plugin.json`, HTTP MCP
+    `https://mcp.membase.so/mcp`, rules, skills, logo.
+  - `aristoapp/hermes-membase`: `pyproject.toml`, `Makefile`, PyPI publish
+    workflow, native plugin YAML.
+  - `aristoapp/openclaw-membase`: npm/Bun package metadata, native OpenClaw
+    manifest, check workflow, extension entrypoint.
+
+Verification:
+
+- First `pnpm check` failed because `smoke/live-smoke-preflight.mjs` still
+  expected the old D2/D3 wording. Updated the preflight guard to match the new
+  runtime-parity plan.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  packaging/action parity guard, secret-hygiene scan for 70 files,
+  public-surface guard, and review-readiness guard for 24 shared files and 4
+  clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Use `docs/packaging-action-parity.md` to add the next concrete
+  non-publishing checks, then start replacing placeholder MCP examples with
+  client-specific runtime configs.
+
+## 2026-06-28 21:18 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, and `git status`.
+- Added `docs/packaging-action-parity.md` with per-client package/workflow
+  evidence and non-publishing parity targets for Claude Code, Cursor, Hermes
+  Agent, and OpenClaw.
+- Added `scripts/check-packaging-action-parity.mjs` and wired it into
+  `pnpm check`.
+- Updated README, architecture, migration parity, test coverage parity,
+  runtime decision, review summary, and context board docs to reference the new
+  guard.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old repo package/workflow sources:
+  - https://raw.githubusercontent.com/aristoapp/claude-membase/main/package.json
+  - https://raw.githubusercontent.com/aristoapp/claude-membase/main/.github/workflows/check.yml
+  - https://raw.githubusercontent.com/aristoapp/cursor-membase/main/mcp.json
+  - https://api.github.com/repos/aristoapp/cursor-membase/contents/.github/workflows?ref=main
+  - https://raw.githubusercontent.com/aristoapp/hermes-membase/main/pyproject.toml
+  - https://raw.githubusercontent.com/aristoapp/hermes-membase/main/.github/workflows/publish.yml
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/package.json
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/.github/workflows/check.yml
+
+Verification:
+
+- `pnpm packaging-action-parity` passed.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  packaging/action parity guard, secret-hygiene scan for 70 files,
+  public-surface guard, and review-readiness guard for 24 shared files and
+  4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Convert the packaging/action map into the first host-specific local parity
+  check, starting with the safest non-publishing target: OpenClaw typecheck/build
+  or Hermes Python build verification, before replacing placeholder MCP examples
+  with client-specific runtime configs.
+
+## 2026-06-28 21:50 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory, and `git status`.
+- Continued from the packaging/action parity map by adding the first
+  host-specific non-publishing parity gate for OpenClaw.
+- Added `scripts/check-openclaw-native-parity.mjs`, which verifies the local
+  OpenClaw package stays private and non-publishing, checks native manifest
+  basics, then runs the integrated OpenClaw typecheck and build path.
+- Wired `pnpm openclaw:native-parity` into `pnpm check`.
+- Updated README, architecture, packaging parity, migration parity, test
+  coverage parity, runtime decision, review summary, smoke, OpenClaw README,
+  and context board docs to record that OpenClaw is the first completed local
+  parity gate while Claude, Cursor, and Hermes remain pending.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old OpenClaw package/workflow sources:
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/package.json
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/.github/workflows/check.yml
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/openclaw.plugin.json
+  - https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/index.ts
+
+Verification:
+
+- First `pnpm openclaw:native-parity` failed because the guard treated
+  `apiKeyEnv` as a raw secret default. The guard was narrowed so environment
+  variable name defaults such as `MEMBASE_API_KEY` are allowed while raw token,
+  secret, or password defaults remain forbidden.
+- `pnpm openclaw:native-parity` passed.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  packaging/action parity guard, OpenClaw native parity gate, secret-hygiene
+  scan for 71 files, public-surface guard, and review-readiness guard for
+  25 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Add the next host-specific non-publishing parity check, preferably Hermes
+  Python build/distribution verification, while keeping PyPI publish disabled.
+
+## 2026-06-28 22:21 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory, and `git status`.
+- Continued from the packaging/action parity queue by adding the next
+  host-specific non-publishing parity gate for Hermes Agent.
+- Added `clients/hermes/python/` as a local Python package review scaffold with
+  `pyproject.toml`, dry-run `hermes-membase` and `hermes-membase-install`
+  console script entrypoints, and a package-data copy of the native Hermes
+  plugin YAML.
+- Added `scripts/check-hermes-python-parity.mjs`, which validates Hermes package
+  metadata, console script entrypoints, native YAML sync with
+  `clients/hermes/plugin/plugin.yaml`, Python syntax, and non-publishing
+  boundaries.
+- Wired `pnpm hermes:python-parity` into `pnpm check`.
+- Updated README, Hermes install/client docs, architecture, packaging parity,
+  migration parity, test coverage parity, runtime decision, review summary,
+  smoke docs, and context board docs to record Hermes as a completed local
+  parity gate while provider runtime behavior remains pending.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old Hermes package metadata:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/pyproject.toml
+- Rechecked old Hermes build/check/verify-dist targets:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/Makefile
+- Rechecked old Hermes tag-based PyPI publish workflow:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/.github/workflows/publish.yml
+
+Verification:
+
+- `pnpm hermes:python-parity` passed.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  packaging/action parity guard, Hermes Python parity gate, OpenClaw native
+  parity gate, secret-hygiene scan for 78 files, public-surface guard, and
+  review-readiness guard for 26 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Add the next safe non-publishing parity check, likely Claude plugin
+  validation if it can run locally without marketplace submission, or Cursor
+  metadata/rules/skills snapshot checks after those assets are ported and
+  rewritten to the connector-capability boundary.
+
+## 2026-06-28 22:52 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory, and `git status`.
+- Continued from the host-specific non-publishing parity queue by adding the
+  Claude plugin parity gate.
+- Added `scripts/check-claude-plugin-parity.mjs`, which checks Claude
+  manifest/package version drift, required connector-capability metadata,
+  canonical MCP secret references, and then runs
+  `claude plugin validate clients/claude` with the installed Claude Code CLI.
+- Wired `pnpm claude:plugin-parity` into `pnpm check`.
+- Updated README, Claude install/client docs, architecture, packaging parity,
+  migration parity, test coverage parity, runtime decision ledger, review
+  summary, smoke docs, and context board so Claude is recorded as a completed
+  local parity gate while commands/hooks/skills/runtime behavior remain
+  pending explicit migration decisions.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old Claude package scripts:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/package.json
+- Rechecked old Claude check workflow:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/.github/workflows/check.yml
+- Rechecked old Claude plugin manifest and MCP config shape:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.claude-plugin/plugin.json
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.mcp.json
+- Local evidence: Claude Code CLI was available as `claude` version
+  `2.1.187`, and `claude plugin validate clients/claude` passed.
+
+Verification:
+
+- `pnpm claude:plugin-parity` passed.
+- `pnpm packaging-action-parity` passed.
+- `pnpm review-readiness` passed.
+- `pnpm check` passed: generated artifact comparison for 15 files, dry-run
+  smoke harness for 4 clients and 8 declared commands, live-smoke preflight,
+  packaging/action parity guard, Claude plugin parity gate, Hermes Python
+  parity gate, OpenClaw native parity gate, secret-hygiene scan for 79 files,
+  public-surface guard, and review-readiness guard for 27 shared files and
+  4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Add the next safe Cursor parity step: preserve the old HTTP MCP-first
+  transport and add metadata/rules/skills snapshot checks only after those
+  artifacts are ported and rewritten to the connector-capability boundary.
+
+## 2026-06-28 23:26 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Continued from the Cursor parity step by preserving the old Cursor HTTP
+  MCP-first transport in generated adapter output.
+- Extended `packages/core` with an HTTP MCP server config shape while keeping
+  existing stdio config generation for Claude, Hermes, and OpenClaw.
+- Updated `clients/cursor/src/index.ts`, `clients/cursor/mcp.json`, and
+  `manifests/cursor/mcp.json` so Cursor now points at
+  `https://mcp.membase.so/mcp` with a headers object instead of the generic
+  `@membase/mcp-server` placeholder.
+- Added `scripts/check-cursor-transport-parity.mjs`, wired
+  `pnpm cursor:transport-parity` into `pnpm check`, and updated smoke/preflight
+  checks so Cursor HTTP is allowed while the other D2/D3 runtime paths remain
+  blocked.
+- Updated README, Cursor install/client docs, architecture, security, runtime
+  decision ledger, packaging/action parity, migration/test parity, marketplace,
+  deprecation, research notes, review summary, smoke docs, and context board.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old Cursor MCP config:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/mcp.json
+- Rechecked old Cursor plugin metadata:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/.cursor-plugin/plugin.json
+- Rechecked old Cursor repo contents for rules, skills, logo, README, and
+  changelog artifacts:
+  https://github.com/aristoapp/cursor-membase
+
+Verification:
+
+- First `pnpm cursor:transport-parity` failed because the new package script
+  line was accidentally appended outside the JSON object. Moved it into
+  `package.json` scripts and reran the guard.
+- `pnpm cursor:transport-parity` passed.
+- `pnpm generated-artifacts` passed: TypeScript build and generated artifact
+  comparison for 15 files.
+- `pnpm smoke:live:preflight` passed with Cursor HTTP preserved and remaining
+  runtime paths blocked.
+- `pnpm check` passed: generated artifacts, dry-run smoke harness for 4 clients
+  and 8 declared commands, live-smoke preflight, packaging/action parity,
+  Claude plugin parity, Cursor transport parity, Hermes Python parity, OpenClaw
+  native parity, secret-hygiene scan for 80 files, public-surface guard, and
+  review-readiness guard for 28 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Add the next Cursor-safe parity artifact only after deciding whether to port
+  rules, skills, logo, or changelog text; otherwise continue with remaining
+  runtime paths: Claude plugin-local stdio, Hermes Python/native provider, and
+  OpenClaw native extension entrypoint.
+
+## 2026-06-28 23:51 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Continued from the remaining runtime-path queue by preserving Claude's old
+  plugin-local stdio MCP path in generated config artifacts.
+- Extended `packages/core` stdio MCP generation with client-specific extra env
+  support, then updated `clients/claude/src/index.ts`,
+  `clients/claude/.mcp.json`, and `manifests/claude/mcp.json` to use
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs` with
+  `MEMBASE_CLAUDE_PLUGIN=1` and shared Membase env references.
+- Expanded generated-artifact, review-readiness, Claude plugin parity,
+  Cursor transport parity, and live-smoke preflight guards so Claude
+  plugin-local and Cursor HTTP-first paths are both treated as preserved while
+  Hermes/OpenClaw runtime paths remain pending.
+- Updated Claude install docs, runtime decision ledger, smoke docs, security
+  notes, migration/test/packaging parity docs, review summary, research notes,
+  and context board.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old Claude plugin-local MCP config:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.mcp.json
+
+Verification:
+
+- `pnpm generated-artifacts` passed: TypeScript build and generated artifact
+  comparison for 16 files.
+- `pnpm claude:plugin-parity` passed.
+- `pnpm smoke:live:preflight` passed with Claude plugin-local MCP and Cursor
+  HTTP MCP preserved while Hermes/OpenClaw runtime paths remain blocked.
+- First `pnpm check` run failed because `scripts/check-cursor-transport-parity.mjs`
+  still expected the old D2/D3 wording. Updated the guard to the new
+  Claude+Cursor preserved status.
+- Final `pnpm check` passed: generated artifacts, dry-run smoke harness for
+  4 clients and 8 declared commands, live-smoke preflight, packaging/action
+  parity, Claude plugin parity, Cursor transport parity, Hermes Python parity,
+  OpenClaw native parity, secret-hygiene scan for 81 files, public-surface
+  guard, and review-readiness guard for 28 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue remaining runtime parity with the next smallest accepted path:
+  Hermes Python/native provider runtime config or OpenClaw native extension
+  entrypoint. Deeper Claude commands/hooks/skills should wait for explicit
+  feature-group acceptance.
+
+## 2026-06-29 00:24 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Continued from the remaining runtime parity queue by preserving the OpenClaw
+  native extension entrypoint without porting hook/tool behavior or adding an
+  MCP-only fallback.
+- Added `openclaw.extensions` to `clients/openclaw/package.json`, pointing at
+  the built review entrypoint `./dist/index.js`.
+- Added a default `openClawNativeExtension` export from
+  `clients/openclaw/src/index.ts` with connector metadata and a no-op local
+  register boundary.
+- Expanded `scripts/check-openclaw-native-parity.mjs` so it verifies the
+  `openclaw.extensions` metadata, builds the package, imports the built
+  entrypoint, and checks the default extension export.
+- Updated OpenClaw install/client docs, runtime decision ledger, live-smoke
+  preflight wording, packaging/migration/test parity docs, marketplace and
+  deprecation plans, security notes, review summary, smoke docs, and context
+  board to distinguish completed OpenClaw entrypoint parity from pending
+  OpenClaw hook/tool runtime behavior.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, or external mutation action was performed in this run.
+
+Research/evidence:
+
+- Rechecked old OpenClaw package metadata and extension entrypoint field:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/package.json
+- Rechecked old OpenClaw extension module shape:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/src/index.ts
+
+Verification:
+
+- `pnpm --filter @membase/client-openclaw typecheck` passed.
+- `pnpm openclaw:native-parity` passed.
+- `pnpm smoke:live:preflight` passed with Claude plugin-local MCP, Cursor HTTP
+  MCP, and OpenClaw native entrypoint preserved while Hermes runtime remains
+  pending.
+- `pnpm cursor:transport-parity` passed.
+- `pnpm review-readiness` passed.
+- `pnpm check` passed: generated artifacts, dry-run smoke harness for
+  4 clients and 8 declared commands, live-smoke preflight, packaging/action
+  parity, Claude plugin parity, Cursor transport parity, Hermes Python parity,
+  OpenClaw native parity, secret-hygiene scan for 81 files, public-surface
+  guard, and review-readiness guard for 28 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue remaining runtime parity with Hermes Python/native provider runtime
+  behavior, or start an explicit OpenClaw hook/tool parity batch if accepted.
+
+## 2026-06-29 04:55 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Continued from the remaining runtime parity queue by adding the next safe
+  Hermes Python/provider boundary step without enabling live API calls,
+  publishing, installing globally, or mutating Hermes config.
+- Added `clients/hermes/python/src/hermes_membase/provider.py` with a
+  review-safe `MembaseMemoryProvider` that exposes only remember, search, task
+  context, and forget tool schemas.
+- Added Hermes native plugin register shims at
+  `clients/hermes/python/src/hermes_membase/plugin/__init__.py` and
+  `clients/hermes/python/src/hermes_membase/plugin/cli.py`.
+- Expanded `scripts/check-hermes-python-parity.mjs` so it validates provider
+  import, fake Hermes `register(ctx)` behavior, public tool names, CLI
+  registration, Python syntax, native YAML sync, and non-publishing boundaries.
+- Updated README, Hermes client/install docs, architecture, runtime decision
+  ledger, live-smoke preflight, smoke docs, migration/test/packaging parity
+  docs, security, marketplace/deprecation docs, review summary, and context
+  board to record Hermes provider import/register parity while keeping Hermes
+  live API behavior pending.
+- Updated `scripts/check-cursor-transport-parity.mjs` after the first full
+  check showed it still expected the previous D2/D3 wording.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Rechecked old Hermes provider class and methods:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/src/membase_hermes/provider.py
+- Rechecked old Hermes plugin register shim:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/src/membase_hermes/plugin/__init__.py
+- Rechecked old Hermes plugin CLI shim:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/src/membase_hermes/plugin/cli.py
+
+Verification:
+
+- `pnpm hermes:python-parity` passed.
+- `pnpm smoke:live:preflight` passed with Claude plugin-local MCP, Cursor HTTP
+  MCP, Hermes provider register path, and OpenClaw native entrypoint preserved
+  while Hermes live API behavior remains pending.
+- First `pnpm check` run failed because `scripts/check-cursor-transport-parity.mjs`
+  still expected the old D2/D3 runtime ledger wording. Updated the guard and
+  reran checks.
+- `pnpm cursor:transport-parity` passed.
+- Final `pnpm check` passed: generated artifacts, dry-run smoke harness for
+  4 clients and 8 declared commands, live-smoke preflight, packaging/action
+  parity, Claude plugin parity, Cursor transport parity, Hermes Python parity,
+  OpenClaw native parity, secret-hygiene scan for 84 files, public-surface
+  guard, and review-readiness guard for 28 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with the next explicitly safe runtime parity batch: Hermes live API
+  behavior after package/runtime ownership is accepted, or OpenClaw hook/tool
+  parity if that batch is accepted first.
+
+## 2026-06-29 05:18 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe verification-hardening step from the post-20 queue
+  instead of adding live API behavior or external mutations.
+- Added `scripts/check-core-contract.mjs`, a standalone shared-core contract
+  guard for config defaults, env-derived config, MCP env references, HTTP MCP
+  config shape, validation errors, and diagnostic redaction.
+- Wired `pnpm core:contract` into `package.json` and `pnpm check`, and updated
+  `scripts/check-review-readiness.mjs` so the review-readiness guard verifies
+  the new core-contract gate remains part of the local launch check path.
+- Updated README, architecture, security, test coverage parity, review summary,
+  and context board docs to record the new shared-core guard without exposing
+  Membase internals.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Used local source-of-truth and verification files for this safe hardening
+  step: `PLAN.md`, `docs/test-coverage-parity.md`,
+  `packages/core/src/index.ts`, `smoke/client-smoke.mjs`, and
+  `scripts/check-review-readiness.mjs`.
+- No new OSS lookup was needed because this run only guarded the existing
+  shared core contract already defined in this repo.
+
+Verification:
+
+- `pnpm core:contract` passed.
+- `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, Claude plugin parity, Cursor transport
+  parity, Hermes Python parity, OpenClaw native parity, secret-hygiene scan
+  for 85 files, public-surface guard, and review-readiness guard for 29 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with explicitly accepted runtime parity only: Hermes live API
+  behavior after package/runtime ownership is accepted, OpenClaw hook/tool
+  parity if that batch is accepted first, or Cursor rules/skills/assets as a
+  review-only snapshot batch.
+
+## 2026-06-29 05:52 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe verification-hardening step from the post-20 queue:
+  Cursor rules/skills/assets as a review-only snapshot batch, without copying
+  old content or enabling marketplace, publish, GitHub, Linear, live MCP, or
+  old-repo mutation actions.
+- Added `clients/cursor/native-artifacts.json`, a structured snapshot of the
+  old Cursor repo's plugin metadata, MCP config, `rules/membase.mdc`, four
+  skill files, `assets/logo.svg`, and changelog evidence with blob SHAs and
+  deferred statuses.
+- Added `scripts/check-cursor-native-artifacts.mjs`, wired
+  `pnpm cursor:native-artifacts` into `pnpm check`, and updated packaging and
+  review-readiness guards so the snapshot gate stays part of the local launch
+  check path.
+- Updated README, Cursor install/client docs, architecture, migration parity,
+  test coverage parity, runtime decision ledger, marketplace/deprecation docs,
+  research notes, review summary, and context board to record that Cursor
+  rules/skills/logo/changelog are snapshot-guarded but not ported.
+- Kept generated Cursor manifests free of `logo` or `icon` fields until an
+  asset file is copied and explicitly approved.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Rechecked the old Cursor repo recursive tree at
+  `177d29c78b2f4698ead9d5108eedeae5b6b059b7`:
+  https://api.github.com/repos/aristoapp/cursor-membase/git/trees/main?recursive=1
+- Rechecked old Cursor plugin metadata and logo reference:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/.cursor-plugin/plugin.json
+- Rechecked old Cursor HTTP MCP config:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/mcp.json
+- Rechecked old Cursor changelog for the zero-dependency HTTP MCP shift and
+  rules/skills history:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/CHANGELOG.md
+
+Verification:
+
+- First `pnpm cursor:native-artifacts` failed because
+  `docs/packaging-action-parity.md` and `clients/cursor/README.md` were missing
+  exact evidence markers. Added the markers and reran.
+- `pnpm cursor:native-artifacts` passed.
+- `pnpm packaging-action-parity` passed.
+- `pnpm review-readiness` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, Claude plugin parity, Cursor transport
+  parity, Cursor native artifact snapshot, Hermes Python parity, OpenClaw
+  native parity, secret-hygiene scan for 87 files, public-surface guard, and
+  review-readiness guard for 30 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: rewrite
+  and port Cursor rules/skills/assets after review, Hermes live API behavior
+  after package/runtime ownership is accepted, or OpenClaw hook/tool parity if
+  that batch is accepted first.
+
+## 2026-06-29 06:23 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe artifact-parity batch from the post-20 queue: Claude
+  native commands/hooks/skills/agent/runtime/session-start evidence as a
+  review-only snapshot, without copying old behavior or enabling marketplace,
+  publish, GitHub, Linear, live MCP, or old-repo mutation actions.
+- Added `clients/claude/native-artifacts.json`, a structured snapshot of the
+  old Claude repo's plugin metadata, MCP config, workflow/package evidence,
+  command files, hook config, skill files, agent file, bundled runtime scripts,
+  and session-start evidence with tree/blob SHA evidence and deferred statuses.
+- Added `scripts/check-claude-native-artifacts.mjs`, wired
+  `pnpm claude:native-artifacts` into `pnpm check`, packaging parity, and
+  review-readiness.
+- Updated README, Claude install/client docs, architecture, migration parity,
+  test coverage parity, packaging/action parity, runtime decision ledger,
+  marketplace/deprecation docs, research notes, review summary, and context
+  board to record that Claude native artifacts are snapshot-guarded but not
+  ported.
+- Kept generated Claude manifests free of native command/hook/skill/agent
+  declarations until those behaviors are explicitly accepted for migration.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Rechecked the old Claude repo recursive tree at
+  `51c15ab3e05bd4f82847c98dd70f926f9eae4459`:
+  https://api.github.com/repos/aristoapp/claude-membase/git/trees/main?recursive=1
+- Rechecked old Claude plugin metadata:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.claude-plugin/plugin.json
+- Rechecked old Claude plugin-local MCP config:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.mcp.json
+- Rechecked old Claude package/workflow evidence:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/package.json
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/.github/workflows/check.yml
+
+Verification:
+
+- First `pnpm claude:native-artifacts` failed because
+  `docs/packaging-action-parity.md` was missing the exact
+  `plugin/commands/login.md` evidence marker. Added the marker and reran.
+- `pnpm claude:native-artifacts` passed.
+- `pnpm packaging-action-parity` passed.
+- `pnpm review-readiness` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, Claude plugin parity, Claude native
+  artifact snapshot, Cursor transport parity, Cursor native artifact snapshot,
+  Hermes Python parity, OpenClaw native parity, secret-hygiene scan for
+  89 files, public-surface guard, and review-readiness guard for 31 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: rewrite
+  and port Claude commands/hooks/skills or Cursor rules/skills/assets after
+  review, Hermes live API behavior after package/runtime ownership is accepted,
+  or OpenClaw hook/tool parity if that batch is accepted first.
+
+## 2026-06-29 06:56 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe artifact-parity batch from the post-20 queue: OpenClaw
+  native commands/hooks/tools/config/update/test evidence as a review-only
+  snapshot, without copying old behavior or enabling marketplace, publish,
+  GitHub, Linear, live MCP, or old-repo mutation actions.
+- Added `clients/openclaw/native-artifacts.json`, a structured snapshot of the
+  old OpenClaw repo's package metadata, check workflow, native manifest,
+  command CLI, hooks, tools, config helpers, update checks, and runtime tests
+  with tree/blob SHA evidence and deferred statuses.
+- Added `scripts/check-openclaw-native-artifacts.mjs`, wired
+  `pnpm openclaw:native-artifacts` into `pnpm check`, packaging parity, and
+  review-readiness.
+- Updated README, OpenClaw install/client docs, architecture, migration parity,
+  test coverage parity, packaging/action parity, runtime decision ledger,
+  deprecation docs, research notes, review summary, and context board to record
+  that OpenClaw native artifacts are snapshot-guarded but not ported.
+- Kept generated OpenClaw manifests free of command, hook, or tool
+  declarations until those behaviors are explicitly accepted for migration.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Rechecked the old OpenClaw repo recursive tree at
+  `b5e2838cd053ab833426aaaf03b47a8b9921ad25`:
+  https://api.github.com/repos/aristoapp/openclaw-membase/git/trees/main?recursive=1
+- Rechecked old OpenClaw package metadata:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/package.json
+- Rechecked old OpenClaw native manifest:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/openclaw.plugin.json
+- Rechecked old OpenClaw check workflow:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/.github/workflows/check.yml
+
+Verification:
+
+- First `pnpm openclaw:native-artifacts` failed because the expected doc
+  markers had not yet been added. Added the markers and reran.
+- `pnpm openclaw:native-artifacts` passed.
+- `pnpm packaging-action-parity` passed.
+- `pnpm review-readiness` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, Claude plugin parity, Claude native
+  artifact snapshot, Cursor HTTP transport parity, Cursor native artifact
+  snapshot, Hermes Python parity, OpenClaw native artifact snapshot, OpenClaw
+  native parity, secret-hygiene scan for 91 files, public-surface guard, and
+  review-readiness guard for 32 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: rewrite
+  and port OpenClaw hooks/tools, Claude commands/hooks/skills, or Cursor
+  rules/skills/assets after review, or implement Hermes live API behavior after
+  package/runtime ownership is accepted.
+
+## 2026-06-29 09:19 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, memory skill guidance, and
+  `git status`.
+- Chose the next smallest review-hardening step from the post-20 queue: keep
+  launch handoff docs consistent after D1 accepted the public repository URL,
+  without selecting a release tag, publishing, marketplace submission, Linear
+  update, old-repo mutation, or runtime behavior port.
+- Added `scripts/check-launch-handoff-consistency.mjs`, wired
+  `pnpm launch-handoff` into `pnpm check`, and made
+  `scripts/check-review-readiness.mjs` require the new guard.
+- Synchronized D1 public repo URL state across
+  `docs/runtime-parity-decisions.md`, `docs/deprecation-plan.md`,
+  `docs/marketplace-assets.md`, and `docs/review-summary.md` while keeping the
+  release tag or bundle path as a launch-time decision.
+- Added explicit `No External Mutations` sections to marketplace and
+  deprecation planning docs so review handoff docs preserve the local-only
+  launch boundary.
+- Updated README, architecture, test coverage parity, review summary, and
+  context board to include the new launch handoff consistency gate.
+
+Research/evidence:
+
+- Fresh OSS lookup was not needed for this guard-only step. Evidence came from
+  the current local source-of-truth and handoff artifacts:
+  `docs/runtime-parity-decisions.md`, `docs/deprecation-plan.md`,
+  `docs/marketplace-assets.md`, `docs/review-summary.md`, `README.md`, and
+  `package.json`.
+
+Verification:
+
+- Initial `pnpm launch-handoff` failed because marketplace and deprecation docs
+  did not expose the exact `No External Mutations` marker. Added the explicit
+  sections and reran.
+- `pnpm launch-handoff` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, runtime decision ledger guard, launch handoff consistency guard,
+  packaging/action parity, version parity, Claude plugin parity, Claude native
+  artifact snapshot, Cursor HTTP transport parity, Cursor native artifact
+  snapshot, Hermes Python parity, Hermes native artifact snapshot, OpenClaw
+  native artifact snapshot, OpenClaw native parity, secret-hygiene scan for
+  96 files, public-surface guard, and review-readiness guard for 36 shared
+  files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+- `git diff --check` passed.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: choose a
+  reviewed batch such as Claude commands/hooks/skills, Cursor rules/skills/logo,
+  Hermes live provider behavior, or OpenClaw hooks/tools, or keep hardening
+  local review guards if those runtime batches are not yet accepted.
+
+## 2026-06-29 08:49 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, memory skill guidance, and
+  `git status`.
+- Chose the next smallest safe review-hardening step from the post-20 plan:
+  make the runtime decision ledger executable instead of porting unaccepted
+  client-native behavior.
+- Added `scripts/check-runtime-decision-ledger.mjs`, which verifies the D1-D6
+  decision rows, the current blocked live-smoke state, the unresolved
+  `@membase/mcp-server` placeholder evidence, and the non-mutating review
+  boundary.
+- Wired `pnpm runtime-decision-ledger` into `pnpm check` and
+  `scripts/check-review-readiness.mjs`.
+- Updated README, architecture, test coverage parity, review summary, and
+  context board so the new guard is visible in the review path.
+- Kept public connector surfaces capability-only and did not port Claude
+  commands/hooks/skills, Cursor rules/skills/assets, Hermes live behavior, or
+  OpenClaw hooks/tools without an explicit migration decision.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Fresh OSS lookup was not needed for this guard-only step. Evidence came from
+  current local review artifacts: `PLAN.md`,
+  `docs/runtime-parity-decisions.md`, `docs/review-summary.md`,
+  `smoke/live-smoke-preflight.mjs`, and `package.json`.
+
+Verification:
+
+- `pnpm runtime-decision-ledger` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, runtime decision ledger guard, packaging/action parity, version
+  parity, Claude plugin parity, Claude native artifact snapshot, Cursor HTTP
+  transport parity, Cursor native artifact snapshot, Hermes Python parity,
+  Hermes native artifact snapshot, OpenClaw native artifact snapshot,
+  OpenClaw native parity, secret-hygiene scan for 95 files, public-surface
+  guard, and review-readiness guard for 35 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+- `git diff --check` passed.
+
+Next step:
+
+- Continue only with explicitly accepted runtime or artifact parity. Candidate
+  batches remain Claude commands/hooks/skills, Cursor rules/skills/assets,
+  Hermes live provider behavior, or OpenClaw hooks/tools after review accepts
+  that behavior.
+
+## 2026-06-29 08:24 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe review-hardening step from the post-20 queue: Hermes
+  native artifact snapshot parity before any live provider behavior, package
+  publish workflow, marketplace submission, GitHub, Linear, old-repo mutation,
+  or client-runtime behavior port.
+- Added `clients/hermes/native-artifacts.json`, a structured review-only
+  snapshot of the old Hermes repo's package metadata, publish workflows,
+  plugin/register files, provider, capture, CLI, OAuth, wiki, formatting,
+  banner asset, update-check, and runtime test evidence with tree/blob SHA
+  evidence and deferred statuses.
+- Added `scripts/check-hermes-native-artifacts.mjs`, wired
+  `pnpm hermes:native-artifacts` into `pnpm check`, packaging parity, and
+  review-readiness.
+- Updated README, Hermes client/install docs, architecture, migration parity,
+  test coverage parity, packaging/action parity, runtime decision ledger,
+  research notes, review summary, and context board to record that Hermes
+  native artifacts are snapshot-guarded but not ported.
+- Kept the Hermes provider scaffold review-only: live API calls, old provider
+  runtime modules, OAuth/wiki/formatting/update behavior, and banner asset copy
+  remain deferred until explicitly accepted.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Rechecked the old Hermes repo recursive tree at
+  `70d5d8951cf417dce0cebf159abaae330defde96`:
+  https://api.github.com/repos/aristoapp/hermes-membase/git/trees/main?recursive=1
+- Rechecked old Hermes package metadata:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/pyproject.toml
+- Rechecked old Hermes publish workflow:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/.github/workflows/publish.yml
+
+Verification:
+
+- Baseline `pnpm check` passed before edits.
+- `pnpm hermes:native-artifacts` passed.
+- `pnpm packaging-action-parity` passed.
+- `pnpm review-readiness` passed.
+- `git diff --check` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, version parity, Claude plugin parity,
+  Claude native artifact snapshot, Cursor HTTP transport parity, Cursor native
+  artifact snapshot, Hermes Python parity, Hermes native artifact snapshot,
+  OpenClaw native artifact snapshot, OpenClaw native parity, secret-hygiene
+  scan for 94 files, public-surface guard, and review-readiness guard for
+  34 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: rewrite
+  and port Claude commands/hooks/skills, Cursor rules/skills/assets, Hermes
+  live provider behavior, or OpenClaw hooks/tools only after review accepts
+  the corresponding behavior.
+
+## 2026-06-29 07:51 UTC
+
+- Read required repo state: `README.md`, `PLAN.md`, `RUN_LOG.md`,
+  `docs/architecture.md`, automation memory status, and `git status`.
+- Chose the next safe review-hardening step from the post-20 queue:
+  normalize package and manifest versioning across review surfaces without
+  choosing a release tag, publishing packages, or porting deferred client-native
+  behavior.
+- Added `scripts/check-version-parity.mjs`, which verifies that the root,
+  shared package, client package, Claude/Cursor plugin manifest, Hermes
+  Python/YAML package metadata, and MCP `MEMBASE_CLIENT_VERSION` examples all
+  stay synchronized to the current review version.
+- Wired `pnpm version-parity` into `pnpm check` and
+  `scripts/check-review-readiness.mjs`.
+- Updated README, PLAN, architecture, migration parity, test coverage parity,
+  packaging/action parity, review summary, smoke docs, and context board to
+  record version parity as a local non-publishing guard.
+- Kept OpenClaw native plugin manifests without a version field until ownership
+  of that host-specific manifest field is accepted.
+- No GitHub, Linear, marketplace, publish, merge, old-repo deprecation, live
+  MCP smoke, global install, or external mutation action was performed in this
+  run.
+
+Research/evidence:
+
+- Used local source-of-truth and review files for this safe hardening step:
+  `PLAN.md`, `docs/migration-parity.md`, `docs/packaging-action-parity.md`,
+  package manifests, committed client manifests, Hermes Python metadata, and
+  committed MCP examples.
+- No new OSS lookup was needed because this run guarded a local pending
+  checklist item rather than changing runtime behavior or host integration
+  shape.
+
+Verification:
+
+- `pnpm version-parity` passed.
+- Final `pnpm check` passed: generated artifacts, shared core contract guard,
+  dry-run smoke harness for 4 clients and 8 declared commands, live-smoke
+  preflight, packaging/action parity, version parity, Claude plugin parity,
+  Claude native artifact snapshot, Cursor HTTP transport parity, Cursor native
+  artifact snapshot, Hermes Python parity, OpenClaw native artifact snapshot,
+  OpenClaw native parity, secret-hygiene scan for 92 files, public-surface
+  guard, and review-readiness guard for 33 shared files and 4 clients.
+- `pnpm smoke:execute` passed: the smoke harness executed the 8
+  adapter-declared local commands.
+- `git diff --check` passed.
+
+Next step:
+
+- Continue with explicitly accepted runtime or artifact parity only: rewrite
+  and port OpenClaw hooks/tools, Claude commands/hooks/skills, or Cursor
+  rules/skills/assets after review, or implement Hermes live API behavior after
+  package/runtime ownership is accepted.

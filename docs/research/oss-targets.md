@@ -115,8 +115,29 @@ logic under `clients/claude`, and keep MCP config generation in the shared core.
   https://github.com/aristoapp/cursor-membase
 
 Implication for this run: add a Cursor adapter package, keep Cursor metadata
-compact, use Cursor's `type: "stdio"` and `${env:...}` config style, and keep
-the public connector copy focused on capabilities rather than private internals.
+compact, and keep the public connector copy focused on capabilities rather than
+private internals. Later runtime parity evidence corrected the generated MCP
+config from local stdio to the old repo's HTTP MCP-first path.
+
+## 2026-06-28 Cursor Runtime Parity Evidence
+
+- Existing `aristoapp/cursor-membase` root `mcp.json` points Cursor at the
+  remote HTTP MCP endpoint `https://mcp.membase.so/mcp` with an empty headers
+  object:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/mcp.json
+- Existing Cursor plugin metadata records the old plugin shape and references
+  a logo asset, but its description includes implementation-specific memory
+  claims that should not be copied verbatim into this integrated repo:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/.cursor-plugin/plugin.json
+- Existing Cursor repo contents include `rules/membase.mdc`, four skill
+  directories, logo, README, and changelog artifacts; no old GitHub workflow
+  directory was found through the GitHub contents API:
+  https://github.com/aristoapp/cursor-membase
+
+Implication for this run: preserve Cursor HTTP MCP as the primary generated MCP
+config and add a non-publishing transport parity guard before porting rules,
+skills, logo, or changelog text. Add local stdio only as an explicit secondary
+fallback after review.
 
 ## 2026-06-28 Hermes Adapter Evidence
 
@@ -240,6 +261,19 @@ metadata boundaries. Do not add marketplace assets until the dedicated
 marketplace asset pass; broken relative asset references should fail generated
 artifact verification.
 
+## 2026-06-28 Claude Runtime Parity Evidence
+
+- `aristoapp/claude-membase` keeps plugin-local MCP config at
+  `plugin/.mcp.json` and launches the runtime through
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs` with
+  `MEMBASE_CLAUDE_PLUGIN=1`:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.mcp.json
+
+Implication for this run: preserve the Claude plugin-local stdio command in
+generated MCP config and keep the shared Membase API key as an environment
+reference. Do not replace it with a generic `@membase/mcp-server` package unless
+that runtime is explicitly accepted later.
+
 ## 2026-06-28 Hermes And OpenClaw Install Evidence
 
 - Hermes Agent's MCP guide describes `mcp_servers` entries with `command`,
@@ -311,3 +345,93 @@ assets prematurely. Old Cursor and Hermes image assets are candidates, not
 current manifest references. Public copy should be rewritten around connector
 capabilities and verified with generated-artifact, smoke, secret-hygiene, and
 public-surface checks before any submission review.
+
+## 2026-06-29 Cursor Native Artifact Snapshot Evidence
+
+- Rechecked the `aristoapp/cursor-membase` recursive tree at
+  `177d29c78b2f4698ead9d5108eedeae5b6b059b7`; it contains
+  `.cursor-plugin/plugin.json`, `mcp.json`, `rules/membase.mdc`, four
+  `skills/*/SKILL.md` files, `assets/logo.svg`, and `CHANGELOG.md`:
+  https://api.github.com/repos/aristoapp/cursor-membase/git/trees/main?recursive=1
+- Rechecked old Cursor plugin metadata; it references `assets/logo.svg` and
+  includes implementation-specific copy that should not be copied directly into
+  generated integrated manifests:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/.cursor-plugin/plugin.json
+- Rechecked old Cursor MCP config; it still points at
+  `https://mcp.membase.so/mcp`:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/mcp.json
+- Rechecked old Cursor changelog; it records the zero-dependency remote HTTP
+  MCP shift and the rules/skills rewrite history:
+  https://raw.githubusercontent.com/aristoapp/cursor-membase/main/CHANGELOG.md
+
+Implication for this run: add `clients/cursor/native-artifacts.json` as a
+review-only path/SHA snapshot and guard it with `pnpm cursor:native-artifacts`.
+Do not copy Cursor rules, skills, logo, or changelog content until the copy is
+rewritten to the public connector-capability boundary and asset reuse is
+approved.
+
+## 2026-06-29 Claude Native Artifact Snapshot Evidence
+
+- Rechecked the `aristoapp/claude-membase` recursive tree at
+  `51c15ab3e05bd4f82847c98dd70f926f9eae4459`; it contains
+  plugin metadata, plugin-local MCP config, `plugin/commands/*`,
+  `plugin/hooks/hooks.json`, `plugin/skills/*/SKILL.md`,
+  `plugin/agents/membase-curator.md`, bundled runtime scripts, and
+  `src/hooks/session-start.ts`:
+  https://api.github.com/repos/aristoapp/claude-membase/git/trees/main?recursive=1
+- Rechecked old Claude plugin metadata and MCP config as the represented
+  metadata/runtime-path baseline:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.claude-plugin/plugin.json
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/plugin/.mcp.json
+- Rechecked old Claude package/workflow evidence for the local non-publishing
+  check boundary:
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/package.json
+  https://raw.githubusercontent.com/aristoapp/claude-membase/main/.github/workflows/check.yml
+
+Implication for this run: add `clients/claude/native-artifacts.json` as a
+review-only path/SHA snapshot and guard it with `pnpm claude:native-artifacts`.
+Do not copy Claude commands, hooks, skills, agents, or bundled runtime scripts
+until each behavior is accepted and rewritten to the public
+connector-capability boundary.
+
+## 2026-06-29 OpenClaw Native Artifact Snapshot Evidence
+
+- Rechecked the `aristoapp/openclaw-membase` recursive tree at
+  `b5e2838cd053ab833426aaaf03b47a8b9921ad25`; it contains package metadata,
+  `.github/workflows/check.yml`, `openclaw.plugin.json`, `src/commands/cli.ts`,
+  hook sources, tool sources, config helpers, update-check behavior, and
+  runtime test files:
+  https://api.github.com/repos/aristoapp/openclaw-membase/git/trees/main?recursive=1
+- Rechecked old OpenClaw package metadata and workflow evidence for the local
+  non-publishing check boundary:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/package.json
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/.github/workflows/check.yml
+- Rechecked old OpenClaw native manifest metadata as the represented
+  control-plane baseline:
+  https://raw.githubusercontent.com/aristoapp/openclaw-membase/main/openclaw.plugin.json
+
+Implication for this run: add `clients/openclaw/native-artifacts.json` as a
+review-only path/SHA snapshot and guard it with
+`pnpm openclaw:native-artifacts`. Do not copy OpenClaw commands, hooks, tools,
+config helpers, update checks, or runtime tests until each behavior is accepted
+and rewritten to the public connector-capability boundary.
+
+## 2026-06-29 Hermes Native Artifact Snapshot Evidence
+
+- Rechecked the `aristoapp/hermes-membase` recursive tree at
+  `70d5d8951cf417dce0cebf159abaae330defde96`; it contains Python package
+  metadata, publish workflows, native plugin YAML, provider/register files,
+  capture/config/client/OAuth/wiki/formatting/update modules, banner asset, and
+  pytest files:
+  https://api.github.com/repos/aristoapp/hermes-membase/git/trees/main?recursive=1
+- Rechecked old Hermes package metadata and publish workflow evidence for the
+  local non-publishing check boundary:
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/pyproject.toml
+  https://raw.githubusercontent.com/aristoapp/hermes-membase/main/.github/workflows/publish.yml
+
+Implication for this run: add `clients/hermes/native-artifacts.json` as a
+review-only path/SHA snapshot and guard it with
+`pnpm hermes:native-artifacts`. Do not copy Hermes provider runtime, capture,
+OAuth, wiki, formatting, banner asset, update-check, or runtime tests until
+each behavior is accepted and rewritten to the public connector-capability
+boundary.

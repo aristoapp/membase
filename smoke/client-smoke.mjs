@@ -145,6 +145,12 @@ function verifyMcpConfig(clientId, mcpConfig, runtime) {
 
   const [serverName, server] = servers[0];
   assert(serverName === "membase", `${clientId} MCP server should be named membase`);
+
+  if (clientId === "cursor") {
+    verifyCursorHttpMcpConfig(server);
+    return;
+  }
+
   assert(typeof server.command === "string" && server.command, `${clientId} MCP command missing`);
   assert(Array.isArray(server.args), `${clientId} MCP args must be an array`);
   assert(server.env && typeof server.env === "object", `${clientId} MCP env missing`);
@@ -172,6 +178,25 @@ function verifyMcpConfig(clientId, mcpConfig, runtime) {
   assert(
     JSON.stringify(server).includes(FAKE_SECRET) === false,
     `${clientId} MCP config included a raw smoke secret`
+  );
+}
+
+function verifyCursorHttpMcpConfig(server) {
+  assert(
+    server.url === "https://mcp.membase.so/mcp",
+    "cursor MCP config must preserve the old HTTP MCP endpoint"
+  );
+  assert(
+    server.headers && typeof server.headers === "object" && !Array.isArray(server.headers),
+    "cursor MCP config must include a headers object"
+  );
+  assert(
+    server.command === undefined && server.args === undefined,
+    "cursor MCP config must not fall back to the placeholder stdio command"
+  );
+  assert(
+    JSON.stringify(server).includes(FAKE_SECRET) === false,
+    "cursor MCP config included a raw smoke secret"
   );
 }
 

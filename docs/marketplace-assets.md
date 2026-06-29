@@ -49,17 +49,17 @@ Support and ownership fields:
 | Owner name | Membase | Ready for review. |
 | Support email | `support@aristo.so` | Ready for review; old Claude marketplace used `support@membase.so`. |
 | Homepage | `https://membase.com` | Matches current generated manifests. |
-| Repository | `https://github.com/aristoapp/membase-plugin-mcp` | Ready after repo publication path is confirmed. |
+| Repository | `https://github.com/aristoapp/membase-plugin-mcp` | Ready for review; release tag or bundle path remains a launch-time decision. |
 | License | MIT | Matches current generated manifests and old public repos. |
 
 ## Asset Inventory
 
 | Client | Existing source evidence | Reuse decision | Blocker |
 | --- | --- | --- | --- |
-| Claude Code | `aristoapp/claude-membase` has `.claude-plugin/marketplace.json` and `plugin/.claude-plugin/plugin.json`. | Reuse the package-style metadata shape and owner/license fields after rewriting copy to the shared launch copy above. | Decide final marketplace source path for a monorepo package: repo root, `clients/claude`, or generated release bundle. |
-| Cursor | `aristoapp/cursor-membase` has `.cursor-plugin/plugin.json` and `assets/logo.svg`. | Reuse the logo only after explicit design/legal review, then add it under `clients/cursor/assets/` and regenerate manifest output. Keep current connector-capability copy. | Current Cursor manifest intentionally has no `logo` field until the file is ported and checked. |
-| Hermes Agent | `aristoapp/hermes-membase` has `hermes-membase-banner.png` and `src/membase_hermes/plugin/plugin.yaml`. | Treat the banner as an optional review asset. Keep native YAML metadata separate from MCP server config. | Decide whether Hermes runtime remains a Python package dependency or moves into this repo before final catalog packaging. |
-| OpenClaw | `aristoapp/openclaw-membase` has `openclaw.plugin.json` and native extension metadata, but no obvious image asset in the repo tree. | Use the native manifest shape already represented in `clients/openclaw/openclaw.plugin.json`. Create or request a new image asset only if the target listing requires one. | Decide native extension entrypoint, auth model, and runtime parity before publishing OpenClaw listing copy. |
+| Claude Code | `aristoapp/claude-membase` has `.claude-plugin/marketplace.json` and `plugin/.claude-plugin/plugin.json`. | Document asset reuse guidance in `clients/claude/README.md`; reuse the package-style metadata shape and owner/license fields after rewriting copy to the shared launch copy above. | Decide final marketplace source path for a monorepo package: repo root, `clients/claude`, or generated release bundle. |
+| Cursor | `aristoapp/cursor-membase` has `.cursor-plugin/plugin.json` and `assets/logo.svg`. | Document asset reuse guidance in `clients/cursor/README.md`; reuse the logo only after explicit design/legal review, then add it under `clients/cursor/assets/` and regenerate manifest output. | Current Cursor manifest intentionally has no `logo` field until the file is ported and checked. |
+| Hermes Agent | `aristoapp/hermes-membase` has `hermes-membase-banner.png` and `src/membase_hermes/plugin/plugin.yaml`. | Document asset reuse guidance in `clients/hermes/README.md`; treat the banner as an optional review asset and keep native YAML metadata separate from MCP server config. | Decide whether Hermes live runtime remains a Python package dependency or moves into this repo before final catalog packaging; provider import/register behavior is already represented locally. |
+| OpenClaw | `aristoapp/openclaw-membase` has `openclaw.plugin.json` and native extension metadata, but no obvious image asset in the repo tree. | Document asset reuse guidance in `clients/openclaw/README.md`; use the native manifest shape already represented in `clients/openclaw/openclaw.plugin.json`; preserve the native entrypoint in package metadata. | Decide native auth model and hook/tool runtime parity before publishing OpenClaw listing copy. |
 
 ## Per-Client Checklist
 
@@ -69,6 +69,9 @@ Support and ownership fields:
   `clients/claude/.claude-plugin/plugin.json`.
 - [x] Reviewable manifest copy exists at `manifests/claude/plugin.json`.
 - [x] Install guide exists at `docs/install/claude.md`.
+- [x] Old Claude commands, hooks, skills, agent, bundled runtime scripts, and
+  session-start evidence are snapshotted in
+  `clients/claude/native-artifacts.json`.
 - [ ] Draft Claude marketplace descriptor for the integrated repo.
 - [ ] Decide final plugin source path for marketplace submission.
 - [ ] Decide whether commands, skills, hooks, and plugin-root MCP config are
@@ -82,12 +85,15 @@ Support and ownership fields:
 - [x] Plugin-local MCP config exists at `clients/cursor/mcp.json`.
 - [x] Reviewable manifest copies exist under `manifests/cursor/`.
 - [x] Install guide exists at `docs/install/cursor.md`.
+- [x] Old Cursor rules, skills, logo, and changelog evidence is snapshotted in
+  `clients/cursor/native-artifacts.json`.
 - [ ] Port `assets/logo.svg` only after review, then update adapter-generated
   manifest output and committed manifest copies together.
-- [ ] Decide whether the marketplace listing advertises local stdio config,
-  remote MCP config, or both with clear precedence.
+- [x] Preserve remote HTTP MCP config as the primary Cursor path.
+- [ ] Decide whether the marketplace listing also advertises a local stdio
+  fallback, and only with clear secondary precedence.
 - [ ] Rewrite any rules, skills, and changelog text around connector
-  capabilities before porting.
+  capabilities before porting from the snapshot.
 - [ ] Run `pnpm generated-artifacts` after any `logo` or `icon` field is added.
 
 ### Hermes Agent
@@ -99,7 +105,8 @@ Support and ownership fields:
 - [ ] Decide whether to reference the old Python package, publish a new package,
   or keep Hermes MCP-only for the first integrated review.
 - [ ] Decide whether `hermes-membase-banner.png` is reused, replaced, or omitted.
-- [ ] Add catalog-specific metadata only after the runtime/package decision.
+- [ ] Add catalog-specific metadata only after the live runtime/package
+  decision; provider import/register behavior is already represented locally.
 - [ ] Run local smoke checks without production credentials.
 
 ### OpenClaw
@@ -108,7 +115,7 @@ Support and ownership fields:
 - [x] MCP config example exists at `clients/openclaw/mcp.json`.
 - [x] Reviewable manifest copies exist under `manifests/openclaw/`.
 - [x] Install guide exists at `docs/install/openclaw.md`.
-- [ ] Decide native extension entrypoint parity versus MCP-only review config.
+- [x] Preserve native extension entrypoint parity in package metadata.
 - [ ] Decide whether env-only API key config is enough for first listing review.
 - [ ] Create or request a marketplace image only if OpenClaw listing rules
   require one.
@@ -127,6 +134,13 @@ pnpm smoke:execute
 For asset changes specifically, `pnpm generated-artifacts` must pass after the
 adapter output and committed manifest copies are updated. This catches relative
 `logo` or `icon` paths that point to missing files.
+
+## No External Mutations
+
+This checklist does not publish packages, submit marketplace entries, update
+catalog metadata, mutate GitHub or Linear state, or deprecate old repositories.
+It only records the review copy, asset candidates, blockers, and local
+verification gates needed before a later launch action is explicitly requested.
 
 ## Evidence
 

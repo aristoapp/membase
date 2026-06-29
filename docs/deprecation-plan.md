@@ -39,7 +39,7 @@ opened:
 - [x] Security and secret-handling expectations exist in `docs/security.md`.
 - [x] `pnpm check` covers typecheck, generated artifacts, smoke dry-run,
   secret hygiene, and public-surface guarding.
-- [ ] Final public repository URL is confirmed.
+- [x] Final public repository URL is confirmed.
 - [ ] Final MCP server package or command path is confirmed.
 - [ ] Final remote MCP URL compatibility decision is recorded per client.
 - [ ] First integrated release tag or launch branch is selected.
@@ -55,10 +55,10 @@ drift and should be refreshed before any launch decision.
 
 | Old repo | Public snapshot | Deprecation handoff |
 | --- | --- | --- |
-| `aristoapp/claude-membase` | Claude Code plugin repo, 3 stars, TypeScript/Bun plugin with marketplace metadata, commands, hooks, skills, tests, and plugin-local MCP config. | Point new installs to the integrated Claude install doc after command/hook/skill parity is either migrated or explicitly deferred. |
+| `aristoapp/claude-membase` | Claude Code plugin repo, 3 stars, TypeScript/Bun plugin with marketplace metadata, commands, hooks, skills, tests, and plugin-local MCP config. | Point new installs to the integrated Claude install doc after command/hook/skill parity is either migrated or explicitly deferred. The old native artifact evidence is now snapshot-guarded in `clients/claude/native-artifacts.json`. |
 | `aristoapp/cursor-membase` | Cursor plugin repo, 1 star, plugin metadata, MCP config, rules, skills, logo, README, and changelog artifacts. | Point new installs to the integrated Cursor install doc after remote MCP URL compatibility and logo/rules/skills decisions are recorded. |
-| `aristoapp/hermes-membase` | Hermes plugin repo, 12 stars, Python package-style provider with native plugin YAML and tests. | Point new installs to the integrated Hermes install doc after the Python package dependency versus MCP-only path is decided. |
-| `aristoapp/openclaw-membase` | OpenClaw plugin repo, 37 stars, TypeScript native plugin with manifest, extension metadata, commands, hooks, tools, skills, and tests. | Point new installs to the integrated OpenClaw install doc after native extension entrypoint/auth parity is decided. |
+| `aristoapp/hermes-membase` | Hermes plugin repo, 12 stars, Python package-style provider with native plugin YAML and tests. | Point new installs to the integrated Hermes install doc after the provider boundary, live API behavior, and package dependency versus MCP-only path are decided. |
+| `aristoapp/openclaw-membase` | OpenClaw plugin repo, 37 stars, TypeScript native plugin with manifest, extension metadata, commands, hooks, tools, skills, and tests. | Point new installs to the integrated OpenClaw install doc after native auth and hook/tool parity are either migrated or explicitly deferred. The old native artifact evidence is now snapshot-guarded in `clients/openclaw/native-artifacts.json`. |
 
 ## Deprecation Sequence
 
@@ -116,6 +116,14 @@ Before archive:
 Archiving should be preferred over deletion because the old repos remain useful
 for history, pinned dependency review, and migration audits.
 
+## No External Mutations
+
+This plan does not archive, delete, rename, transfer, edit, or open pull
+requests against the old repositories. It also does not update Linear,
+marketplace listings, package registries, or public GitHub metadata. Those
+actions remain blocked until Jaehwan explicitly requests them after the local
+review gates pass.
+
 ### Phase 4: Star Concentration Launch
 
 - Use a single launch URL: the integrated repo.
@@ -130,6 +138,9 @@ for history, pinned dependency review, and migration audits.
 
 ### Claude Code
 
+- [x] Snapshot old Claude commands, hooks, skills, agent, bundled runtime
+  scripts, and session-start evidence in
+  `clients/claude/native-artifacts.json` without porting behavior.
 - [ ] Decide whether old commands, skills, agents, hooks, and session-start
   behavior move into this repo or remain legacy.
 - [ ] Decide final plugin source path for Claude marketplace review.
@@ -138,8 +149,11 @@ for history, pinned dependency review, and migration audits.
 
 ### Cursor
 
-- [ ] Decide whether old remote MCP URL compatibility is preserved alongside the
-  local stdio config.
+- [x] Preserve old remote MCP URL compatibility as the primary Cursor config.
+- [x] Snapshot old Cursor rules, skills, logo, and changelog evidence in
+  `clients/cursor/native-artifacts.json` without porting content.
+- [ ] Decide whether a local stdio fallback is needed for Cursor after the
+  primary HTTP path is reviewed.
 - [ ] Decide whether old rules and skills are rewritten and ported.
 - [ ] Port the logo only after asset review, then update adapter output and
   committed manifest copies together.
@@ -148,17 +162,23 @@ for history, pinned dependency review, and migration audits.
 ### Hermes Agent
 
 - [ ] Decide whether the old Python package remains the runtime dependency,
-  moves into this repo, or is replaced by MCP-only config for the first review.
+  moves into this repo, or is replaced by MCP-only config for the first review;
+  the provider import/register boundary is now represented locally.
 - [ ] Decide whether the old banner is reused, replaced, or omitted.
 - [ ] Draft old README notice with links to `docs/install/hermes.md`.
 - [ ] Keep provider/package migration separate from public connector API docs.
 
 ### OpenClaw
 
-- [ ] Decide native extension entrypoint parity versus MCP-only review config.
+- [x] Preserve native extension entrypoint parity in the integrated package.
+- [x] Snapshot old OpenClaw commands, hooks, tools, config helpers, update
+  checks, and runtime tests in `clients/openclaw/native-artifacts.json`
+  without porting behavior.
 - [ ] Decide auth/config schema parity for the native OpenClaw manifest.
+- [ ] Decide whether old hooks, commands, tools, skills, update checks, and
+  runtime tests move into this repo or remain legacy.
 - [ ] Draft old README notice with links to `docs/install/openclaw.md`.
-- [ ] Preserve old runtime tests as parity references until hook/tool migration
+- [x] Preserve old runtime tests as parity references until hook/tool migration
   is accepted or explicitly deferred.
 
 ## Evidence

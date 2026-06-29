@@ -14,7 +14,9 @@ import {
 export const CLAUDE_CLIENT_ID = "claude";
 export const CLAUDE_DISPLAY_NAME = "Claude Code";
 export const CLAUDE_MCP_SERVER_NAME = "membase";
-export const CLAUDE_MCP_SERVER_PACKAGE = "@membase/mcp-server";
+export const CLAUDE_PLUGIN_ROOT_REFERENCE = "${CLAUDE_PLUGIN_ROOT}";
+export const CLAUDE_PLUGIN_MCP_SERVER_PATH =
+  `${CLAUDE_PLUGIN_ROOT_REFERENCE}/scripts/mcp-server.cjs`;
 
 export interface ClaudePluginManifest {
   name: string;
@@ -83,8 +85,11 @@ export function generateClaudeMcpConfig(
   config: ConnectorRuntimeConfig
 ): McpConfigDocument {
   return createMcpConfigDocument(CLAUDE_MCP_SERVER_NAME, config, {
-    command: "npx",
-    args: ["-y", CLAUDE_MCP_SERVER_PACKAGE]
+    command: "node",
+    args: [CLAUDE_PLUGIN_MCP_SERVER_PATH],
+    env: {
+      MEMBASE_CLAUDE_PLUGIN: "1"
+    }
   });
 }
 

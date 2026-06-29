@@ -76,17 +76,21 @@ depend on the SDK instead of rebuilding config or secret-handling behavior.
 ## Client Adapter Status
 
 - Claude Code: `clients/claude` now implements the SDK `ClientAdapter`, emits a
-  compact Claude plugin manifest, and generates an MCP config document through
-  `packages/core`.
+  compact Claude plugin manifest, generates plugin-local MCP config through
+  `packages/core`, and passes local Claude Code plugin manifest validation.
 - Cursor: `clients/cursor` now implements the SDK `ClientAdapter`, emits a
-  compact Cursor plugin manifest, and generates a Cursor-compatible stdio MCP
-  config document with Cursor environment interpolation.
+  compact Cursor plugin manifest, and preserves the old repo's HTTP MCP config
+  at `https://mcp.membase.so/mcp` as the primary Cursor transport.
 - Hermes Agent: `clients/hermes` now implements the SDK `ClientAdapter`, emits
-  native Hermes plugin metadata, and generates a shared MCP config example for
-  Hermes config translation.
+  native Hermes plugin metadata, generates a shared MCP config example for
+  Hermes config translation, and preserves an importable Python
+  provider/register boundary without enabling live API calls. The old Hermes
+  provider, capture, OAuth, wiki, formatting, asset, update-check, and test
+  evidence is guarded as a review-only snapshot at
+  `clients/hermes/native-artifacts.json`.
 - OpenClaw: `clients/openclaw` now implements the SDK `ClientAdapter`, emits a
-  native OpenClaw manifest placeholder, and generates a shared MCP config
-  example for local connector testing.
+  native OpenClaw manifest placeholder, exports a native extension entrypoint,
+  and generates a shared MCP config example for local connector testing.
 
 ## Migration Parity Status
 
@@ -109,8 +113,8 @@ the required architecture, migration parity, test coverage parity, security,
 marketplace, deprecation, install, client, and manifest artifacts for local
 review. It also checks that every client install guide includes the shared
 secret-reference and local verification markers, and that `pnpm check` keeps
-generated-artifact, smoke, secret-hygiene, public-surface, and review-readiness
-guards wired together.
+generated-artifact, core-contract, smoke, secret-hygiene, public-surface, and
+review-readiness guards wired together.
 
 ## Client Smoke Harness
 
@@ -122,16 +126,34 @@ commands, and the public remember/search/context/delete flow through
 `smoke/public-contract-stub.mjs`.
 
 The harness can execute adapter-declared local commands with
-`pnpm smoke:execute`. Live client-to-MCP runtime checks remain pending until the
-shared `@membase/mcp-server` package path is available. The launch-gate shape
-for that future check is documented in `docs/live-smoke-runbook.md`, including
-required decisions, test-only data, cleanup behavior, and redacted logging.
+`pnpm smoke:execute`. Live client-to-MCP runtime checks remain pending until
+the remaining client-specific runtime behavior and test credentials are
+implemented: Hermes Python package/native provider and OpenClaw native
+hook/tool behavior. Claude plugin-local stdio, Cursor HTTP MCP transport, and
+OpenClaw native extension entrypoint are preserved locally, but live exercise
+still needs the D6 test credential and cleanup decision.
+The launch-gate shape for that future check is documented in
+`docs/live-smoke-runbook.md`, including required decisions, test-only data,
+cleanup behavior, and redacted logging.
 
 ## Live MCP Smoke Runbook
 
 `docs/live-smoke-runbook.md` defines the pending live smoke implementation
 contract for D2, D3, and D6. It keeps the future test limited to public
 remember, search, context, forget, diagnostics, and cleanup behavior.
+
+## Live Smoke Preflight
+
+`smoke/live-smoke-preflight.mjs` keeps the current blocked state executable:
+D2 records that Claude plugin-local, Cursor HTTP-first, Hermes provider
+import/register, and OpenClaw native entrypoint paths are implemented while
+Hermes runtime API behavior remains pending, D3 records that those primary
+paths are preserved while fallback decisions remain pending, and D6 stays
+accepted only in principle until the remaining runtime behavior and live
+credentials are resolved. The preflight also verifies that Claude keeps the old
+plugin-local MCP command, Cursor keeps the old HTTP MCP URL, OpenClaw keeps the
+native entrypoint metadata, and the remaining placeholder MCP examples do not
+pretend live smoke is runnable.
 
 ## Test Coverage Parity
 
@@ -144,9 +166,52 @@ only after the corresponding old commands, hooks, skills, providers, tools, or
 rules are explicitly migrated.
 
 The current repo covers generated artifacts, dry-run smoke behavior,
-secret-hygiene scanning, and public-surface wording. Focused core unit tests,
-host CLI validation, display formatting fixtures, and runtime hook/provider
-parity tests are still pending.
+shared core auth/env/MCP/redaction contract behavior, secret-hygiene scanning,
+and public-surface wording. Host CLI validation, display formatting fixtures,
+and runtime hook/provider parity tests are still pending.
+
+## Packaging and Action Parity
+
+`docs/packaging-action-parity.md` records the old Claude, Cursor, Hermes, and
+OpenClaw packaging and GitHub Action shape before any publishing or marketplace
+workflow is enabled. `scripts/check-packaging-action-parity.mjs` keeps that map
+present in `pnpm check` and verifies that publishing remains documented as
+disabled until Jaehwan explicitly authorizes external mutations.
+`pnpm claude:plugin-parity` validates the integrated Claude plugin metadata
+with the installed Claude Code CLI and checks manifest/version/MCP secret
+reference drift without marketplace submission.
+`pnpm claude:native-artifacts` verifies the review-only snapshot at
+`clients/claude/native-artifacts.json` for the old Claude commands, hooks,
+skills, agent, bundled runtime scripts, and session-start evidence. It also
+keeps generated Claude metadata free of premature native-behavior declarations
+until those artifacts are explicitly accepted for migration.
+`pnpm cursor:transport-parity` verifies that Cursor's committed MCP examples
+preserve the old HTTP MCP endpoint and do not regress to the generic stdio
+placeholder.
+`pnpm cursor:native-artifacts` verifies the review-only snapshot at
+`clients/cursor/native-artifacts.json` for the old Cursor rules, skills, logo,
+and changelog artifacts. It also keeps generated Cursor metadata free of
+`logo` or `icon` references until an asset file is copied and approved.
+`pnpm hermes:python-parity` validates the Hermes Python package review
+scaffold, console script entrypoints, native YAML package data, Python syntax,
+provider import/register behavior, and non-publishing boundary.
+`pnpm hermes:native-artifacts` verifies the review-only snapshot at
+`clients/hermes/native-artifacts.json` for old Hermes provider, capture, CLI,
+OAuth, wiki, formatting, banner asset, update-check, and runtime test evidence.
+It also keeps deferred Hermes runtime modules uncopied until those behaviors
+are explicitly accepted for migration.
+`pnpm openclaw:native-artifacts` verifies the review-only snapshot at
+`clients/openclaw/native-artifacts.json` for old OpenClaw commands, hooks,
+tools, config helpers, update checks, and runtime test evidence. It also keeps
+deferred OpenClaw runtime source directories uncopied until those behaviors are
+explicitly accepted for migration.
+`pnpm openclaw:native-parity` runs the integrated OpenClaw adapter
+typecheck/build path, imports the built native extension entrypoint, and
+verifies the native manifest remains a private, non-publishing review artifact.
+`pnpm version-parity` verifies that the current review version stays synchronized
+across workspace package manifests, public plugin manifest versions, Hermes
+Python/YAML package metadata, and MCP client-version environment examples. It
+does not decide a release tag or enable publishing.
 
 ## Install Documentation Status
 
@@ -175,9 +240,20 @@ and per-client handoff blockers for Claude, Cursor, Hermes, and OpenClaw.
 ## Runtime Parity Decision Ledger
 
 `docs/runtime-parity-decisions.md` now records the remaining public repo URL,
-MCP server path, transport precedence, client-native runtime parity, asset
-reuse, and live smoke decisions that must be accepted before any external
-launch or old-repo mutation work.
+client runtime package paths, transport precedence, client-native runtime
+parity, asset reuse, and live smoke decisions that must be accepted before any
+external launch or old-repo mutation work.
+`scripts/check-runtime-decision-ledger.mjs` keeps those D1-D6 statuses wired
+into `pnpm check`, including the current blocked live-smoke state and the
+non-mutating review boundary.
+
+## Launch Handoff Consistency
+
+`scripts/check-launch-handoff-consistency.mjs` keeps the accepted D1 public
+repository URL synchronized across the runtime ledger, marketplace asset
+checklist, deprecation plan, and Linear-ready review summary. It deliberately
+keeps the release tag or bundle path pending until a launch-time decision is
+made.
 
 ## Linear-Ready Summary
 
@@ -190,10 +266,11 @@ scope for this local loop.
 ## Secret Handling
 
 `docs/security.md` is the current security and secret-handling contract for the
-integrated repo. The public connector model keeps raw API keys outside committed
-manifests and MCP examples by emitting environment references such as
-`${MEMBASE_API_KEY}` or Cursor's `${env:MEMBASE_API_KEY}`. `packages/core`
-redacts diagnostic environment values for sensitive key names, the smoke
-harness checks the redaction path with a fake sentinel secret, and
+integrated repo. The public connector model keeps raw API keys outside
+committed manifests and MCP examples by emitting environment references such as
+`${MEMBASE_API_KEY}` for local-runtime examples; Cursor's current HTTP MCP
+example has no local API-key field. `packages/core` redacts diagnostic
+environment values for sensitive key names, the smoke harness checks the
+redaction path with a fake sentinel secret, and
 `scripts/check-secret-hygiene.mjs` scans connector artifacts for raw
 secret-looking values during `pnpm check`.
