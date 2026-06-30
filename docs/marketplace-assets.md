@@ -48,7 +48,7 @@ Support and ownership fields:
 | --- | --- | --- |
 | Owner name | Membase | Ready for review. |
 | Support email | `support@aristo.so` | Ready for review; old Claude marketplace used `support@membase.so`. |
-| Homepage | `https://membase.com` | Matches current generated manifests. |
+| Homepage | `https://membase.so` | Matches current generated manifests. |
 | Repository | `https://github.com/aristoapp/membase-plugin-mcp` | Ready for review; release tag or bundle path remains a launch-time decision. |
 | License | MIT | Matches current generated manifests and old public repos. |
 

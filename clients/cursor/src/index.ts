@@ -68,9 +68,9 @@ export function generateCursorPluginManifest(
     author: {
       name: "Membase",
       email: "support@aristo.so",
-      url: "https://membase.com"
+      url: "https://membase.so"
     },
-    homepage: "https://membase.com",
+    homepage: "https://membase.so",
     repository: "https://github.com/aristoapp/membase-plugin-mcp",
     license: "MIT",
     keywords: [

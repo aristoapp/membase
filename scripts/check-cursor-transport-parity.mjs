@@ -19,13 +19,13 @@ const requiredDocMarkers = [
   {
     path: "docs/runtime-parity-decisions.md",
     markers: [
-      "Claude plugin-local, Cursor HTTP-first, Hermes provider import/register boundary, and OpenClaw native entrypoint implemented; Hermes runtime API behavior pending",
-      "Claude plugin-local, Cursor HTTP-primary, Hermes provider register path, and OpenClaw native entrypoint implemented; fallback decisions pending"
+      "Finalized to `membase.so` with no user-supplied API key",
+      "Finalized: Claude plugin-local stdio and Cursor/Hermes/OpenClaw remote HTTP MCP"
     ]
   },
   {
     path: "docs/install/cursor.md",
-    markers: [CURSOR_MCP_URL, "MEMBASE_API_KEY", "pnpm cursor:transport-parity"]
+    markers: [CURSOR_MCP_URL, "OAuth", "pnpm cursor:transport-parity"]
   }
 ];
 

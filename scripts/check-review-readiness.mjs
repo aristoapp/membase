@@ -162,7 +162,7 @@ const documentMarkers = [
   },
   {
     path: "docs/security.md",
-    markers: ["MEMBASE_API_KEY", "redacted", "Live client-to-MCP smoke"]
+    markers: ["user-supplied API key", "redacted", "Live client-to-MCP smoke"]
   },
   {
     path: "docs/live-smoke-runbook.md",
@@ -226,7 +226,7 @@ const documentMarkers = [
 ];
 
 const installDocMarkers = [
-  "MEMBASE_API_KEY",
+  "No raw token or API key appears",
   "pnpm check",
   "pnpm smoke:execute",
   "Review Checklist",

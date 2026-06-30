@@ -1,5 +1,5 @@
 import {
-  createMcpConfigDocument,
+  createHttpMcpConfigDocument,
   defineConnectorConfig,
   type ConnectorConfigInput,
   type ConnectorRuntimeConfig,
@@ -17,7 +17,7 @@ export const HERMES_PLUGIN_NAME = "membase";
 export const HERMES_PYTHON_PACKAGE = "hermes-membase";
 export const HERMES_PYTHON_PACKAGE_MIN_VERSION = "0.2.0";
 export const HERMES_MCP_SERVER_NAME = "membase";
-export const HERMES_MCP_SERVER_PACKAGE = "@membase/mcp-server";
+export const HERMES_MCP_SERVER_URL = "https://mcp.membase.so/mcp";
 
 export interface HermesPluginManifest {
   name: string;
@@ -65,11 +65,11 @@ export function generateHermesPluginManifest(
 }
 
 export function generateHermesMcpConfig(
-  config: ConnectorRuntimeConfig
+  _config: ConnectorRuntimeConfig
 ): McpConfigDocument {
-  return createMcpConfigDocument(HERMES_MCP_SERVER_NAME, config, {
-    command: "npx",
-    args: ["-y", HERMES_MCP_SERVER_PACKAGE]
+  return createHttpMcpConfigDocument(HERMES_MCP_SERVER_NAME, {
+    url: HERMES_MCP_SERVER_URL,
+    headers: {}
   });
 }
 

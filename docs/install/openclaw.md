@@ -7,11 +7,10 @@ OpenClaw repo.
 
 ## Prerequisites
 
-- Node.js 20 or newer for MCP server launch examples.
 - An OpenClaw checkout or installation with the `openclaw` CLI available.
-- `pnpm install` run at the repo root.
-- A Membase API key available as `MEMBASE_API_KEY` when using the MCP config
-  path.
+- `pnpm install` run at the repo root for the connector workspace checks.
+- A Membase account. The OpenClaw plugin authenticates through an OAuth flow
+  (access/refresh tokens); there is no user-supplied API key.
 
 ## Build And Sync Check
 
@@ -68,8 +67,8 @@ openclaw plugins inspect openclaw-membase --runtime --json
 ```
 
 Configure plugin-specific settings under `plugins.entries.openclaw-membase`.
-Keep secret values outside committed config. Prefer the `apiKeyEnv` setting for
-API-key based local testing and `tokenFile` for native OAuth token caches.
+Keep OAuth tokens outside committed config — prefer `tokenFile` for the native
+OAuth token cache.
 
 ```json
 {
@@ -78,11 +77,11 @@ API-key based local testing and `tokenFile` for native OAuth token caches.
       "openclaw-membase": {
         "enabled": true,
         "config": {
-          "apiUrl": "https://api.membase.com",
-          "apiKeyEnv": "MEMBASE_API_KEY",
+          "apiUrl": "https://api.membase.so",
+          "tokenFile": "~/.openclaw/credentials/openclaw-membase.json",
           "autoRecall": false,
           "autoWikiRecall": false,
-          "autoCapture": false,
+          "autoCapture": true,
           "maxRecallChars": 4000
         }
       }
@@ -91,40 +90,29 @@ API-key based local testing and `tokenFile` for native OAuth token caches.
 }
 ```
 
-Set the real key outside committed config:
-
-```bash
-export MEMBASE_API_KEY="<membase-api-key>"
-export MEMBASE_API_BASE_URL="https://api.membase.com"
-```
+The plugin completes its OAuth login on first use and caches tokens in the
+`tokenFile`. Do not commit `accessToken` or `refreshToken` values.
 
 ## MCP Config
 
-Use `manifests/openclaw/mcp.json` as the canonical local MCP example for this
-repo. It uses the shared MCP server package and keeps `MEMBASE_API_KEY` as an
-environment reference:
+For setups that connect OpenClaw to the hosted Membase MCP server, use
+`manifests/openclaw/mcp.json` as the canonical example. It points at the remote
+Membase MCP endpoint:
 
 ```json
 {
   "mcpServers": {
     "membase": {
-      "command": "npx",
-      "args": ["-y", "@membase/mcp-server"],
-      "env": {
-        "MEMBASE_API_BASE_URL": "https://api.membase.com",
-        "MEMBASE_API_KEY": "${MEMBASE_API_KEY}",
-        "MEMBASE_CLIENT_ID": "openclaw",
-        "MEMBASE_CLIENT_NAME": "OpenClaw",
-        "MEMBASE_CLIENT_VERSION": "0.0.0"
-      }
+      "url": "https://mcp.membase.so/mcp",
+      "headers": {}
     }
   }
 }
 ```
 
 Keep the native plugin manifest and the MCP config separate. The manifest
-describes OpenClaw plugin control-plane metadata and local settings. The MCP
-config describes the shared connector server launch shape.
+describes OpenClaw plugin control-plane metadata and local settings; the MCP
+config describes the remote connector server endpoint.
 
 ## Local Verification
 
@@ -141,23 +129,22 @@ adapter-declared local commands without publishing, installing a global
 OpenClaw plugin, or calling the Membase API.
 
 Host-level OpenClaw runtime checks remain pending until hook/tool migration
-parity and live test inputs are accepted. The native package entrypoint is now
-checked locally; the shared `@membase/mcp-server` MCP example remains a
-fallback placeholder until explicitly accepted.
+parity and live test inputs are accepted. The native package entrypoint is
+checked locally; the remote HTTP MCP config is the connector example.
 
 ## Review Checklist
 
 - `clients/openclaw/openclaw.plugin.json` has connector capability copy only.
 - `clients/openclaw/mcp.json` and `manifests/openclaw/mcp.json` contain
-  `mcpServers.membase`.
+  `mcpServers.membase` with the remote `url` and an empty `headers` object.
 - `clients/openclaw/package.json` declares `openclaw.extensions` for
   `./dist/index.js`.
 - `clients/openclaw/native-artifacts.json` is present and
   `pnpm openclaw:native-artifacts` passes before any old command, hook, tool,
   or skill behavior is ported.
-- Native OpenClaw settings point at an environment variable name or token file,
-  not a committed token value.
-- `MEMBASE_API_KEY` is an environment reference, not a raw token.
+- Native OpenClaw settings point at a token file, not a committed token value.
+- No raw token or API key appears in any committed config; authentication is the
+  OAuth flow.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
   private memory-engine details.
 

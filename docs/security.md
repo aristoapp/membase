@@ -18,36 +18,38 @@ embedding, ranking, freshness, or governance implementation details.
 
 ## Secret Model
 
-The default auth input is an environment variable named `MEMBASE_API_KEY`.
-Generated manifests and MCP config examples must reference that variable by
-name. They must not embed the raw key value.
+Membase clients do not use a user-supplied API key. Authentication is handled
+by the client per transport, and no raw credential belongs in a committed
+config or manifest:
 
-Supported public environment variables:
-
-| Variable | Required | Purpose |
+| Client | Transport | Auth |
 | --- | --- | --- |
-| `MEMBASE_API_KEY` | Yes for live use | API token read by the MCP server or client runtime. |
-| `MEMBASE_API_BASE_URL` | No | API endpoint override. Defaults to `https://api.membase.com`. |
+| Cursor | Remote MCP URL (`https://mcp.membase.so/mcp`) | In-client OAuth browser flow; no committed token. |
+| Claude Code | Bundled stdio MCP server (`node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs`) | Plugin-managed login. |
+| Hermes Agent | Native `hermes-membase` pip package (or remote MCP URL) | OAuth flow. |
+| OpenClaw | Native plugin (or remote MCP URL) | OAuth access/refresh tokens cached in a `tokenFile`. |
+
+Supported public configuration values:
+
+| Value | Required | Purpose |
+| --- | --- | --- |
+| `apiUrl` / `MEMBASE_API_BASE_URL` | No | API endpoint override. Defaults to `https://api.membase.so`. |
 | `MEMBASE_PROFILE` | No | Optional profile label for client/runtime scoping. |
-
-Client-specific generated config uses the safest reference syntax available:
-
-- Claude, Hermes, and OpenClaw examples use `${MEMBASE_API_KEY}`.
-- Cursor's current HTTP MCP example has no local `MEMBASE_API_KEY` field. If a
-  later local fallback is accepted, it should use `${env:MEMBASE_API_KEY}`
-  because Cursor supports explicit environment interpolation in MCP config.
+| OAuth tokens (`accessToken`, `refreshToken`, `tokenFile`) | Client-managed | Held by the client runtime; never committed. |
 
 ## Local Setup
 
-Use shell or client-level secret storage for real values:
+Real credentials are obtained through each client's OAuth or plugin login flow,
+not exported as shell variables. Only the optional endpoint override is a plain
+value:
 
 ```bash
-export MEMBASE_API_KEY="<membase-api-key>"
-export MEMBASE_API_BASE_URL="https://api.membase.com"
+export MEMBASE_API_BASE_URL="https://api.membase.so"
 ```
 
-Local env files are ignored by this repo. Only `.env.example`-style placeholder
-files may be committed, and they must not contain real credentials.
+Local env files and OAuth token caches are ignored by this repo. Only
+`.env.example`-style placeholder files may be committed, and they must not
+contain real credentials.
 
 ## Redaction Guarantees
 
@@ -55,8 +57,9 @@ files may be committed, and they must not contain real credentials.
 
 - keys matching `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` are redacted by
   `redactEnvironment`
-- generated MCP config documents use environment references rather than raw
-  secret values
+- generated MCP config documents carry no embedded credentials: remote-URL
+  configs use empty headers, and the bundled Claude server config carries only
+  a non-secret plugin flag
 - `pnpm core:contract` validates environment-reference generation and
   diagnostic redaction at the shared core boundary
 - `smoke/client-smoke.mjs` injects a fake sentinel secret and fails if adapter
@@ -81,7 +84,8 @@ needs explicit test credentials, endpoint/profile, and cleanup policy.
 The concrete launch-gate runbook is `docs/live-smoke-runbook.md`.
 When live smoke is added, it should:
 
-- require an explicit `MEMBASE_API_KEY`
+- authenticate through the client's OAuth or plugin login flow, never an
+  embedded credential
 - default to a test profile or test endpoint, not a user's production context
 - create a clearly tagged test memory
 - verify remember, search, context, and forget behavior

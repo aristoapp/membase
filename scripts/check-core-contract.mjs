@@ -96,8 +96,16 @@ assert(stdioServer.args?.[0] === "server.js", "stdio config should preserve args
 assert(stdioServer.cwd === "/tmp/membase-review", "stdio config should preserve cwd");
 assert(stdioServer.env.STATIC_FLAG === "1", "stdio config should preserve static env");
 assert(
-  stdioServer.env.CUSTOM_MEMBASE_KEY === "${CUSTOM_MEMBASE_KEY}",
-  "stdio config should use an API key reference"
+  stdioServer.env.CUSTOM_MEMBASE_KEY === undefined,
+  "stdio config should not inject an API key reference (clients use no user-supplied API key)"
+);
+assert(
+  stdioServer.env.MEMBASE_API_BASE_URL === undefined,
+  "stdio config should not inject a host into env"
+);
+assert(
+  Object.keys(stdioServer.env).length === 1,
+  "stdio config env should contain only the explicit env passed in"
 );
 
 const httpConfig = createHttpMcpConfigDocument("membase", {

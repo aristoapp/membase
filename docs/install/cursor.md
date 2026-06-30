@@ -8,9 +8,8 @@ publish a marketplace entry or deprecate the old Cursor repo.
 
 - Node.js 20 or newer.
 - `pnpm install` run at the repo root.
-- No raw API key in the Cursor MCP JSON. If a later local fallback uses
-  `MEMBASE_API_KEY`, keep it as an environment reference instead of committing
-  a token value.
+- A Membase account. Cursor authenticates to the remote Membase MCP server
+  through an in-client OAuth browser flow on first use — no CLI and no API keys.
 
 ## Build And Sync Check
 
@@ -54,15 +53,9 @@ For an all-projects local install, place the same JSON in `~/.cursor/mcp.json`.
 For plugin-local review, keep `clients/cursor/.cursor-plugin/plugin.json` and
 `clients/cursor/mcp.json` together at the Cursor plugin root.
 
-Do not paste raw API keys into any config file. The current HTTP MCP config has
-no `MEMBASE_API_KEY` field. If a later accepted local stdio fallback adds one,
-keep `MEMBASE_API_KEY` as `${env:MEMBASE_API_KEY}` and set the real value in
-the shell or Cursor environment:
-
-```bash
-export MEMBASE_API_KEY="<membase-api-key>"
-export MEMBASE_API_BASE_URL="https://api.membase.com"
-```
+There are no secrets in this config. The first MCP request triggers Cursor's
+OAuth flow; tokens are managed by Cursor and the Membase MCP server, not stored
+in the config file. The Membase API endpoint defaults to `https://api.membase.so`.
 
 ## Plugin Metadata
 
@@ -104,8 +97,8 @@ test credential, endpoint/profile, and cleanup decisions are accepted.
   only.
 - `clients/cursor/mcp.json` and `manifests/cursor/mcp.json` contain
   `mcpServers.membase.url` set to `https://mcp.membase.so/mcp`.
-- `MEMBASE_API_KEY` is absent from the HTTP config, or, if a later fallback is
-  accepted, represented only as a Cursor environment reference.
+- No raw token or API key appears in the HTTP config; authentication is the
+  in-client OAuth flow.
 - `clients/cursor/native-artifacts.json` lists old Cursor rules, skills, logo,
   and changelog evidence without copying deferred content.
 - No public artifact describes Membase storage, graph, embedding, ranking, or

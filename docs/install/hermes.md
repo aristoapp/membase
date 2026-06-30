@@ -7,11 +7,10 @@ old Hermes repo.
 
 ## Prerequisites
 
-- Node.js 20 or newer for MCP server launch examples.
-- Python 3.11 or newer for the existing Hermes native plugin package.
-- `pnpm install` run at the repo root.
-- A Membase API key available as `MEMBASE_API_KEY` in the shell or Hermes
-  environment when using the MCP config path.
+- Python 3.11 or newer for the Hermes native plugin package.
+- `pnpm install` run at the repo root for the connector workspace checks.
+- A Membase account. The Hermes provider and the remote MCP endpoint
+  authenticate through an OAuth flow; there is no user-supplied API key.
 
 ## Build And Sync Check
 
@@ -52,36 +51,22 @@ by the Hermes package. Do not move MCP server configuration into
 
 ## MCP Config Translation
 
-Use `manifests/hermes/mcp.json` as the canonical local MCP example for this
-repo. Hermes stores MCP servers under `mcp_servers` in `~/.hermes/config.yaml`,
-so the JSON example maps to this YAML shape:
+For setups that connect Hermes to the hosted Membase MCP server instead of the
+native package, use `manifests/hermes/mcp.json` as the canonical example. Hermes
+stores MCP servers under `mcp_servers` in `~/.hermes/config.yaml`, so the JSON
+example maps to this YAML shape:
 
 ```yaml
 mcp_servers:
   membase:
-    command: "npx"
-    args: ["-y", "@membase/mcp-server"]
-    env:
-      MEMBASE_API_BASE_URL: "https://api.membase.com"
-      MEMBASE_API_KEY: "${MEMBASE_API_KEY}"
-      MEMBASE_CLIENT_ID: "hermes"
-      MEMBASE_CLIENT_NAME: "Hermes Agent"
-      MEMBASE_CLIENT_VERSION: "0.0.0"
+    url: "https://mcp.membase.so/mcp"
+    headers: {}
 ```
 
-Do not paste raw API keys into the config file. Keep `MEMBASE_API_KEY` as an
-environment reference and set the real value in the shell or Hermes runtime
-environment:
-
-```bash
-export MEMBASE_API_KEY="<membase-api-key>"
-export MEMBASE_API_BASE_URL="https://api.membase.com"
-```
-
-If Hermes later supports both the native Python package path and the shared MCP
-server path, treat `manifests/hermes/plugin.yaml` as native plugin metadata and
-`manifests/hermes/mcp.json` as the MCP server config source. Do not duplicate
-secret values between them.
+Authentication to the remote MCP server is handled by Hermes' OAuth flow on
+first use; no token is stored in the config file. The native Python package
+remains the primary runtime; treat `manifests/hermes/plugin.yaml` as native
+plugin metadata and `manifests/hermes/mcp.json` as the remote MCP example.
 
 ## Local Verification
 
@@ -109,10 +94,12 @@ test-only credentials.
 - `clients/hermes/native-artifacts.json` is present and
   `pnpm hermes:native-artifacts` passes before any old provider, capture,
   OAuth, wiki, formatting, asset, update-check, or test behavior is ported.
-- `manifests/hermes/mcp.json` contains `mcpServers.membase`.
-- The translated Hermes config uses `mcp_servers.membase` with `command`,
-  `args`, and `env`.
-- `MEMBASE_API_KEY` is an environment reference, not a raw token.
+- `manifests/hermes/mcp.json` contains `mcpServers.membase` with the remote
+  `url` and an empty `headers` object.
+- The translated Hermes config uses `mcp_servers.membase` with `url` and
+  `headers`.
+- No raw token or API key appears in any committed config; authentication is the
+  OAuth flow.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
   private memory-engine details.
 

@@ -1,6 +1,6 @@
 export type MembaseVisibility = "private" | "team" | "public";
 
-export const DEFAULT_MEMBASE_API_BASE_URL = "https://api.membase.com";
+export const DEFAULT_MEMBASE_API_BASE_URL = "https://api.membase.so";
 
 export const MEMBASE_CONNECTOR_ENV = {
   apiBaseUrl: "MEMBASE_API_BASE_URL",
@@ -136,12 +136,14 @@ export function defineConnectorConfigFromEnv(
 
 export function createMcpConfigDocument(
   serverName: string,
-  runtime: ConnectorRuntimeConfig,
+  _runtime: ConnectorRuntimeConfig,
   server: Pick<StdioMcpServerConfig, "command" | "args" | "cwd" | "type"> & {
     env?: Record<string, string>;
-  },
-  options: McpConfigDocumentOptions = {}
+  }
 ): McpConfigDocument {
+  // Stdio MCP config carries only the explicit env the client needs. Membase
+  // clients do not take a user-supplied API key, so no host/key/client
+  // metadata is injected here. Remote clients use createHttpMcpConfigDocument.
   return {
     mcpServers: {
       [serverName]: {
@@ -149,10 +151,7 @@ export function createMcpConfigDocument(
         command: server.command,
         args: server.args,
         ...(server.cwd ? { cwd: server.cwd } : {}),
-        env: {
-          ...(server.env ?? {}),
-          ...createMcpEnvironment(runtime, options)
-        }
+        env: server.env ?? {}
       }
     }
   };

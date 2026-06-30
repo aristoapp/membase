@@ -24,7 +24,13 @@ fi
 
 forbidden_pattern='storage schema|graph model|graph structure|embedding layout|embedding implementation|chunking implementation|ranking pipeline|ranking algorithm|private memory engine|internal memory engine|governance implementation'
 
-if rg -n -i "${forbidden_pattern}" "${existing_dirs[@]}"; then
+if command -v rg >/dev/null 2>&1; then
+  scan() { rg -n -i "${forbidden_pattern}" "${existing_dirs[@]}"; }
+else
+  scan() { grep -rniE "${forbidden_pattern}" "${existing_dirs[@]}"; }
+fi
+
+if scan; then
   echo
   echo "Public connector surface exposes private Membase memory internals."
   exit 1

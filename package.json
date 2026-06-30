@@ -14,6 +14,7 @@
     "claude:plugin-parity": "node scripts/check-claude-plugin-parity.mjs",
     "claude:native-artifacts": "node scripts/check-claude-native-artifacts.mjs",
     "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --clean",
+    "generate": "pnpm typecheck && node scripts/regen-artifacts.mjs",
     "core:contract": "node scripts/check-core-contract.mjs",
     "cursor:native-artifacts": "node scripts/check-cursor-native-artifacts.mjs",
     "cursor:transport-parity": "node scripts/check-cursor-transport-parity.mjs",

@@ -10,9 +10,9 @@ const liveRunbookPath = "docs/live-smoke-runbook.md";
 const mcpConfigSpecs = [
   { path: "clients/claude/.mcp.json", mode: "claude-plugin-local" },
   { path: "manifests/claude/mcp.json", mode: "claude-plugin-local" },
-  { path: "manifests/cursor/mcp.json", mode: "cursor-http" },
-  { path: "manifests/hermes/mcp.json", mode: "placeholder-stdio" },
-  { path: "manifests/openclaw/mcp.json", mode: "placeholder-stdio" }
+  { path: "manifests/cursor/mcp.json", mode: "remote-http" },
+  { path: "manifests/hermes/mcp.json", mode: "remote-http" },
+  { path: "manifests/openclaw/mcp.json", mode: "remote-http" }
 ];
 
 const failures = [];
@@ -27,18 +27,18 @@ const d6Line = findDecisionLine(runtimeDecisions, "D6");
 
 assertIncludes(
   d2Line,
-  "Claude plugin-local, Cursor HTTP-first, Hermes provider import/register boundary, and OpenClaw native entrypoint implemented; Hermes runtime API behavior pending",
-  "D2 must record Claude plugin-local, Cursor HTTP-first, Hermes provider boundary, and OpenClaw native entrypoint implementation while Hermes live API behavior remains pending."
+  "Finalized",
+  "D2 must be marked Finalized once the per-client runtime/command paths are locked."
 );
 assertIncludes(
   d3Line,
-  "Claude plugin-local, Cursor HTTP-primary, Hermes provider register path, and OpenClaw native entrypoint implemented; fallback decisions pending",
-  "D3 must record Claude plugin-local, Cursor HTTP-primary, Hermes provider register path, and OpenClaw native entrypoint implementation while fallback decisions remain pending."
+  "Finalized",
+  "D3 must be marked Finalized once the per-client transports are locked."
 );
 assertIncludes(
   d6Line,
-  "Accepted in principle; pending D2/D3",
-  "D6 must remain accepted in principle but blocked on D2/D3."
+  "pending",
+  "D6 must remain pending on accepted live test credentials and cleanup."
 );
 assertIncludes(liveRunbook, "D2", "Live smoke runbook must name D2 as a precondition.");
 assertIncludes(liveRunbook, "D3", "Live smoke runbook must name D3 as a precondition.");
@@ -59,60 +59,36 @@ for (const spec of mcpConfigSpecs) {
     continue;
   }
 
-  if (spec.mode === "cursor-http") {
+  if (spec.mode === "remote-http") {
     if (server.url !== "https://mcp.membase.so/mcp") {
-      failures.push(`${spec.path}: expected Cursor HTTP MCP endpoint.`);
+      failures.push(`${spec.path}: expected the remote Membase HTTP MCP endpoint.`);
     }
     if (!server.headers || typeof server.headers !== "object" || Array.isArray(server.headers)) {
-      failures.push(`${spec.path}: expected Cursor HTTP MCP headers object.`);
+      failures.push(`${spec.path}: expected an HTTP MCP headers object.`);
     }
     if (server.command !== undefined || server.args !== undefined) {
-      failures.push(`${spec.path}: Cursor must not use the placeholder stdio command.`);
+      failures.push(`${spec.path}: remote HTTP MCP must not declare a stdio command.`);
+    }
+    if (server.env?.MEMBASE_API_KEY !== undefined) {
+      failures.push(`${spec.path}: must not carry a user-supplied API key (OAuth only).`);
     }
     continue;
   }
 
-  if (spec.mode === "claude-plugin-local") {
-    if (server.command !== "node") {
-      failures.push(`${spec.path}: expected Claude plugin-local node command.`);
-    }
-    if (!Array.isArray(server.args) || server.args[0] !== "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs") {
-      failures.push(`${spec.path}: expected Claude plugin-local MCP server path.`);
-    }
-    if (server.env?.MEMBASE_CLAUDE_PLUGIN !== "1") {
-      failures.push(`${spec.path}: expected MEMBASE_CLAUDE_PLUGIN marker.`);
-    }
-    const apiKeyReference = server.env?.MEMBASE_API_KEY;
-    if (typeof apiKeyReference !== "string" || !apiKeyReference.includes("MEMBASE_API_KEY")) {
-      failures.push(`${spec.path}: missing MEMBASE_API_KEY environment reference.`);
-    }
-    continue;
+  // claude-plugin-local: bundled stdio server, plugin-managed auth, no API key.
+  if (server.command !== "node") {
+    failures.push(`${spec.path}: expected Claude plugin-local node command.`);
   }
-
-  if (server.command !== "npx") {
-    failures.push(`${spec.path}: expected placeholder command npx while this runtime path is blocked.`);
+  if (!Array.isArray(server.args) || server.args[0] !== "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs") {
+    failures.push(`${spec.path}: expected Claude plugin-local MCP server path.`);
   }
-
-  if (!Array.isArray(server.args) || !server.args.includes("@membase/mcp-server")) {
-    failures.push(`${spec.path}: expected @membase/mcp-server placeholder while this runtime path is blocked.`);
+  if (server.env?.MEMBASE_CLAUDE_PLUGIN !== "1") {
+    failures.push(`${spec.path}: expected MEMBASE_CLAUDE_PLUGIN marker.`);
   }
-
-  const apiKeyReference = server.env?.MEMBASE_API_KEY;
-  if (typeof apiKeyReference !== "string" || !apiKeyReference.includes("MEMBASE_API_KEY")) {
-    failures.push(`${spec.path}: missing MEMBASE_API_KEY environment reference.`);
+  if (server.env?.MEMBASE_API_KEY !== undefined) {
+    failures.push(`${spec.path}: Claude plugin login is used; no MEMBASE_API_KEY belongs in the config.`);
   }
 }
-
-assertIncludes(
-  runtimeDecisions,
-  "npm view @membase/mcp-server",
-  "Runtime ledger must record the npm availability check while the placeholder package is unresolved."
-);
-assertIncludes(
-  runtimeDecisions,
-  "returned npm 404",
-  "Runtime ledger must record that @membase/mcp-server is not currently available."
-);
 
 if (failures.length > 0) {
   console.error("Live smoke preflight failed:");
@@ -123,7 +99,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Live smoke preflight passed: Claude plugin-local MCP, Cursor HTTP MCP, Hermes provider register path, and OpenClaw native entrypoint are preserved, Hermes live API behavior remains pending, and live smoke remains blocked on accepted test credentials and cleanup."
+  "Live smoke preflight passed: Claude plugin-local stdio MCP and Cursor/Hermes/OpenClaw remote HTTP MCP are finalized with no user-supplied API key, and live smoke remains blocked on accepted test credentials and cleanup."
 );
 
 function findDecisionLine(content, decisionId) {

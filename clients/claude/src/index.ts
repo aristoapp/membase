@@ -66,9 +66,9 @@ export function generateClaudePluginManifest(
     version: config.client.version ?? "0.0.0",
     author: {
       name: "Membase",
-      url: "https://membase.com"
+      url: "https://membase.so"
     },
-    homepage: "https://membase.com",
+    homepage: "https://membase.so",
     repository: "https://github.com/aristoapp/membase-plugin-mcp",
     license: "MIT",
     keywords: [

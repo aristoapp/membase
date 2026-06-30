@@ -1,5 +1,5 @@
 import {
-  createMcpConfigDocument,
+  createHttpMcpConfigDocument,
   defineConnectorConfig,
   type ConnectorConfigInput,
   type ConnectorRuntimeConfig,
@@ -17,7 +17,7 @@ export const OPENCLAW_PLUGIN_ID = "openclaw-membase";
 export const OPENCLAW_PLUGIN_KIND = "memory";
 export const OPENCLAW_SKILLS_DIR = "skills";
 export const OPENCLAW_MCP_SERVER_NAME = "membase";
-export const OPENCLAW_MCP_SERVER_PACKAGE = "@membase/mcp-server";
+export const OPENCLAW_MCP_SERVER_URL = "https://mcp.membase.so/mcp";
 
 export interface OpenClawPluginManifest {
   id: string;
@@ -97,39 +97,46 @@ export function generateOpenClawPluginManifest(
         placeholder: config.endpoint.apiBaseUrl,
         advanced: true
       },
-      apiKeyEnv: {
-        label: "API key environment variable",
-        placeholder: config.auth.apiKeyEnv,
-        help: "Name of the environment variable OpenClaw should read at runtime.",
+      accessToken: {
+        label: "OAuth Access Token",
+        sensitive: true,
+        advanced: true
+      },
+      refreshToken: {
+        label: "OAuth Refresh Token",
+        sensitive: true,
+        advanced: true
+      },
+      clientId: {
+        label: "OAuth Client ID",
         advanced: true
       },
       tokenFile: {
-        label: "OAuth token file",
+        label: "OAuth Token File",
         placeholder: "~/.openclaw/credentials/openclaw-membase.json",
-        help: "Native OpenClaw plugin token cache path for OAuth-based installs.",
         advanced: true
       },
       autoRecall: {
-        label: "Auto-recall",
-        help: "Inject relevant Membase context before an agent turn."
+        label: "Auto-Recall",
+        help: "Inject relevant memories before every AI turn (disabled by default)"
       },
       autoWikiRecall: {
-        label: "Auto wiki recall",
-        help: "Inject relevant wiki documents before an agent turn."
+        label: "Auto Wiki Recall",
+        help: "Inject relevant wiki documents before every AI turn (disabled by default)"
       },
       autoCapture: {
-        label: "Auto-capture",
-        help: "Store selected conversation context after an agent turn."
+        label: "Auto-Capture",
+        help: "Automatically store conversations to memory"
       },
       maxRecallChars: {
-        label: "Max recall context size",
+        label: "Max Recall Context Size",
         placeholder: "4000",
-        help: "Maximum context characters injected per turn.",
+        help: "Maximum characters of memory context injected per turn (500–16000)",
         advanced: true
       },
       debug: {
-        label: "Debug logging",
-        help: "Enable verbose connector diagnostics.",
+        label: "Debug Logging",
+        help: "Enable verbose debug logs for API calls and responses",
         advanced: true
       }
     },
@@ -141,11 +148,16 @@ export function generateOpenClawPluginManifest(
           type: "string",
           default: config.endpoint.apiBaseUrl
         },
-        apiKeyEnv: {
-          type: "string",
-          default: config.auth.apiKeyEnv
+        clientId: {
+          type: "string"
         },
         tokenFile: {
+          type: "string"
+        },
+        accessToken: {
+          type: "string"
+        },
+        refreshToken: {
           type: "string"
         },
         autoRecall: {
@@ -158,17 +170,15 @@ export function generateOpenClawPluginManifest(
         },
         autoCapture: {
           type: "boolean",
-          default: false
+          default: true
         },
         maxRecallChars: {
           type: "number",
           minimum: 500,
-          maximum: 16000,
-          default: 4000
+          maximum: 16000
         },
         debug: {
-          type: "boolean",
-          default: false
+          type: "boolean"
         }
       }
     }
@@ -176,11 +186,11 @@ export function generateOpenClawPluginManifest(
 }
 
 export function generateOpenClawMcpConfig(
-  config: ConnectorRuntimeConfig
+  _config: ConnectorRuntimeConfig
 ): McpConfigDocument {
-  return createMcpConfigDocument(OPENCLAW_MCP_SERVER_NAME, config, {
-    command: "npx",
-    args: ["-y", OPENCLAW_MCP_SERVER_PACKAGE]
+  return createHttpMcpConfigDocument(OPENCLAW_MCP_SERVER_NAME, {
+    url: OPENCLAW_MCP_SERVER_URL,
+    headers: {}
   });
 }
 

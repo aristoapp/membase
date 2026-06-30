@@ -12,7 +12,7 @@ except Exception:
         """Fallback base class for local review without Hermes Agent installed."""
 
 
-DEFAULT_API_URL = "https://api.membase.com"
+DEFAULT_API_URL = "https://api.membase.so"
 TOOL_MEMBASE_REMEMBER = "membase_remember"
 TOOL_MEMBASE_SEARCH = "membase_search"
 TOOL_MEMBASE_CONTEXT = "membase_get_context"

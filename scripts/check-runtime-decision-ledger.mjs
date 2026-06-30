@@ -20,18 +20,18 @@ const requiredDecisionRows = [
     id: "D2",
     cells: [
       "Client runtime package or command path",
-      "Claude plugin-local, Cursor HTTP-first",
-      "Hermes provider import/register boundary",
-      "OpenClaw native entrypoint implemented",
-      "Hermes runtime API behavior pending"
+      "Finalized to `membase.so` with no user-supplied API key",
+      "Claude plugin-local stdio",
+      "remote HTTP MCP endpoint",
+      "live API behavior pending"
     ]
   },
   {
     id: "D3",
     cells: [
       "Per-client transport precedence",
-      "Claude plugin-local, Cursor HTTP-primary",
-      "fallback decisions pending"
+      "Finalized: Claude plugin-local stdio and Cursor/Hermes/OpenClaw remote HTTP MCP",
+      "no user-supplied API key"
     ]
   },
   {
@@ -56,7 +56,7 @@ const requiredDecisionRows = [
     id: "D6",
     cells: [
       "Live client-to-MCP smoke gate",
-      "Accepted in principle; pending D2/D3",
+      "live smoke remains pending",
       "test-only credentials",
       "cleanup behavior"
     ]

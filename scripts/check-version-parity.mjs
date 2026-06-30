@@ -28,15 +28,6 @@ const hermesYamlVersionPaths = [
   "manifests/hermes/plugin.yaml"
 ];
 
-const mcpVersionEnvPaths = [
-  "clients/claude/.mcp.json",
-  "manifests/claude/mcp.json",
-  "clients/hermes/mcp.json",
-  "manifests/hermes/mcp.json",
-  "clients/openclaw/mcp.json",
-  "manifests/openclaw/mcp.json"
-];
-
 const failures = [];
 const rootPackage = readJson("package.json");
 const expectedVersion = rootPackage?.version;
@@ -83,13 +74,6 @@ if (expectedVersion !== undefined) {
       readPythonAssignment(hermesInitText, "__version__"),
       expectedVersion
     );
-  }
-
-  for (const mcpPath of mcpVersionEnvPaths) {
-    const mcpConfig = readJson(mcpPath);
-    if (mcpConfig !== undefined) {
-      assertMcpClientVersion(mcpPath, mcpConfig, expectedVersion);
-    }
   }
 
   assertNoUnexpectedVersionFields("clients/openclaw/openclaw.plugin.json");
@@ -147,28 +131,6 @@ function readTomlString(content, key) {
 function readPythonAssignment(content, key) {
   const pattern = new RegExp(`^${escapeRegExp(key)}\\s*=\\s*["']([^"']+)["']\\s*$`, "m");
   return content.match(pattern)?.[1];
-}
-
-function assertMcpClientVersion(relativePath, mcpConfig, expectedVersion) {
-  const servers = mcpConfig?.mcpServers;
-  if (servers === undefined || typeof servers !== "object") {
-    failures.push(`${relativePath}: missing mcpServers object`);
-    return;
-  }
-
-  const server = servers.membase;
-  if (server === undefined || typeof server !== "object") {
-    failures.push(`${relativePath}: missing membase server config`);
-    return;
-  }
-
-  const env = server.env;
-  if (env === undefined || typeof env !== "object") {
-    failures.push(`${relativePath}: missing env for MEMBASE_CLIENT_VERSION`);
-    return;
-  }
-
-  assertVersion(relativePath, env.MEMBASE_CLIENT_VERSION, expectedVersion);
 }
 
 function assertNoUnexpectedVersionFields(relativePath) {

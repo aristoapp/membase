@@ -47,8 +47,14 @@ if (manifest) {
     `${MANIFEST_PATH}: config schema must reject undeclared keys`
   );
   assert(
-    manifest.uiHints?.apiKeyEnv?.placeholder === "MEMBASE_API_KEY",
-    `${MANIFEST_PATH}: API key must remain an environment-variable reference`
+    manifest.uiHints?.accessToken?.sensitive === true &&
+      manifest.uiHints?.refreshToken?.sensitive === true,
+    `${MANIFEST_PATH}: OAuth access/refresh token hints must be marked sensitive`
+  );
+  assert(
+    !("apiKeyEnv" in (manifest.uiHints ?? {})) &&
+      !("apiKeyEnv" in (manifest.configSchema?.properties ?? {})),
+    `${MANIFEST_PATH}: must not declare apiKeyEnv (OAuth-based auth, no user API key)`
   );
   assertNoRawSecretDefaults(MANIFEST_PATH, manifest.configSchema?.properties ?? {});
 }

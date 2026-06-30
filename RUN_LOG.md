@@ -1909,3 +1909,41 @@ Next step:
   and port OpenClaw hooks/tools, Claude commands/hooks/skills, or Cursor
   rules/skills/assets after review, or implement Hermes live API behavior after
   package/runtime ownership is accepted.
+
+## 2026-06-30 (interactive) — Finalize host/auth migration to membase.so, no user API key
+
+- Took over the in-progress host/auth migration (decision: finalize to reality).
+  Reconciled with the automation's remote base first; this work is on top of
+  origin/main (96d676d), not the earlier stale local base.
+- Finalized the connector model across all four clients:
+  - Host `api.membase.com` -> `api.membase.so`; MCP host `mcp.membase.so`.
+  - Removed the `@membase/mcp-server` placeholder and the `MEMBASE_API_KEY`
+    env-injection model. No client uses a user-supplied API key.
+  - Claude: bundled stdio server with env `{ MEMBASE_CLAUDE_PLUGIN: "1" }` only.
+  - Cursor/Hermes/OpenClaw: remote HTTP MCP `https://mcp.membase.so/mcp` (OAuth /
+    native-runtime primary). OpenClaw config schema switched to OAuth fields.
+  - `packages/core`: `createMcpConfigDocument` no longer injects host/key/client
+    env; default base URL is membase.so.
+- Updated the decision ledger D2/D3/D6 to "Finalized" and brought every
+  enforcing checker in line with the finalized model: check-core-contract,
+  check-claude-plugin-parity, check-version-parity (dropped mcp client-version
+  env), check-openclaw-native-parity (OAuth, no apiKeyEnv),
+  check-cursor-transport-parity, check-runtime-decision-ledger,
+  smoke/client-smoke.mjs, smoke/live-smoke-preflight.mjs, check-review-readiness.
+- Rewrote install docs (claude/cursor/hermes/openclaw) and security.md to the
+  OAuth / bundled-server / no-API-key model; fixed marketplace-assets homepage
+  and the Hermes Python provider default host.
+- Fixed scripts/check-public-surface.sh to fall back to grep when ripgrep is
+  absent (it previously passed vacuously). Added scripts/regen-artifacts.mjs and
+  a `pnpm generate` script.
+
+Verification:
+
+- `pnpm check` passed (all ~20 sub-checks, including the now-active
+  public-surface scan and 16 generated artifacts).
+- `pnpm smoke:execute` passed (4 clients, 8 commands).
+
+Next step:
+
+- Remaining launch work is unchanged: port outstanding marketplace assets, make
+  the repo public, then execute old-repo deprecation (deferred per the user).

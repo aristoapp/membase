@@ -133,7 +133,10 @@ async function verifyPublicContractStub() {
   assert(afterDeleteResults.length === 0, "deleteOrForget left stale search results");
 }
 
-function verifyMcpConfig(clientId, mcpConfig, runtime) {
+// Finalized transport model: Claude uses a bundled stdio server with only a
+// non-secret plugin flag; Cursor, Hermes, and OpenClaw use the remote HTTP MCP
+// endpoint. No client carries a user-supplied API key or host in its config.
+function verifyMcpConfig(clientId, mcpConfig, _runtime) {
   assert(mcpConfig && typeof mcpConfig === "object", `${clientId} MCP config missing`);
   assert(
     mcpConfig.mcpServers && typeof mcpConfig.mcpServers === "object",
@@ -146,57 +149,54 @@ function verifyMcpConfig(clientId, mcpConfig, runtime) {
   const [serverName, server] = servers[0];
   assert(serverName === "membase", `${clientId} MCP server should be named membase`);
 
-  if (clientId === "cursor") {
-    verifyCursorHttpMcpConfig(server);
-    return;
+  if (clientId === "claude") {
+    verifyStdioMcpConfig(clientId, server);
+  } else {
+    verifyHttpMcpConfig(clientId, server);
   }
 
-  assert(typeof server.command === "string" && server.command, `${clientId} MCP command missing`);
-  assert(Array.isArray(server.args), `${clientId} MCP args must be an array`);
-  assert(server.env && typeof server.env === "object", `${clientId} MCP env missing`);
-  assert(
-    server.env[MEMBASE_CONNECTOR_ENV.apiBaseUrl] === SMOKE_API_BASE_URL,
-    `${clientId} MCP env missing API base URL`
-  );
-  assert(
-    server.env.MEMBASE_CLIENT_ID === clientId,
-    `${clientId} MCP env missing client id`
-  );
-  assert(
-    typeof server.env[runtime.auth.apiKeyEnv] === "string",
-    `${clientId} MCP env missing API key reference`
-  );
-
-  const redacted = redactEnvironment({
-    ...server.env,
-    [runtime.auth.apiKeyEnv]: FAKE_SECRET
-  });
-  assert(
-    JSON.stringify(redacted).includes(FAKE_SECRET) === false,
-    `${clientId} redacted diagnostics leaked a secret`
-  );
   assert(
     JSON.stringify(server).includes(FAKE_SECRET) === false,
     `${clientId} MCP config included a raw smoke secret`
   );
 }
 
-function verifyCursorHttpMcpConfig(server) {
+function verifyStdioMcpConfig(clientId, server) {
+  assert(typeof server.command === "string" && server.command, `${clientId} MCP command missing`);
+  assert(Array.isArray(server.args), `${clientId} MCP args must be an array`);
+  assert(server.env && typeof server.env === "object", `${clientId} MCP env missing`);
+  assert(server.url === undefined, `${clientId} stdio MCP config must not declare a remote url`);
+
+  for (const [key, value] of Object.entries(server.env)) {
+    if (isSensitiveKey(key)) {
+      assert(
+        isSafeSecretReference(value),
+        `${clientId} MCP env contains a raw sensitive value for ${key}`
+      );
+    }
+  }
   assert(
-    server.url === "https://mcp.membase.so/mcp",
-    "cursor MCP config must preserve the old HTTP MCP endpoint"
+    server.env.MEMBASE_API_BASE_URL === undefined,
+    `${clientId} MCP env should not embed a host`
+  );
+}
+
+function verifyHttpMcpConfig(clientId, server) {
+  assert(
+    typeof server.url === "string" && server.url.startsWith("https://"),
+    `${clientId} HTTP MCP config must declare an https url`
+  );
+  assert(
+    server.url.includes("mcp.membase.so"),
+    `${clientId} HTTP MCP config must point at the Membase MCP endpoint`
   );
   assert(
     server.headers && typeof server.headers === "object" && !Array.isArray(server.headers),
-    "cursor MCP config must include a headers object"
+    `${clientId} HTTP MCP config must include a headers object`
   );
   assert(
     server.command === undefined && server.args === undefined,
-    "cursor MCP config must not fall back to the placeholder stdio command"
-  );
-  assert(
-    JSON.stringify(server).includes(FAKE_SECRET) === false,
-    "cursor MCP config included a raw smoke secret"
+    `${clientId} HTTP MCP config must not declare a stdio command`
   );
 }
 

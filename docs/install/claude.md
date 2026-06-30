@@ -9,8 +9,8 @@ it does not publish a marketplace entry or deprecate the old Claude repo.
 - Node.js 20 or newer.
 - `pnpm install` run at the repo root.
 - Claude Code CLI installed for `pnpm claude:plugin-parity`.
-- A Membase API key available as `MEMBASE_API_KEY` in the shell or client
-  environment.
+- A Membase account. The Claude Code plugin manages authentication through its
+  own login flow; there is no user-supplied API key in the MCP config.
 
 ## Build And Sync Check
 
@@ -45,12 +45,7 @@ user/local Claude MCP config.
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs"],
       "env": {
-        "MEMBASE_CLAUDE_PLUGIN": "1",
-        "MEMBASE_API_BASE_URL": "https://api.membase.com",
-        "MEMBASE_API_KEY": "${MEMBASE_API_KEY}",
-        "MEMBASE_CLIENT_ID": "claude",
-        "MEMBASE_CLIENT_NAME": "Claude Code",
-        "MEMBASE_CLIENT_VERSION": "0.0.0"
+        "MEMBASE_CLAUDE_PLUGIN": "1"
       }
     }
   }
@@ -64,7 +59,7 @@ clients/claude/.mcp.json
 ```
 
 For a project-scoped review install, copy the manifest example into the target
-project's `.mcp.json` and keep the API key as an environment reference:
+project's `.mcp.json`:
 
 ```bash
 cp manifests/claude/mcp.json /path/to/project/.mcp.json
@@ -73,13 +68,10 @@ cp manifests/claude/mcp.json /path/to/project/.mcp.json
 For a private local or user-scoped install, keep the same server shape but store
 it through Claude Code's MCP config flow instead of committing it to a project.
 
-Do not paste raw API keys into any config file. Keep `MEMBASE_API_KEY` as
-`${MEMBASE_API_KEY}` and set the real value in the shell or client environment:
-
-```bash
-export MEMBASE_API_KEY="<membase-api-key>"
-export MEMBASE_API_BASE_URL="https://api.membase.com"
-```
+The bundled `scripts/mcp-server.cjs` handles login and Membase API access, so no
+API key or endpoint override belongs in the config. The Membase API endpoint
+defaults to `https://api.membase.so` and is configurable through the plugin's
+`apiUrl` user config.
 
 ## Plugin Metadata
 
@@ -117,7 +109,8 @@ available in a test-only review path.
 - `clients/claude/native-artifacts.json` lists old Claude command, hook, skill,
   agent, runtime bundle, and session-start evidence without copying deferred
   files.
-- `MEMBASE_API_KEY` is an environment reference, not a raw token.
+- No raw token or API key appears in any committed config; the bundled plugin
+  manages login.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
   private memory-engine details.
 

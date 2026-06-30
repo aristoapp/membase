@@ -128,14 +128,20 @@ function assertClaudeMcpConfig(config) {
     failures.push(`${MANIFEST_MCP_PATH}: MEMBASE_CLAUDE_PLUGIN marker must stay enabled`);
   }
 
-  if (env.MEMBASE_API_KEY !== "${MEMBASE_API_KEY}") {
-    failures.push(`${MANIFEST_MCP_PATH}: MEMBASE_API_KEY must stay an environment reference`);
+  // The bundled plugin manages login; the config must carry no user-supplied
+  // API key, host, or client metadata env — only the plugin flag.
+  if ("MEMBASE_API_KEY" in env) {
+    failures.push(`${MANIFEST_MCP_PATH}: must not carry MEMBASE_API_KEY (Claude plugin login is used)`);
   }
 
   for (const field of ["MEMBASE_API_BASE_URL", "MEMBASE_CLIENT_ID", "MEMBASE_CLIENT_NAME", "MEMBASE_CLIENT_VERSION"]) {
-    if (!isNonEmptyString(env[field])) {
-      failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.env.${field} must be a non-empty string`);
+    if (field in env) {
+      failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.env.${field} must not be set (bundled server handles it)`);
     }
+  }
+
+  if (Object.keys(env).length !== 1) {
+    failures.push(`${MANIFEST_MCP_PATH}: env must contain only MEMBASE_CLAUDE_PLUGIN`);
   }
 }
 
