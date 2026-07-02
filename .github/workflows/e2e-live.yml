@@ -1,0 +1,29 @@
+name: E2E live (quality + latency)
+
+on:
+  schedule:
+    - cron: "17 1 * * *" # daily 01:17 UTC
+  workflow_dispatch:
+
+jobs:
+  e2e-live:
+    name: remember/search/context/forget lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Tier 2 live eval (skips gracefully without token)
+        env:
+          MEMBASE_MCP_TOKEN: ${{ secrets.MEMBASE_MCP_TOKEN }}
+        run: |
+          if [ -z "$MEMBASE_MCP_TOKEN" ]; then
+            echo "::notice::MEMBASE_MCP_TOKEN secret not set — running Tier 1 only."
+            node e2e/run-e2e.mjs
+          else
+            node e2e/run-e2e.mjs --live
+          fi
