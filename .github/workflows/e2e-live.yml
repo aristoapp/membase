@@ -17,27 +17,31 @@ jobs:
         with:
           node-version: 22
 
-      # Auth model: the Membase auth server rotates refresh tokens on every
-      # exchange, so this job refreshes an access token at start and then
-      # persists the ROTATED refresh token back into the repo secret. The
-      # chain is seeded once by running `node e2e/get-token.mjs` locally and
-      # storing MEMBASE_MCP_REFRESH_TOKEN / MEMBASE_MCP_CLIENT_ID secrets.
-      # GH_SECRETS_PAT must be a PAT with repo admin (secrets write) access;
-      # without it the chain breaks after the first run.
+      # Auth (preferred): MEMBASE_SERVICE_CLIENT_ID/SECRET — static
+      # client_credentials service credentials (aristoapp/membase#318),
+      # provisioned via apps/api/scripts/create_service_client.py. No
+      # rotation, no PAT needed; revoke by deleting the service client.
+      #
+      # Fallback: MEMBASE_MCP_REFRESH_TOKEN/MEMBASE_MCP_CLIENT_ID refresh
+      # chain. The server rotates refresh tokens, so the rotated token must
+      # be written back (requires GH_SECRETS_PAT); remove this path once the
+      # service credentials are live.
       - name: Run Tier 2 live eval (Tier 1 fallback without credentials)
         id: live
         env:
+          MEMBASE_SERVICE_CLIENT_ID: ${{ secrets.MEMBASE_SERVICE_CLIENT_ID }}
+          MEMBASE_SERVICE_CLIENT_SECRET: ${{ secrets.MEMBASE_SERVICE_CLIENT_SECRET }}
           MEMBASE_MCP_REFRESH_TOKEN: ${{ secrets.MEMBASE_MCP_REFRESH_TOKEN }}
           MEMBASE_MCP_CLIENT_ID: ${{ secrets.MEMBASE_MCP_CLIENT_ID }}
         run: |
-          if [ -z "$MEMBASE_MCP_REFRESH_TOKEN" ]; then
-            echo "::notice::MEMBASE_MCP_REFRESH_TOKEN secret not set — running Tier 1 only."
+          if [ -z "$MEMBASE_SERVICE_CLIENT_ID" ] && [ -z "$MEMBASE_MCP_REFRESH_TOKEN" ]; then
+            echo "::notice::No live credentials configured — running Tier 1 only."
             node e2e/run-e2e.mjs
           else
             node e2e/run-e2e.mjs --live
           fi
 
-      - name: Persist rotated refresh token to repo secret
+      - name: Persist rotated refresh token to repo secret (fallback path only)
         if: always() && steps.live.outputs.rotated_refresh_token != ''
         env:
           GH_TOKEN: ${{ secrets.GH_SECRETS_PAT }}

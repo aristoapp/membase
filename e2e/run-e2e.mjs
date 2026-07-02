@@ -31,8 +31,8 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const LIVE = process.argv.includes("--live");
 const auth = LIVE ? await ensureAccessToken() : { token: process.env.MEMBASE_MCP_TOKEN, source: "env" };
 const TOKEN = auth.token;
-if (LIVE && TOKEN && auth.source === "refresh_token grant") {
-  console.error(`access token minted via refresh_token grant (TTL ${auth.expiresIn ?? "?"}s; refresh token rotated)`);
+if (LIVE && TOKEN && auth.source !== "env access token") {
+  console.error(`access token minted via ${auth.source} (TTL ${auth.expiresIn ?? "?"}s)`);
 }
 const AUTH_SERVER = "https://api.membase.so";
 
