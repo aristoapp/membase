@@ -7,7 +7,7 @@ on:
 
 jobs:
   e2e-live:
-    name: remember/search/context/forget lifecycle
+    name: remember/search/context lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -17,13 +17,35 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run Tier 2 live eval (skips gracefully without token)
+      # Auth model: the Membase auth server rotates refresh tokens on every
+      # exchange, so this job refreshes an access token at start and then
+      # persists the ROTATED refresh token back into the repo secret. The
+      # chain is seeded once by running `node e2e/get-token.mjs` locally and
+      # storing MEMBASE_MCP_REFRESH_TOKEN / MEMBASE_MCP_CLIENT_ID secrets.
+      # GH_SECRETS_PAT must be a PAT with repo admin (secrets write) access;
+      # without it the chain breaks after the first run.
+      - name: Run Tier 2 live eval (Tier 1 fallback without credentials)
+        id: live
         env:
-          MEMBASE_MCP_TOKEN: ${{ secrets.MEMBASE_MCP_TOKEN }}
+          MEMBASE_MCP_REFRESH_TOKEN: ${{ secrets.MEMBASE_MCP_REFRESH_TOKEN }}
+          MEMBASE_MCP_CLIENT_ID: ${{ secrets.MEMBASE_MCP_CLIENT_ID }}
         run: |
-          if [ -z "$MEMBASE_MCP_TOKEN" ]; then
-            echo "::notice::MEMBASE_MCP_TOKEN secret not set — running Tier 1 only."
+          if [ -z "$MEMBASE_MCP_REFRESH_TOKEN" ]; then
+            echo "::notice::MEMBASE_MCP_REFRESH_TOKEN secret not set — running Tier 1 only."
             node e2e/run-e2e.mjs
           else
             node e2e/run-e2e.mjs --live
           fi
+
+      - name: Persist rotated refresh token to repo secret
+        if: always() && steps.live.outputs.rotated_refresh_token != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRETS_PAT }}
+          ROTATED: ${{ steps.live.outputs.rotated_refresh_token }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::Refresh token was rotated but GH_SECRETS_PAT is not set — the stored MEMBASE_MCP_REFRESH_TOKEN is now stale. Re-seed with e2e/get-token.mjs before the next run."
+            exit 0
+          fi
+          printf '%s' "$ROTATED" | gh secret set MEMBASE_MCP_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY"
+          echo "rotated refresh token stored."
