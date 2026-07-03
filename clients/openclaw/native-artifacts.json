@@ -7,15 +7,9 @@
     "treeUrl": "https://api.github.com/repos/aristoapp/openclaw-membase/git/trees/main?recursive=1"
   },
   "policy": {
-    "status": "review-only",
+    "status": "ported",
     "summary": "Snapshot old OpenClaw-native commands, hooks, tools, config, update checks, and runtime tests before any behavior is ported.",
-    "copyRule": "Do not copy old OpenClaw commands, hooks, tools, config helpers, update checks, or test fixtures until each behavior is accepted and rewritten to the public connector-capability boundary.",
-    "forbiddenRuntimeDirectoriesUntilNativeArtifactsPorted": [
-      "commands",
-      "hooks",
-      "tools",
-      "skills"
-    ]
+    "copyRule": "OpenClaw runtime has been copied into clients/openclaw/runtime as-is (consolidation Group B). The adapter stays at clients/openclaw/src; refactor the runtime toward a shared core and wire the manifest later. This snapshot is now a historical inventory of the ported source."
   },
   "artifacts": [
     {
