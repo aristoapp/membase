@@ -1,0 +1,22 @@
+{
+  "name": "@membase/openclaw-membase-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin runtime for Membase (tools, hooks, commands) — copied in as-is from the standalone connector; refactor toward shared core later.",
+  "main": "./index.ts",
+  "peerDependencies": {
+    "openclaw": ">=2026.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.14"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --pretty false"
+  }
+}
