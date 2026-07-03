@@ -72,3 +72,27 @@ CI/headless, a bearer token via `bearer_token_env_var`).
 
 - `/mcp` in a Codex session lists `membase` with the memory tools
   (remember / search / getContext / forget) exposed by the live MCP server.
+
+## Secret Handling
+
+No raw token or API key appears in `~/.codex/config.toml`, the
+`.codex-plugin` bundle, generated artifacts, or logs. Auth is handled by
+Codex-managed OAuth; for CI/headless, a bearer token is referenced via
+`bearer_token_env_var` (an env-var name, never an inline value).
+No public artifact describes Membase storage, graph, embedding, ranking, or internal memory-engine details — only connector capabilities (remember, search, task context, forget).
+
+## Review Checklist
+
+Before proposing changes, run and confirm green:
+
+```bash
+pnpm --filter @membase/client-codex typecheck
+pnpm generated-artifacts
+pnpm check
+pnpm smoke:execute
+```
+
+- Generated `.codex-plugin/plugin.json` and `.mcp.json` match the committed
+  artifacts (`pnpm generated-artifacts`).
+- No secret material is committed (`pnpm secret-hygiene`, `pnpm public-surface`).
+- The Codex MCP config points only at the public HTTP endpoint.
