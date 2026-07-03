@@ -34,7 +34,13 @@ const TOKEN = auth.token;
 if (LIVE && TOKEN && auth.source !== "env access token") {
   console.error(`access token minted via ${auth.source} (TTL ${auth.expiresIn ?? "?"}s)`);
 }
-const AUTH_SERVER = "https://api.membase.so";
+// Endpoint selection. Defaults target production; a staging (or preview) run
+// overrides these so the same harness verifies whichever environment CI points
+// at. MEMBASE_AUTH_BASE is the expected authorization server advertised by
+// discovery; MEMBASE_MCP_URL, when set, replaces each client config's MCP URL
+// so the lifecycle runs against that endpoint (its token audience must match).
+const AUTH_SERVER = process.env.MEMBASE_AUTH_BASE ?? "https://api.membase.so";
+const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
 
 const CLIENTS = [
   { id: "claude", config: "clients/claude/.mcp.json" },
@@ -64,17 +70,20 @@ for (const client of CLIENTS) {
   const entry = { id: client.id, transport, config: client.config, checks: [], latency: {}, quality: {} };
 
   if (transport === "http") {
-    await verifyHttp(entry, server.url);
+    // A staging/preview run overrides the committed (prod) URL so the same
+    // connector config is verified against the target environment.
+    const url = MCP_URL_OVERRIDE ?? server.url;
+    await verifyHttp(entry, url);
     if (LIVE && TOKEN && entry.checks.every((c) => c.pass)) {
       // All HTTP clients share the hosted endpoint; run the write/read
       // lifecycle once per URL so the test account is not polluted N times
       // (there is no memory-delete tool on the live server yet).
-      if (!lifecycleByUrl.has(server.url)) {
+      if (!lifecycleByUrl.has(url)) {
         const shared = { checks: [], latency: {}, quality: {} };
-        await evalLive({ ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId }, server.url);
-        lifecycleByUrl.set(server.url, shared);
+        await evalLive({ ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId }, url);
+        lifecycleByUrl.set(url, shared);
       }
-      const shared = lifecycleByUrl.get(server.url);
+      const shared = lifecycleByUrl.get(url);
       entry.checks.push(...shared.checks);
       Object.assign(entry.latency, shared.latency);
       Object.assign(entry.quality, shared.quality);
@@ -107,7 +116,7 @@ async function verifyHttp(entry, url) {
       `resource=${disc.meta.resource}`
     ));
     entry.checks.push(check(
-      "authorization_server = api.membase.so",
+      `authorization_server = ${AUTH_SERVER}`,
       Array.isArray(disc.meta.authorization_servers) && disc.meta.authorization_servers.includes(AUTH_SERVER),
       `servers=${JSON.stringify(disc.meta.authorization_servers)}`
     ));

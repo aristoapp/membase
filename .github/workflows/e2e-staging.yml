@@ -1,0 +1,48 @@
+name: E2E staging (client_credentials)
+
+# Verifies the connector contract + remember/search/context lifecycle against
+# the STAGING environment, which tracks `develop`. This is the pre-prod gate:
+# changes land on develop -> deploy to staging -> this workflow proves the live
+# connector still works there before prod. Auth uses a staging-only
+# client_credentials service client (aristoapp/membase#318), so no human login
+# and no token rotation is needed.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "47 1 * * *" # daily 01:47 UTC (after the nightly staging deploy)
+
+concurrency:
+  group: e2e-staging
+  cancel-in-progress: false
+
+jobs:
+  e2e-staging:
+    name: staging remember/search/context lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Staging Cloud Run endpoints (stable per project; not secrets).
+      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
+      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Staging service credentials — a client_credentials client bound to a
+      # dedicated ci-e2e test user, provisioned against the staging Redis via
+      # apps/api/scripts/create_service_client.py. Revoke by deleting that
+      # service client; no rotation, no PAT.
+      - name: Run staging Tier 2 live eval
+        env:
+          MEMBASE_SERVICE_CLIENT_ID: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_ID }}
+          MEMBASE_SERVICE_CLIENT_SECRET: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$MEMBASE_SERVICE_CLIENT_ID" ]; then
+            echo "::error::MEMBASE_STAGING_SERVICE_CLIENT_ID is not set — cannot run the staging live eval."
+            exit 1
+          fi
+          node e2e/run-e2e.mjs --live
