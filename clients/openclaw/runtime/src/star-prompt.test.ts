@@ -10,6 +10,7 @@ describe("maybePromptGithubStar", () => {
       stdoutIsTTY: true,
       hasBeenPromptedFn: async () => false,
       isGhInstalledFn: () => true,
+      isGhAuthenticatedFn: () => true,
       askYesNoFn: async () => {
         steps.push("ask");
         return false;
@@ -35,6 +36,7 @@ describe("maybePromptGithubStar", () => {
         stdoutIsTTY: true,
         hasBeenPromptedFn: async () => false,
         isGhInstalledFn: () => true,
+        isGhAuthenticatedFn: () => true,
         askYesNoFn: async () => {
           throw new Error("prompt failed");
         },
@@ -56,6 +58,7 @@ describe("maybePromptGithubStar", () => {
       stdoutIsTTY: true,
       hasBeenPromptedFn: async () => false,
       isGhInstalledFn: () => true,
+      isGhAuthenticatedFn: () => true,
       askYesNoFn: async () => true,
       markPromptedFn: async () => {
         throw new Error("disk error");
