@@ -50,3 +50,32 @@ jobs:
           node-version: 22
 
       - run: node e2e/run-e2e.mjs
+
+  e2e-tier2-staging:
+    # Fast live smoke (authed remember/search) against STAGING on every push/PR.
+    # Uses a staging-only client_credentials service token (no browser). Skips
+    # gracefully when the secret is unavailable (e.g. forked PRs) so it never
+    # blocks external contributions. Deep quality/latency (Tier 3) stays nightly.
+    name: e2e tier 2 (staging, authed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
+      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Tier 2 (fast smoke) against staging
+        env:
+          MEMBASE_SERVICE_CLIENT_ID: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_ID }}
+          MEMBASE_SERVICE_CLIENT_SECRET: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$MEMBASE_SERVICE_CLIENT_ID" ]; then
+            echo "::notice::No staging service credentials (likely a fork PR) — skipping Tier 2."
+            exit 0
+          fi
+          node e2e/run-e2e.mjs --live

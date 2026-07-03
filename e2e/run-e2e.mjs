@@ -59,6 +59,7 @@ const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
 const CLIENTS = [
   { id: "claude", config: "clients/claude/.mcp.json" },
   { id: "cursor", config: "clients/cursor/mcp.json" },
+  { id: "codex", config: "clients/codex/.mcp.json" },
   { id: "hermes", config: "clients/hermes/mcp.json" },
   { id: "openclaw", config: "clients/openclaw/mcp.json" }
 ];

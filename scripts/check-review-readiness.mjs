@@ -74,6 +74,19 @@ const clientReadiness = [
     ]
   },
   {
+    id: "codex",
+    files: [
+      "clients/codex/src/index.ts",
+      "clients/codex/README.md",
+      "clients/codex/package.json",
+      "clients/codex/.codex-plugin/plugin.json",
+      "clients/codex/.mcp.json",
+      "manifests/codex/plugin.json",
+      "manifests/codex/mcp.json",
+      "docs/install/codex.md"
+    ]
+  },
+  {
     id: "hermes",
     files: [
       "clients/hermes/src/index.ts",

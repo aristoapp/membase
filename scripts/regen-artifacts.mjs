@@ -31,6 +31,17 @@ const adapterSpecs = [
     ]
   },
   {
+    modulePath: "clients/codex/dist/index.js",
+    defineRuntimeConfig: "defineCodexRuntimeConfig",
+    generateArtifacts: "generateCodexArtifacts",
+    targets: [
+      { path: "clients/codex/.codex-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
+      { path: "clients/codex/.mcp.json", format: "json", pick: (a) => a.mcp },
+      { path: "manifests/codex/plugin.json", format: "json", pick: (a) => a.plugin },
+      { path: "manifests/codex/mcp.json", format: "json", pick: (a) => a.mcp }
+    ]
+  },
+  {
     modulePath: "clients/hermes/dist/index.js",
     defineRuntimeConfig: "defineHermesRuntimeConfig",
     generateArtifacts: "generateHermesArtifacts",
