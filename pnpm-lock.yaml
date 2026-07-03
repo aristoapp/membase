@@ -21,6 +21,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  clients/codex:
+    dependencies:
+      '@membase/connector-sdk':
+        specifier: workspace:*
+        version: link:../../packages/connector-sdk
+      '@membase/plugin-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   clients/cursor:
     dependencies:
       '@membase/connector-sdk':
