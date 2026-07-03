@@ -47,6 +47,12 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   records write→searchable time + search p50/p95.
 - **getContext** (semantic retrieval) returns the sentinel memory.
 - **forget** removes the memory (when the server exposes a delete tool).
+- **tool contract**: asserts every expected tool is exposed (basis: the shipped
+  tool surface — `add_memory`, `search_memory`, `get_current_date`,
+  `search_wiki`, `add_wiki`, `update_wiki`, `delete_wiki`; a missing tool fails
+  the run), that `get_current_date` returns a date, and runs a full wiki CRUD
+  round-trip (add → search → update → delete → confirm gone) that cleans up
+  after itself.
 
 Obtain the token through the client's normal OAuth flow, or set
 `MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a

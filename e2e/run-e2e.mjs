@@ -75,6 +75,24 @@ const CAPABILITY_MATCHERS = [
 
 const RECALL_DELAYS_MS = [0, 2000, 5000, 10_000, 20_000];
 
+// Tier 3 tool contract: the declared "should" set of tools every run must
+// expose and be able to exercise. Basis = the tools the MCP server actually
+// ships (memory add/search, get_current_date, wiki add/search/update/delete).
+// If any expected tool disappears, the presence check fails the run. Wiki has a
+// full CRUD surface, so evalContract runs an add -> search -> update -> delete
+// -> confirm-gone round-trip that cleans up after itself; memory add/search
+// recall is covered by evalLiveDeep.
+const EXPECTED_TOOLS = [
+  "add_memory",
+  "search_memory",
+  "get_current_date",
+  "search_wiki",
+  "add_wiki",
+  "update_wiki",
+  "delete_wiki",
+];
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 const results = [];
 const lifecycleByUrl = new Map(); // run the live lifecycle once per endpoint
 
@@ -95,8 +113,11 @@ for (const client of CLIENTS) {
       if (!lifecycleByUrl.has(url)) {
         const shared = { checks: [], latency: {}, quality: {} };
         const ctx = { ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId };
-        const roles = await evalLiveFast(ctx, url); // Tier 2 (fast)
-        if (TIER3 && roles) await evalLiveDeep(ctx, url, roles); // Tier 3 (deep)
+        const fast = await evalLiveFast(ctx, url); // Tier 2 (fast)
+        if (TIER3 && fast) {
+          await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency)
+          await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+        }
         lifecycleByUrl.set(url, shared);
       }
       const shared = lifecycleByUrl.get(url);
@@ -171,8 +192,8 @@ async function evalLiveFast(entry, url) {
 
   const tl = await listTools(url, { token: TOKEN, sessionId });
   entry.latency.toolsList = round(tl.ms);
-  const tools = tl.payload?.result?.tools ?? [];
-  const roles = matchRoles(tools);
+  const toolObjs = tl.payload?.result?.tools ?? [];
+  const roles = matchRoles(toolObjs);
   entry.quality.toolCoverage = `${["remember", "search", "getContext", "forget"].filter((r) => roles[r]).length}/4`;
 
   entry.checks.push(check(
@@ -215,7 +236,77 @@ async function evalLiveFast(entry, url) {
     `${round(s.ms)}ms (recall correctness verified in Tier 3)`
   ));
 
-  return roles;
+  return { roles, tools: toolObjs };
+}
+
+// ---------- Tier 3: tool contract suite (basis: the shipped tool surface) ----------
+async function evalContract(entry, url, tools) {
+  const sessionId = entry.sessionId;
+  const names = new Set(tools.map((t) => t.name));
+  const call = (name, args, id) => callTool(url, { token: TOKEN, sessionId, id, name, args });
+
+  // 1. Presence — every expected tool must be exposed (regression guard).
+  let missing = 0;
+  for (const name of EXPECTED_TOOLS) {
+    const present = names.has(name);
+    if (!present) missing++;
+    entry.checks.push(check(`contract: ${name} exposed`, present, present ? "present" : "MISSING from tools/list"));
+  }
+  entry.quality.contractToolsPresent = `${EXPECTED_TOOLS.length - missing}/${EXPECTED_TOOLS.length}`;
+
+  // 2. get_current_date returns an actual date.
+  if (names.has("get_current_date")) {
+    const d = await call("get_current_date", {}, 50);
+    const hasDate = /\d{4}-\d{2}-\d{2}/.test(d.raw ?? "");
+    entry.checks.push(check(
+      "contract: get_current_date returns a date",
+      !d.payload?.error && d.status < 400 && hasDate,
+      hasDate ? "ISO date present" : errText(d) || "no date in response"
+    ));
+  }
+
+  // 3. Wiki full lifecycle (create -> read -> update -> delete -> confirm gone).
+  const wikiTools = ["add_wiki", "search_wiki", "update_wiki", "delete_wiki"];
+  if (wikiTools.every((n) => names.has(n))) {
+    const stamp = `e2e-wiki-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+    const add = await call("add_wiki", { title: `[e2e] ${stamp}`, content: `Contract wiki body for ${stamp}. (safe to delete)` }, 51);
+    const addOk = !add.payload?.error && add.status < 400;
+    const docId = (add.raw ?? "").match(UUID_RE)?.[0];
+    entry.checks.push(check(
+      "contract: add_wiki stores a document",
+      addOk,
+      addOk ? (docId ? `doc_id=${short(docId)}` : "stored (no doc_id in response)") : errText(add)
+    ));
+
+    // search finds it (wiki indexing may be async — brief backoff)
+    let found = false;
+    for (const delay of [0, 3000, 8000]) {
+      if (delay) await new Promise((res) => setTimeout(res, delay));
+      const s = await call("search_wiki", { query: stamp }, 52);
+      if ((s.raw ?? "").includes(stamp)) { found = true; break; }
+    }
+    entry.checks.push(check("contract: search_wiki finds the added document", found, found ? "found by sentinel" : "not searchable within ~11s"));
+
+    if (docId) {
+      const upd = await call("update_wiki", { doc_id: docId, content: `Updated contract body ${stamp}` }, 53);
+      entry.checks.push(check("contract: update_wiki succeeds", !upd.payload?.error && upd.status < 400, errText(upd) || "updated"));
+
+      const del = await call("delete_wiki", { doc_id: docId }, 54);
+      entry.checks.push(check("contract: delete_wiki succeeds", !del.payload?.error && del.status < 400, errText(del) || "deleted"));
+
+      // confirm cleanup (small backoff for index to catch up)
+      let gone = false;
+      for (const delay of [1000, 4000]) {
+        await new Promise((res) => setTimeout(res, delay));
+        const s2 = await call("search_wiki", { query: stamp }, 55);
+        if (!(s2.raw ?? "").includes(stamp)) { gone = true; break; }
+      }
+      entry.checks.push(check("contract: deleted wiki no longer found", gone, gone ? "cleaned up" : "still searchable after delete"));
+    } else {
+      entry.checks.push(warn("contract: wiki update/delete skipped", "add_wiki returned no doc_id to target"));
+    }
+  }
 }
 
 // ---------- Tier 3: deep quality/latency eval (async-indexing waits) ----------
