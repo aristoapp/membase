@@ -105,10 +105,10 @@ export async function fetchLatestVersion(
   }
 }
 
-function isFreshCheck(checkedAt: string): boolean {
+function isFreshCheck(checkedAt: string, now: Date = new Date()): boolean {
   const ts = Date.parse(checkedAt);
   if (!Number.isFinite(ts)) return false;
-  return Date.now() - ts < CACHE_TTL_MS;
+  return now.getTime() - ts < CACHE_TTL_MS;
 }
 
 function isSameUtcDay(
@@ -149,7 +149,7 @@ export async function refreshLatestVersion(
   if (
     existing?.checked_at &&
     existing.current_version === current &&
-    isFreshCheck(existing.checked_at)
+    isFreshCheck(existing.checked_at, now)
   ) {
     return;
   }

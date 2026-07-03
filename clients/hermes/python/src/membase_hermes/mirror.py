@@ -15,6 +15,11 @@ def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+# Index values that are local placeholders, not server episode UUIDs.
+# "resynced" is written by the CLI resync command (cli.py).
+PLACEHOLDER_UUIDS = {"local-store", "mirrored", "resynced"}
+
+
 @dataclass
 class MirrorAction:
     operation: str
@@ -131,14 +136,14 @@ class MirrorWorker:
 
         if item.operation == "remove":
             episode_uuid = self.store.get_uuid_by_content(content)
-            if episode_uuid and episode_uuid not in {"local-store", "mirrored"}:
+            if episode_uuid and episode_uuid not in PLACEHOLDER_UUIDS:
                 self.client.delete_memory(episode_uuid)
             self.store.remove(content)
             return
 
         if item.operation == "replace":
             episode_uuid = self.store.get_uuid_by_content(content)
-            if episode_uuid and episode_uuid not in {"local-store", "mirrored"}:
+            if episode_uuid and episode_uuid not in PLACEHOLDER_UUIDS:
                 self.client.delete_memory(episode_uuid)
             self.store.remove(content)
             if not self.store.has_content(content):

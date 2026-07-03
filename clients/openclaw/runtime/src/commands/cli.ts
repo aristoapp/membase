@@ -561,6 +561,7 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
             const result = await client.searchWiki(
               query,
               limit,
+              undefined,
               opts.collectionId,
             );
             if (result.documents.length === 0) {
@@ -624,8 +625,9 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
             const doc = await client.createWikiDocument(
               title,
               opts.content,
-              opts.collectionId,
+              undefined,
               Boolean(opts.summarize),
+              opts.collectionId,
             );
             api.logger.info(`Wiki document created: ${doc.title} (${doc.id})`);
           } catch (error) {

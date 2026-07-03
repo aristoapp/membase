@@ -5,6 +5,8 @@ import { extractTextContent, sanitizeMembaseText } from "../utils";
 const SILENCE_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_BUFFER_SIZE = 20;
 const MIN_MESSAGES_TO_FLUSH = 2;
+// Upper bound on messages retained across failed flushes (~10 failed batches).
+const MAX_RETAINED_MESSAGES = 200;
 const HEARTBEAT_CONTROL_PATTERNS = [
   /^heartbeat$/i,
   /^heartbeat_ok$/i,
@@ -143,7 +145,12 @@ export function registerCaptureHook(
       if (buffer.length >= MAX_BUFFER_SIZE) {
         const toFlush = buffer.splice(0, buffer.length - MIN_MESSAGES_TO_FLUSH);
         const tempKey = `${channelKey}__flush`;
-        messageBuffers.set(tempKey, toFlush);
+        // Merge with any batch retained by a previous failed flush — a plain
+        // set() would silently drop it. Cap retention so a long API outage
+        // can't grow the buffer unbounded (oldest messages dropped first).
+        const retained = messageBuffers.get(tempKey) ?? [];
+        const merged = [...retained, ...toFlush].slice(-MAX_RETAINED_MESSAGES);
+        messageBuffers.set(tempKey, merged);
         await flushBuffer(tempKey, client, logger);
         return;
       }

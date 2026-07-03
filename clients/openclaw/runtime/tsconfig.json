@@ -1,16 +1,20 @@
 {
-  "extends": "../../../tsconfig.base.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "lib": ["es2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
     "noEmit": true,
-    "rootDir": ".",
     "types": ["bun"]
   },
-  "include": [
-    "index.ts",
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "**/*.test.ts"
-  ]
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "**/*.test.ts"]
 }

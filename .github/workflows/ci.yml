@@ -33,6 +33,18 @@ jobs:
 
       - run: pnpm check
 
+      # Runtime unit tests (copied in with the Group B runtimes). The parity
+      # checks above are source-inspection only; these actually import and
+      # exercise the runtimes.
+      - name: Install Hermes runtime deps
+        run: python3 -m pip install httpx pyyaml
+
+      - run: pnpm hermes:test
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm openclaw:runtime-test
+
       - run: pnpm smoke:execute
 
   e2e-tier1:
