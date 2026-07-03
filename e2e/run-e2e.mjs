@@ -7,13 +7,18 @@
 // chain, and latency. Stdio clients (Claude) are config-validated only, since
 // their server ships in the client plugin repo, not here.
 //
-// Tier 2 (--live, needs MEMBASE_MCP_TOKEN): run the full remember -> search ->
-// getContext -> forget lifecycle against the live server and score quality
-// (tool coverage, recall@1, forget effectiveness) and per-operation latency.
+// Tier 2 (--live, needs a token): fast live smoke — authed initialize, tool
+// coverage, remember accepted, search endpoint responds. No waiting on async
+// indexing, so it stays a ~seconds merge-gate check.
+//
+// Tier 3 (--tier3, needs a token): deep quality/latency eval on top of Tier 2 —
+// recall@1 with indexing backoff, search-latency percentiles, semantic context
+// retrieval, and the forget lifecycle. Minutes-long; for nightly runs.
 //
 // Usage:
 //   node e2e/run-e2e.mjs                 # Tier 1
-//   MEMBASE_MCP_TOKEN=... node e2e/run-e2e.mjs --live
+//   MEMBASE_MCP_TOKEN=... node e2e/run-e2e.mjs --live    # + Tier 2 (fast)
+//   MEMBASE_MCP_TOKEN=... node e2e/run-e2e.mjs --tier3   # + Tier 2 + Tier 3 (deep)
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,13 +33,28 @@ import {
 import { ensureAccessToken } from "./auth.mjs";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const LIVE = process.argv.includes("--live");
+// Tiers:
+//   (none)   Tier 1 — reachability + protocol + OAuth discovery (no creds).
+//   --live   Tier 1 + Tier 2 — fast live smoke: authed initialize, tool
+//            coverage, remember accepted, search endpoint responds. No waiting
+//            on async indexing, so it stays a ~seconds merge-gate check.
+//   --tier3  Tier 1 + Tier 2 + Tier 3 — deep quality/latency eval: recall@1
+//            with indexing backoff, latency percentiles, semantic context
+//            retrieval, forget. Minutes-long; for nightly runs.
+const TIER3 = process.argv.includes("--tier3");
+const LIVE = process.argv.includes("--live") || TIER3;
 const auth = LIVE ? await ensureAccessToken() : { token: process.env.MEMBASE_MCP_TOKEN, source: "env" };
 const TOKEN = auth.token;
 if (LIVE && TOKEN && auth.source !== "env access token") {
   console.error(`access token minted via ${auth.source} (TTL ${auth.expiresIn ?? "?"}s)`);
 }
-const AUTH_SERVER = "https://api.membase.so";
+// Endpoint selection. Defaults target production; a staging (or preview) run
+// overrides these so the same harness verifies whichever environment CI points
+// at. MEMBASE_AUTH_BASE is the expected authorization server advertised by
+// discovery; MEMBASE_MCP_URL, when set, replaces each client config's MCP URL
+// so the lifecycle runs against that endpoint (its token audience must match).
+const AUTH_SERVER = process.env.MEMBASE_AUTH_BASE ?? "https://api.membase.so";
+const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
 
 const CLIENTS = [
   { id: "claude", config: "clients/claude/.mcp.json" },
@@ -64,17 +84,22 @@ for (const client of CLIENTS) {
   const entry = { id: client.id, transport, config: client.config, checks: [], latency: {}, quality: {} };
 
   if (transport === "http") {
-    await verifyHttp(entry, server.url);
+    // A staging/preview run overrides the committed (prod) URL so the same
+    // connector config is verified against the target environment.
+    const url = MCP_URL_OVERRIDE ?? server.url;
+    await verifyHttp(entry, url);
     if (LIVE && TOKEN && entry.checks.every((c) => c.pass)) {
       // All HTTP clients share the hosted endpoint; run the write/read
       // lifecycle once per URL so the test account is not polluted N times
       // (there is no memory-delete tool on the live server yet).
-      if (!lifecycleByUrl.has(server.url)) {
+      if (!lifecycleByUrl.has(url)) {
         const shared = { checks: [], latency: {}, quality: {} };
-        await evalLive({ ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId }, server.url);
-        lifecycleByUrl.set(server.url, shared);
+        const ctx = { ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId };
+        const roles = await evalLiveFast(ctx, url); // Tier 2 (fast)
+        if (TIER3 && roles) await evalLiveDeep(ctx, url, roles); // Tier 3 (deep)
+        lifecycleByUrl.set(url, shared);
       }
-      const shared = lifecycleByUrl.get(server.url);
+      const shared = lifecycleByUrl.get(url);
       entry.checks.push(...shared.checks);
       Object.assign(entry.latency, shared.latency);
       Object.assign(entry.quality, shared.quality);
@@ -107,7 +132,7 @@ async function verifyHttp(entry, url) {
       `resource=${disc.meta.resource}`
     ));
     entry.checks.push(check(
-      "authorization_server = api.membase.so",
+      `authorization_server = ${AUTH_SERVER}`,
       Array.isArray(disc.meta.authorization_servers) && disc.meta.authorization_servers.includes(AUTH_SERVER),
       `servers=${JSON.stringify(disc.meta.authorization_servers)}`
     ));
@@ -134,10 +159,15 @@ async function verifyHttp(entry, url) {
   }
 }
 
-// ---------- Tier 2: live lifecycle + quality/latency eval ----------
-async function evalLive(entry, url) {
+// ---------- Tier 2: fast live smoke (no async-indexing waits) ----------
+// Proves the authed surface works: tools are exposed, a write is accepted, and
+// the search endpoint responds. Recall correctness + quality are Tier 3. The
+// remembered sentinel is stashed on the entry so Tier 3 can reuse it.
+// Returns the resolved roles (for Tier 3) or null if the surface is unusable.
+async function evalLiveFast(entry, url) {
   const sessionId = entry.sessionId;
   const sentinel = `membase-e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  entry.sentinel = sentinel;
 
   const tl = await listTools(url, { token: TOKEN, sessionId });
   entry.latency.toolsList = round(tl.ms);
@@ -161,7 +191,7 @@ async function evalLive(entry, url) {
       "public contract lists deleteOrForget; only delete_wiki exists — test memories cannot be cleaned up"
     ));
   }
-  if (!roles.remember || !roles.search) return;
+  if (!roles.remember || !roles.search) return null;
 
   // remember: the live server acknowledges storage with text (no id is returned).
   const r = await callTool(url, {
@@ -172,6 +202,30 @@ async function evalLive(entry, url) {
   const ack = !r.payload?.error && r.status < 400 && (r.raw ?? "").length > 0;
   entry.checks.push(check("remember acknowledges storage", ack, ack ? textOf(r.payload).slice(0, 60) : errText(r)));
 
+  // search endpoint responds (no recall-hit wait — indexing is async; recall
+  // correctness is judged in Tier 3). This keeps Tier 2 a ~seconds check.
+  const s = await callTool(url, {
+    token: TOKEN, sessionId, id: 20, name: roles.search.name,
+    args: argsFor(roles.search, { primary: sentinel })
+  });
+  entry.latency.search = round(s.ms);
+  entry.checks.push(check(
+    "search responds without error",
+    !s.payload?.error && s.status < 400,
+    `${round(s.ms)}ms (recall correctness verified in Tier 3)`
+  ));
+
+  return roles;
+}
+
+// ---------- Tier 3: deep quality/latency eval (async-indexing waits) ----------
+// The slow, correctness-and-quality half: waits out async indexing to judge
+// recall@1, records search-latency percentiles, checks semantic context
+// retrieval, and runs the forget lifecycle when a delete tool exists.
+async function evalLiveDeep(entry, url, roles) {
+  const sessionId = entry.sessionId;
+  const sentinel = entry.sentinel; // reuse the memory written in Tier 2
+
   // recall@1 with indexing backoff: memory ingestion is async, so poll until
   // the sentinel becomes searchable and record write->searchable latency.
   const searchMs = [];
@@ -181,7 +235,7 @@ async function evalLive(entry, url) {
   for (const delay of RECALL_DELAYS_MS) {
     if (delay) await new Promise((res) => setTimeout(res, delay));
     const s = await callTool(url, {
-      token: TOKEN, sessionId, id: 20, name: roles.search.name,
+      token: TOKEN, sessionId, id: 21, name: roles.search.name,
       args: argsFor(roles.search, { primary: sentinel })
     });
     searchMs.push(s.ms);
@@ -216,7 +270,7 @@ async function evalLive(entry, url) {
   ));
 
   // forget lifecycle: only runnable once the live server exposes a
-  // memory-delete tool (warned above).
+  // memory-delete tool (warned in Tier 2).
   if (roles.forget) {
     const f = await callTool(url, { token: TOKEN, sessionId, id: 40, name: roles.forget.name, args: argsFor(roles.forget, { id: sentinel }) });
     entry.latency.forget = round(f.ms);

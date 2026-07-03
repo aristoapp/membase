@@ -24,25 +24,35 @@ live, spec-compliant, correctly-secured MCP server:
 Stdio clients (Claude) are config-validated only — the bundled server ships in
 the Claude plugin repo, so its live run belongs in that repo's e2e.
 
-**Tier 2 — live lifecycle + quality/latency eval (needs a token).**
+**Tier 2 — fast live smoke (needs a token).** Merge-gate speed (~seconds).
 
 ```bash
 MEMBASE_MCP_TOKEN="<oauth-access-token>" pnpm e2e:live
 ```
 
-Against the live server it runs the public contract lifecycle per HTTP client
-and scores it:
+Proves the authed surface works, without waiting on async indexing:
 
-- `tools/list` exposes remember / search / getContext / forget.
-- **remember** returns an id.
-- **recall@1**: a follow-up **search** for the sentinel returns the memory
-  (search is repeated to report p50/p95 latency).
-- **getContext** responds without error.
-- **forget** removes the memory (a final search no longer recalls it).
+- `tools/list` exposes remember + search (getContext / forget absences are warned).
+- **remember** is accepted (storage acknowledged).
+- **search** endpoint responds without error (recall *correctness* is Tier 3).
 
-Obtain the token through the client's normal OAuth flow (authorization server
-`https://api.membase.so`, per the discovery metadata). Use a test-only account;
-the harness tags its data with a unique sentinel and forgets it at the end.
+**Tier 3 — deep lifecycle + quality/latency eval (needs a token).** Minutes-long;
+for nightly runs. Runs Tier 2, then the slow correctness/quality half:
+
+```bash
+MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
+```
+
+- **recall@1**: polls **search** for the sentinel with indexing backoff and
+  records write→searchable time + search p50/p95.
+- **getContext** (semantic retrieval) returns the sentinel memory.
+- **forget** removes the memory (when the server exposes a delete tool).
+
+Obtain the token through the client's normal OAuth flow, or set
+`MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a
+`client_credentials` service token (CI). Target staging/preview by also setting
+`MEMBASE_AUTH_BASE` + `MEMBASE_MCP_URL`. Use a test-only account; the harness
+tags its data with a unique sentinel.
 
 ## Output
 

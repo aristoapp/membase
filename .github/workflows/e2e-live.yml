@@ -38,7 +38,9 @@ jobs:
             echo "::notice::No live credentials configured — running Tier 1 only."
             node e2e/run-e2e.mjs
           else
-            node e2e/run-e2e.mjs --live
+            # Nightly prod run: Tier 3 (deep quality/latency), since --live is
+            # now the fast smoke tier.
+            node e2e/run-e2e.mjs --tier3
           fi
 
       - name: Persist rotated refresh token to repo secret (fallback path only)
