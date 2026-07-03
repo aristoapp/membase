@@ -53,6 +53,11 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   the run), that `get_current_date` returns a date, and runs a full wiki CRUD
   round-trip (add → search → update → delete → confirm gone) that cleans up
   after itself.
+- **quality gates**: hard pass/fail on measured quality — semantic context must
+  retrieve the sentinel, write→searchable ≤ `MEMBASE_E2E_MAX_RECALL_MS`
+  (default 60s), search p95 ≤ `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms).
+- **negative cases**: no token → 401 Bearer, forged token → 401, and malformed
+  tool calls (missing/empty required arg, unknown tool) → tool-level error.
 
 Obtain the token through the client's normal OAuth flow, or set
 `MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a

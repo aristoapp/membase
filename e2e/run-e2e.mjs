@@ -93,6 +93,12 @@ const EXPECTED_TOOLS = [
 ];
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
+// Tier 3 quality gates (env-tunable). Defaults sit well above observed staging
+// values (search p95 ~0.8s, write→searchable ~40s) so they catch gross
+// regressions without being flaky.
+const QUALITY_MAX_SEARCH_P95_MS = Number(process.env.MEMBASE_E2E_MAX_SEARCH_P95_MS ?? 3000);
+const QUALITY_MAX_RECALL_MS = Number(process.env.MEMBASE_E2E_MAX_RECALL_MS ?? 60000);
+
 const results = [];
 const lifecycleByUrl = new Map(); // run the live lifecycle once per endpoint
 
@@ -115,8 +121,9 @@ for (const client of CLIENTS) {
         const ctx = { ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId };
         const fast = await evalLiveFast(ctx, url); // Tier 2 (fast)
         if (TIER3 && fast) {
-          await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency)
+          await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+          await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
       }
@@ -360,6 +367,30 @@ async function evalLiveDeep(entry, url, roles) {
     `${round(c.ms)}ms${entry.quality.contextAnswerHit ? ", sentinel memory retrieved by semantic query" : ""}`
   ));
 
+  // ----- Quality gates: turn measured quality/latency into hard pass/fail so a
+  // regression fails the run instead of silently degrading. Thresholds are
+  // env-tunable (generous defaults chosen well above observed staging values to
+  // avoid flakiness while still catching gross regressions).
+  entry.checks.push(check(
+    "quality gate: semantic context retrieves the sentinel",
+    entry.quality.contextAnswerHit,
+    entry.quality.contextAnswerHit ? "sentinel returned by semantic query" : "context query did not return the sentinel"
+  ));
+  if (recallHit && timeToRecallMs !== null) {
+    entry.checks.push(check(
+      `quality gate: write→searchable ≤ ${QUALITY_MAX_RECALL_MS / 1000}s`,
+      timeToRecallMs <= QUALITY_MAX_RECALL_MS,
+      `timeToRecall=${(timeToRecallMs / 1000).toFixed(1)}s`
+    ));
+  }
+  if (entry.latency.search_p95 != null) {
+    entry.checks.push(check(
+      `quality gate: search p95 ≤ ${QUALITY_MAX_SEARCH_P95_MS}ms`,
+      entry.latency.search_p95 <= QUALITY_MAX_SEARCH_P95_MS,
+      `search p95=${entry.latency.search_p95}ms`
+    ));
+  }
+
   // forget lifecycle: only runnable once the live server exposes a
   // memory-delete tool (warned in Tier 2).
   if (roles.forget) {
@@ -367,6 +398,56 @@ async function evalLiveDeep(entry, url, roles) {
     entry.latency.forget = round(f.ms);
     entry.checks.push(check("forget responds without error", !f.payload?.error && f.status < 400, errText(f)));
   }
+}
+
+// The MCP SDK surfaces tool-level failures as a *successful* response whose
+// result carries isError:true and an "MCP error ..." text — not a JSON-RPC
+// error. Negative-case checks must look here, not at payload.error.
+function toolErrored(r) {
+  return r?.payload?.result?.isError === true;
+}
+
+// ---------- Tier 3: negative cases (rejection behavior) ----------
+// Proves the endpoint rejects what it should: unauthenticated/invalid tokens
+// (transport-level 401) and malformed tool calls (tool-level isError). A server
+// that silently accepts these is a real security/contract regression.
+async function evalNegative(entry, url) {
+  // Auth negatives — the endpoint must be OAuth-gated.
+  const noTok = await initialize(url, { token: undefined });
+  const noTokGated = noTok.status === 401 && /bearer/i.test(noTok.wwwAuth ?? "");
+  entry.checks.push(check(
+    "negative: no token → 401 Bearer",
+    noTokGated,
+    `HTTP ${noTok.status}${noTok.wwwAuth ? `, ${noTok.wwwAuth.split(" ")[0]}` : ""}`
+  ));
+
+  const badTok = await initialize(url, { token: "forged.invalid.token" });
+  entry.checks.push(check("negative: forged token → 401", badTok.status === 401, `HTTP ${badTok.status}`));
+
+  // Input negatives — need a valid session; reuse the Tier 2/3 one.
+  const sessionId = entry.sessionId;
+  if (!sessionId) return;
+
+  const missing = await callTool(url, { token: TOKEN, sessionId, id: 60, name: "add_memory", args: {} });
+  entry.checks.push(check(
+    "negative: add_memory without required content → validation error",
+    toolErrored(missing) && /validation|invalid|required/i.test(textOf(missing.payload)),
+    (textOf(missing.payload) || errText(missing) || "no error").slice(0, 80)
+  ));
+
+  const empty = await callTool(url, { token: TOKEN, sessionId, id: 61, name: "add_memory", args: { content: "" } });
+  entry.checks.push(check(
+    "negative: add_memory with empty content → validation error",
+    toolErrored(empty),
+    (textOf(empty.payload) || errText(empty) || "no error").slice(0, 80)
+  ));
+
+  const unknown = await callTool(url, { token: TOKEN, sessionId, id: 62, name: "definitely_not_a_tool", args: {} });
+  entry.checks.push(check(
+    "negative: unknown tool → error",
+    toolErrored(unknown) && /not found|unknown/i.test(textOf(unknown.payload)),
+    (textOf(unknown.payload) || errText(unknown) || "no error").slice(0, 80)
+  ));
 }
 
 function textOf(payload) {
