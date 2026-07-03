@@ -13,3 +13,4 @@ __pycache__/
 automation/state.env
 automation/*.log
 .DS_Store
+.codegraph/

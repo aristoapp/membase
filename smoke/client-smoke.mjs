@@ -26,6 +26,12 @@ const clientSpecs = [
     defineRuntimeConfigExport: "defineCursorRuntimeConfig"
   },
   {
+    id: "codex",
+    modulePath: "clients/codex/dist/index.js",
+    adapterExport: "codexAdapter",
+    defineRuntimeConfigExport: "defineCodexRuntimeConfig"
+  },
+  {
     id: "hermes",
     modulePath: "clients/hermes/dist/index.js",
     adapterExport: "hermesAdapter",

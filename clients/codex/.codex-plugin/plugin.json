@@ -1,0 +1,21 @@
+{
+  "name": "membase",
+  "version": "0.0.0",
+  "description": "Connect Codex CLI to Membase context APIs for remember, search, task context, and forget actions.",
+  "author": {
+    "name": "Membase",
+    "email": "support@aristo.so",
+    "url": "https://membase.so"
+  },
+  "homepage": "https://membase.so",
+  "repository": "https://github.com/aristoapp/membase-plugin-mcp",
+  "license": "MIT",
+  "keywords": [
+    "agent-memory",
+    "context",
+    "mcp",
+    "codex",
+    "membase"
+  ],
+  "mcpServers": ".mcp.json"
+}
