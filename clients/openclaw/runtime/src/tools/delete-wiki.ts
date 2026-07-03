@@ -58,6 +58,7 @@ export function registerDeleteWikiTool(
         const result = await client.searchWiki(
           params.query,
           5,
+          undefined,
           params.collection_id,
         );
         if (result.documents.length === 0) {

@@ -91,7 +91,14 @@ class CaptureWorker:
 
     def _run(self) -> None:
         while True:
-            item = self._queue.get()
+            try:
+                item = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                # stop() may fail to enqueue the None sentinel when the queue is
+                # full; exit once we've drained the backlog after stop.
+                if not self._accepting:
+                    break
+                continue
             if item is None:
                 break
             try:

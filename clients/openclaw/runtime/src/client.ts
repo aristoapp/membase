@@ -278,10 +278,14 @@ export class MembaseClient {
     query: string,
     limit?: number,
     collection?: string,
+    collectionId?: string,
   ): Promise<WikiSearchResponse> {
     const qs = new URLSearchParams({ query });
     if (limit !== undefined) qs.set("limit", String(limit));
-    if (collection) qs.set("collection", collection);
+    // The API distinguishes collection_id (UUID) from collection (name;
+    // name filters are resolved by slug and lookup-or-create on write).
+    if (collectionId) qs.set("collection_id", collectionId);
+    else if (collection) qs.set("collection", collection);
     return this.request<WikiSearchResponse>(`/wiki/search?${qs.toString()}`);
   }
 
@@ -290,6 +294,7 @@ export class MembaseClient {
     content: string,
     collection?: string,
     summarize?: boolean,
+    collectionId?: string,
   ): Promise<WikiDocumentResponse> {
     const body: Record<string, unknown> = {
       title,
@@ -299,6 +304,8 @@ export class MembaseClient {
     };
     if (collection) {
       body.collection = collection;
+    } else if (collectionId) {
+      body.collection_id = collectionId;
     }
     return this.request<WikiDocumentResponse>("/wiki/documents", {
       method: "POST",

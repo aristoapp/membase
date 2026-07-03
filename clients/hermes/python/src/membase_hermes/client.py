@@ -27,6 +27,10 @@ class AuthState:
     access_token: str
     refresh_token: str
     client_id: str
+    # client_credentials service credentials, kept so the client can re-mint
+    # an access token on 401 (service tokens carry no refresh token).
+    service_client_id: str = ""
+    service_client_secret: str = ""
 
 
 def resolve_auth_state(config: Any, *, logger: logging.Logger | None = None) -> AuthState:
@@ -53,7 +57,13 @@ def resolve_auth_state(config: Any, *, logger: logging.Logger | None = None) -> 
         client_id = config.service_client_id
         if logger is not None:
             logger.info("[membase] minted service access token via client_credentials")
-    return AuthState(access_token=access, refresh_token=refresh, client_id=client_id)
+    return AuthState(
+        access_token=access,
+        refresh_token=refresh,
+        client_id=client_id,
+        service_client_id=config.service_client_id or "",
+        service_client_secret=config.service_client_secret or "",
+    )
 
 
 class MembaseClient:
@@ -72,6 +82,8 @@ class MembaseClient:
         self.access_token = auth.access_token
         self.refresh_token = auth.refresh_token
         self.client_id = auth.client_id
+        self.service_client_id = auth.service_client_id
+        self.service_client_secret = auth.service_client_secret
         self.source = source
         self.debug = debug
         self.logger = logger or logging.getLogger(__name__)
@@ -88,6 +100,24 @@ class MembaseClient:
     def _log(self, message: str, *args: Any) -> None:
         if self.debug:
             self.logger.info("membase: " + message, *args)
+
+    def _remint_service_token(self) -> None:
+        """Re-exchange client_credentials for a fresh access token (no refresh
+        token exists on the service-token path)."""
+        if self._refreshing:
+            return
+        self._refreshing = True
+        try:
+            from .oauth import exchange_client_credentials
+
+            self.access_token = exchange_client_credentials(
+                self.api_url,
+                client_id=self.service_client_id,
+                client_secret=self.service_client_secret,
+            )
+            self._log("re-minted service access token via client_credentials")
+        finally:
+            self._refreshing = False
 
     def _refresh_access_token(self) -> None:
         if self._refreshing:
@@ -160,8 +190,12 @@ class MembaseClient:
             json=json_body,
             data=form_body,
         )
-        if response.status_code == 401 and self.refresh_token:
-            self._refresh_access_token()
+        can_remint = bool(self.service_client_id and self.service_client_secret)
+        if response.status_code == 401 and (self.refresh_token or can_remint):
+            if self.refresh_token:
+                self._refresh_access_token()
+            else:
+                self._remint_service_token()
             headers["Authorization"] = f"Bearer {self.access_token}"
             response = self._http.request(
                 method=method,
