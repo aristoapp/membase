@@ -24,7 +24,7 @@ const pluginJsonVersionPaths = [
 
 const hermesYamlVersionPaths = [
   "clients/hermes/plugin/plugin.yaml",
-  "clients/hermes/python/src/hermes_membase/plugin/plugin.yaml",
+  "clients/hermes/python/src/membase_hermes/plugin/plugin.yaml",
   "manifests/hermes/plugin.yaml"
 ];
 
@@ -67,10 +67,10 @@ if (expectedVersion !== undefined) {
     );
   }
 
-  const hermesInitText = readText("clients/hermes/python/src/hermes_membase/__init__.py");
+  const hermesInitText = readText("clients/hermes/python/src/membase_hermes/__init__.py");
   if (hermesInitText !== undefined) {
     assertVersion(
-      "clients/hermes/python/src/hermes_membase/__init__.py",
+      "clients/hermes/python/src/membase_hermes/__init__.py",
       readPythonAssignment(hermesInitText, "__version__"),
       expectedVersion
     );
