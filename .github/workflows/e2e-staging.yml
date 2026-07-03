@@ -9,6 +9,12 @@ name: E2E staging (client_credentials)
 
 on:
   workflow_dispatch:
+    inputs:
+      tier:
+        description: "Which tier to run"
+        type: choice
+        default: "2"
+        options: ["2", "3"]
   schedule:
     - cron: "47 1 * * *" # daily 01:47 UTC (after the nightly staging deploy)
 
@@ -47,10 +53,12 @@ jobs:
             echo "::error::MEMBASE_STAGING_SERVICE_CLIENT_ID is not set — cannot run the staging live eval."
             exit 1
           fi
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "::notice::Nightly — running Tier 3 (deep quality/latency)."
+          # Nightly always runs Tier 3; manual runs honor the `tier` input
+          # (default 2 = fast smoke, 3 = deep quality/latency).
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.tier }}" = "3" ]; then
+            echo "::notice::Running Tier 3 (deep quality/latency)."
             node e2e/run-e2e.mjs --tier3
           else
-            echo "::notice::On-demand — running Tier 2 (fast smoke)."
+            echo "::notice::Running Tier 2 (fast smoke)."
             node e2e/run-e2e.mjs --live
           fi
