@@ -1,0 +1,36 @@
+---
+description: Membase persistent memory — use MCP tools proactively
+alwaysApply: true
+---
+
+You have Membase MCP tools for long-term memory (knowledge graph + semantic search) and a knowledge wiki:
+
+**Memory tools** (personal context — preferences, habits, decisions):
+
+- `search_memory`: Search before answering questions about the user's past work, preferences, decisions, or prior context. Supports `date_from`/`date_to` (ISO 8601), `sources` filter (slack, gmail, google-calendar, notion, cursor, etc.), and `project` filter.
+- `add_memory`: Store durable facts the user wants to remember or that will help later sessions. Use `project` only when the user explicitly mentions one.
+- `get_current_date`: Use when you need the user's timezone or to turn phrases like "today" into date filters for search.
+
+**Wiki tools** (factual knowledge — documents, references, stable information):
+
+- `search_wiki`: Hybrid keyword + semantic search for the user's knowledge wiki. Use alongside `search_memory` for comprehensive answers.
+- `add_wiki`: Create a wiki document (markdown with `[[wikilinks]]`). Use for knowledge, references, and documentation — not personal context.
+- `update_wiki`: Update an existing wiki document by `doc_id`.
+- `delete_wiki`: Permanently delete a wiki document by `doc_id`.
+
+**Resources** (read via MCP resource URIs):
+
+- `membase://profile`: Stable user settings (display name, role, interests, timezone). Read for personalization.
+- `membase://recent`: Recent memories timeline. Read for latest-context questions or after resource update notifications.
+
+When to use:
+
+- User refers to earlier sessions, prior decisions, or "what we did before" → `search_memory` first, then `search_wiki`.
+- User says "remember", "save this", "don't forget" → `add_memory`.
+- You learn stable preferences, architecture choices, or bugfix root causes worth keeping → `add_memory`.
+- User wants to store documentation, references, or factual knowledge → `add_wiki`.
+- Schedule or date-relative memory questions → `get_current_date` then `search_memory` with `date_from` / `date_to`.
+- User asks about their schedule, meetings, or emails → `search_memory` with `sources` filter (google-calendar, gmail, slack).
+- For any user question, call **both** `search_memory` and `search_wiki` to combine personal context with factual knowledge.
+
+Read `membase://profile` for user settings and `membase://recent` for latest context. Still call `search_memory` when the question clearly needs deeper or fresher retrieval.

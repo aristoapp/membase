@@ -1,12 +1,16 @@
 packages:
   - "packages/*"
   - "clients/*"
+  - "clients/claude/runtime"
   - "clients/openclaw/runtime"
   - "smoke/*"
 # Dependencies of the openclaw peer dep pulled in for runtime typechecking;
 # none of their postinstall scripts are needed for type-only usage.
 allowBuilds:
   '@google/genai': false
+  # esbuild's postinstall fetches its platform binary — needed by the claude
+  # runtime bundle build (scripts/build.ts).
+  esbuild: true
   openclaw: false
   protobufjs: false
   tree-sitter-bash: false

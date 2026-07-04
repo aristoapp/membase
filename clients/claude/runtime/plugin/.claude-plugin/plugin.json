@@ -1,0 +1,63 @@
+{
+  "name": "membase",
+  "version": "0.1.4",
+  "description": "Persistent memory and wiki workflows for Claude Code.",
+  "author": {
+    "name": "Aristo Technologies",
+    "email": "support@membase.so"
+  },
+  "homepage": "https://membase.so",
+  "repository": "https://github.com/aristoapp/claude-membase",
+  "license": "MIT",
+  "keywords": ["membase", "memory", "mcp", "claude-code"],
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "agents": ["./agents/membase-curator.md"],
+  "mcpServers": "./.mcp.json",
+  "userConfig": {
+    "apiUrl": {
+      "type": "string",
+      "title": "Membase API URL",
+      "description": "Membase API endpoint.",
+      "default": "https://api.membase.so"
+    },
+    "autoRecall": {
+      "type": "boolean",
+      "title": "Auto Recall",
+      "description": "Search Membase before user prompts and inject relevant context.",
+      "default": true
+    },
+    "autoWikiRecall": {
+      "type": "boolean",
+      "title": "Auto Wiki Recall",
+      "description": "Include wiki documents in automatic recall.",
+      "default": false
+    },
+    "maxRecallChars": {
+      "type": "number",
+      "title": "Max Recall Characters",
+      "description": "Maximum characters injected by auto-recall.",
+      "default": 4000,
+      "min": 500,
+      "max": 16000
+    },
+    "sessionStartContext": {
+      "type": "string",
+      "title": "Session Start Context",
+      "description": "Context injected at Claude Code session start: off, minimal, or profile.",
+      "default": "minimal"
+    },
+    "projectMode": {
+      "type": "string",
+      "title": "Project Mode",
+      "description": "Project scoping mode: auto_git, manual, or off.",
+      "default": "auto_git"
+    },
+    "debug": {
+      "type": "boolean",
+      "title": "Debug Logging",
+      "description": "Write local debug logs under the plugin data directory.",
+      "default": false
+    }
+  }
+}
