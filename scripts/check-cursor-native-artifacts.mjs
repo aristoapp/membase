@@ -11,13 +11,13 @@ const OLD_TREE_SHA = "177d29c78b2f4698ead9d5108eedeae5b6b059b7";
 const expectedArtifacts = [
   [".cursor-plugin/plugin.json", "plugin-metadata", "represented"],
   ["mcp.json", "mcp-config", "represented"],
-  ["rules/membase.mdc", "cursor-rule", "deferred-review-only"],
-  ["skills/membase-overview/SKILL.md", "cursor-skill", "deferred-review-only"],
-  ["skills/memory-save/SKILL.md", "cursor-skill", "deferred-review-only"],
-  ["skills/memory-search/SKILL.md", "cursor-skill", "deferred-review-only"],
-  ["skills/wiki-manage/SKILL.md", "cursor-skill", "deferred-review-only"],
-  ["assets/logo.svg", "asset", "deferred-review-only"],
-  ["CHANGELOG.md", "changelog", "deferred-review-only"]
+  ["rules/membase.mdc", "cursor-rule", "ported"],
+  ["skills/membase-overview/SKILL.md", "cursor-skill", "ported"],
+  ["skills/memory-save/SKILL.md", "cursor-skill", "ported"],
+  ["skills/memory-search/SKILL.md", "cursor-skill", "ported"],
+  ["skills/wiki-manage/SKILL.md", "cursor-skill", "ported"],
+  ["assets/logo.svg", "asset", "ported"],
+  ["CHANGELOG.md", "changelog", "ported"]
 ];
 
 const requiredDocMarkers = [
@@ -49,18 +49,11 @@ const snapshot = readJson(SNAPSHOT_PATH);
 if (snapshot) {
   assert(snapshot.source?.repo === OLD_REPO, `${SNAPSHOT_PATH}: source.repo must be ${OLD_REPO}`);
   assert(snapshot.source?.treeSha === OLD_TREE_SHA, `${SNAPSHOT_PATH}: source.treeSha is stale or missing`);
-  assert(snapshot.policy?.status === "review-only", `${SNAPSHOT_PATH}: policy.status must remain review-only`);
+  assert(snapshot.policy?.status === "ported", `${SNAPSHOT_PATH}: policy.status must be ported (consolidation Group C)`);
   assert(
-    snapshot.policy?.copyRule?.includes("Do not copy old Cursor rules"),
-    `${SNAPSHOT_PATH}: policy.copyRule must block premature Cursor artifact copy`
+    snapshot.policy?.copyRule?.includes("copied in as-is"),
+    `${SNAPSHOT_PATH}: policy.copyRule must record the as-is copy-in decision`
   );
-
-  for (const field of ["logo", "icon"]) {
-    assert(
-      snapshot.policy?.forbiddenManifestFieldsUntilAssetsPorted?.includes(field),
-      `${SNAPSHOT_PATH}: policy must forbid ${field} until assets are ported`
-    );
-  }
 
   const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
   assert(artifacts.length === expectedArtifacts.length, `${SNAPSHOT_PATH}: expected ${expectedArtifacts.length} artifacts`);
@@ -81,7 +74,7 @@ if (snapshot) {
 }
 
 assertCursorMetadataStillAssetFree();
-assertDeferredArtifactsNotCopied();
+assertArtifactsPortedIn();
 assertDocs();
 assertPackageCheckComposition();
 
@@ -102,8 +95,10 @@ function assertCursorMetadataStillAssetFree() {
       continue;
     }
 
+    // The logo asset is ported at clients/cursor/assets/logo.svg; referencing
+    // it from the generated manifest stays a launch-time choice (D5).
     for (const field of ["logo", "icon"]) {
-      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} must stay omitted until asset is copied and approved`);
+      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} stays omitted until the marketplace asset decision (D5) lands`);
     }
 
     assert(
@@ -117,17 +112,19 @@ function assertCursorMetadataStillAssetFree() {
   }
 }
 
-function assertDeferredArtifactsNotCopied() {
-  for (const relativePath of [
-    "clients/cursor/rules/membase.mdc",
-    "clients/cursor/skills/membase-overview/SKILL.md",
-    "clients/cursor/skills/memory-save/SKILL.md",
-    "clients/cursor/skills/memory-search/SKILL.md",
-    "clients/cursor/skills/wiki-manage/SKILL.md",
-    "clients/cursor/assets/logo.svg",
-    "clients/cursor/CHANGELOG.md"
-  ]) {
-    assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: copied before review-only snapshot status was changed`);
+// Cursor-native artifacts (rules, skills, logo, changelog) now live under
+// clients/cursor (consolidation Group C, pure copy-in). Every inventory entry
+// marked "ported" must exist there — derived from expectedArtifacts so the two
+// lists cannot drift.
+function assertArtifactsPortedIn() {
+  for (const [artifactPath, , status] of expectedArtifacts) {
+    if (status !== "ported") {
+      continue;
+    }
+    assert(
+      fs.existsSync(path.join(ROOT_DIR, "clients/cursor", artifactPath)),
+      `clients/cursor/${artifactPath}: ported artifact missing after copy-in`
+    );
   }
 }
 

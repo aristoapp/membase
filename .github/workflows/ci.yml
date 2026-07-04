@@ -45,6 +45,8 @@ jobs:
 
       - run: pnpm openclaw:runtime-test
 
+      - run: pnpm claude:runtime-test
+
       - run: pnpm smoke:execute
 
   e2e-tier1:

@@ -50,11 +50,20 @@ const secretPatterns = [
   /\b(?:MEMBASE_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|NPM_TOKEN|API_KEY|TOKEN|SECRET|PASSWORD)\s*=\s*(["']?)(?!\$\{|<|your-|example|placeholder|dummy|test|smoke|redacted|process\.env)[^\s"']{8,}\1/gi
 ];
 
+// Redaction-feature test fixtures deliberately contain secret-shaped
+// key/value strings to prove the sanitizer redacts them; not secrets.
+const redactionFixtureFiles = new Set([
+  "clients/claude/runtime/tests/sanitize.test.ts"
+]);
+
 const violations = [];
 const files = collectFiles(scanRoots);
 
 for (const file of files) {
   const relative = path.relative(ROOT_DIR, file);
+  if (redactionFixtureFiles.has(relative)) {
+    continue;
+  }
   const content = fs.readFileSync(file, "utf8");
 
   for (const pattern of secretPatterns) {

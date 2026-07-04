@@ -13,27 +13,27 @@ const expectedArtifacts = [
   ["plugin/.mcp.json", "mcp-config", "represented"],
   [".github/workflows/check.yml", "workflow", "represented"],
   ["package.json", "package-metadata", "represented"],
-  ["plugin/bin/membase", "command-shim", "deferred-review-only"],
-  ["plugin/commands/index-project.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/login.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/logout.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/project-config.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/recall.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/remember.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/status.md", "claude-command", "deferred-review-only"],
-  ["plugin/commands/wiki.md", "claude-command", "deferred-review-only"],
-  ["plugin/agents/membase-curator.md", "claude-agent", "deferred-review-only"],
-  ["plugin/hooks/hooks.json", "claude-hook", "deferred-review-only"],
-  ["plugin/scripts/hook.cjs", "runtime-bundle", "deferred-review-only"],
-  ["plugin/scripts/mcp-server.cjs", "runtime-bundle", "deferred-review-only"],
-  ["plugin/scripts/membase.cjs", "runtime-bundle", "deferred-review-only"],
-  ["plugin/skills/memory-hygiene/SKILL.md", "claude-skill", "deferred-review-only"],
-  ["plugin/skills/project-context/SKILL.md", "claude-skill", "deferred-review-only"],
-  ["plugin/skills/recall/SKILL.md", "claude-skill", "deferred-review-only"],
-  ["plugin/skills/remember/SKILL.md", "claude-skill", "deferred-review-only"],
-  ["plugin/skills/wiki/SKILL.md", "claude-skill", "deferred-review-only"],
-  ["src/hooks/session-start.ts", "source-behavior", "deferred-review-only"],
-  ["tests/session-start.test.ts", "test-evidence", "deferred-review-only"]
+  ["plugin/bin/membase", "command-shim", "ported"],
+  ["plugin/commands/index-project.md", "claude-command", "ported"],
+  ["plugin/commands/login.md", "claude-command", "ported"],
+  ["plugin/commands/logout.md", "claude-command", "ported"],
+  ["plugin/commands/project-config.md", "claude-command", "ported"],
+  ["plugin/commands/recall.md", "claude-command", "ported"],
+  ["plugin/commands/remember.md", "claude-command", "ported"],
+  ["plugin/commands/status.md", "claude-command", "ported"],
+  ["plugin/commands/wiki.md", "claude-command", "ported"],
+  ["plugin/agents/membase-curator.md", "claude-agent", "ported"],
+  ["plugin/hooks/hooks.json", "claude-hook", "ported"],
+  ["plugin/scripts/hook.cjs", "runtime-bundle", "ported"],
+  ["plugin/scripts/mcp-server.cjs", "runtime-bundle", "ported"],
+  ["plugin/scripts/membase.cjs", "runtime-bundle", "ported"],
+  ["plugin/skills/memory-hygiene/SKILL.md", "claude-skill", "ported"],
+  ["plugin/skills/project-context/SKILL.md", "claude-skill", "ported"],
+  ["plugin/skills/recall/SKILL.md", "claude-skill", "ported"],
+  ["plugin/skills/remember/SKILL.md", "claude-skill", "ported"],
+  ["plugin/skills/wiki/SKILL.md", "claude-skill", "ported"],
+  ["src/hooks/session-start.ts", "source-behavior", "ported"],
+  ["tests/session-start.test.ts", "test-evidence", "ported"]
 ];
 
 const requiredDocMarkers = [
@@ -73,18 +73,11 @@ const snapshot = readJson(SNAPSHOT_PATH);
 if (snapshot) {
   assert(snapshot.source?.repo === OLD_REPO, `${SNAPSHOT_PATH}: source.repo must be ${OLD_REPO}`);
   assert(snapshot.source?.treeSha === OLD_TREE_SHA, `${SNAPSHOT_PATH}: source.treeSha is stale or missing`);
-  assert(snapshot.policy?.status === "review-only", `${SNAPSHOT_PATH}: policy.status must remain review-only`);
+  assert(snapshot.policy?.status === "ported", `${SNAPSHOT_PATH}: policy.status must be ported (consolidation Group C)`);
   assert(
-    snapshot.policy?.copyRule?.includes("Do not copy old Claude commands"),
-    `${SNAPSHOT_PATH}: policy.copyRule must block premature Claude artifact copy`
+    snapshot.policy?.copyRule?.includes("copied in as-is"),
+    `${SNAPSHOT_PATH}: policy.copyRule must record the as-is copy-in decision`
   );
-
-  for (const field of ["commands", "hooks", "skills", "agents"]) {
-    assert(
-      snapshot.policy?.forbiddenManifestFieldsUntilNativeArtifactsPorted?.includes(field),
-      `${SNAPSHOT_PATH}: policy must forbid ${field} until native artifacts are ported`
-    );
-  }
 
   const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
   assert(artifacts.length === expectedArtifacts.length, `${SNAPSHOT_PATH}: expected ${expectedArtifacts.length} artifacts`);
@@ -105,7 +98,7 @@ if (snapshot) {
 }
 
 assertClaudeMetadataStillNativeFree();
-assertDeferredArtifactsNotCopied();
+assertRuntimePortedIn();
 assertDocs();
 assertPackageCheckComposition();
 
@@ -126,8 +119,11 @@ function assertClaudeMetadataStillNativeFree() {
       continue;
     }
 
+    // The ADAPTER manifest stays capability-level by design; the copied-in
+    // runtime bundle carries its own native manifest with commands/hooks/skills
+    // at clients/claude/runtime/plugin/.claude-plugin/plugin.json.
     for (const field of ["commands", "hooks", "skills", "agents"]) {
-      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} must stay omitted until native artifacts are ported`);
+      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} belongs to the runtime bundle manifest, not the adapter manifest`);
     }
 
     assert(
@@ -141,29 +137,18 @@ function assertClaudeMetadataStillNativeFree() {
   }
 }
 
-function assertDeferredArtifactsNotCopied() {
-  for (const relativePath of [
-    "clients/claude/bin/membase",
-    "clients/claude/commands/index-project.md",
-    "clients/claude/commands/login.md",
-    "clients/claude/commands/logout.md",
-    "clients/claude/commands/project-config.md",
-    "clients/claude/commands/recall.md",
-    "clients/claude/commands/remember.md",
-    "clients/claude/commands/status.md",
-    "clients/claude/commands/wiki.md",
-    "clients/claude/agents/membase-curator.md",
-    "clients/claude/hooks/hooks.json",
-    "clients/claude/scripts/hook.cjs",
-    "clients/claude/scripts/mcp-server.cjs",
-    "clients/claude/scripts/membase.cjs",
-    "clients/claude/skills/memory-hygiene/SKILL.md",
-    "clients/claude/skills/project-context/SKILL.md",
-    "clients/claude/skills/recall/SKILL.md",
-    "clients/claude/skills/remember/SKILL.md",
-    "clients/claude/skills/wiki/SKILL.md"
-  ]) {
-    assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: copied before review-only snapshot status was changed`);
+// The full standalone runtime now lives at clients/claude/runtime (consolidation
+// Group C, pure copy-in). Every inventory entry marked "ported" must exist there
+// — derived from expectedArtifacts so the two lists cannot drift.
+function assertRuntimePortedIn() {
+  for (const [artifactPath, , status] of expectedArtifacts) {
+    if (status !== "ported") {
+      continue;
+    }
+    assert(
+      fs.existsSync(path.join(ROOT_DIR, "clients/claude/runtime", artifactPath)),
+      `clients/claude/runtime/${artifactPath}: ported artifact missing after copy-in`
+    );
   }
 }
 

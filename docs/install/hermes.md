@@ -89,11 +89,12 @@ test-only credentials.
 ## Review Checklist
 
 - `clients/hermes/plugin/plugin.yaml` has connector capability copy only.
-- `clients/hermes/python/src/membase_hermes/provider.py` imports locally and
-  exposes only remember, search, task context, and forget tool schemas.
+- `clients/hermes/python/src/membase_hermes/provider.py` is the ported
+  runtime provider (memory tools plus wiki tools; provider, capture, OAuth,
+  and mirroring behavior copied in as-is from the standalone repo).
 - `clients/hermes/native-artifacts.json` is present and
-  `pnpm hermes:native-artifacts` passes before any old provider, capture,
-  OAuth, wiki, formatting, asset, update-check, or test behavior is ported.
+  `pnpm hermes:native-artifacts` passes (it asserts the ported runtime
+  modules exist; the snapshot is the historical inventory of what moved).
 - `manifests/hermes/mcp.json` contains `mcpServers.membase` with the remote
   `url` and an empty `headers` object.
 - The translated Hermes config uses `mcp_servers.membase` with `url` and

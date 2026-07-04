@@ -8,7 +8,7 @@
   },
   "policy": {
     "status": "ported",
-    "summary": "Snapshot old Hermes-native provider, capture, CLI, OAuth, wiki, formatting, update-check, asset, and test evidence before any live behavior is ported.",
+    "summary": "The Hermes Python runtime (provider, client, OAuth, capture, mirror, CLI, installer, tests) is copied in as-is at clients/hermes/python (consolidation Group B); this snapshot is the historical inventory of the ported source.",
     "copyRule": "Hermes runtime has been copied into clients/hermes/python/src/membase_hermes as-is (consolidation Group B). Refactor toward a shared core later; this snapshot is now a historical inventory of the source that was ported."
   },
   "artifacts": [
@@ -36,14 +36,14 @@
     {
       "path": "Makefile",
       "kind": "packaging-command",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "b3618006bd728d84077ccdc12474044e7d88342d",
       "size": 836
     },
     {
       "path": "hermes-membase-banner.png",
       "kind": "asset",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "9cd67a95bab936d6a665a99fbd5c4e7393fb49c2",
       "size": 32340
     },
@@ -78,126 +78,126 @@
     {
       "path": "src/membase_hermes/__main__.py",
       "kind": "python-cli",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "eb53e2f31b2f703ad32ef64b8a41faa3e7d18e08",
       "size": 48
     },
     {
       "path": "src/membase_hermes/cli.py",
       "kind": "python-cli",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "e4b84331c4ab467ab25ff94c18f7b15e0f90ec13",
       "size": 12898
     },
     {
       "path": "src/membase_hermes/installer.py",
       "kind": "installer",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "6c8648afff361b952ce705d7fd4ddba6f2c87d2d",
       "size": 2653
     },
     {
       "path": "src/membase_hermes/provider.py",
       "kind": "provider-runtime",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "a6afd0d6ff0e70c6fb9a6dfa4aba996405959e05",
       "size": 48750
     },
     {
       "path": "src/membase_hermes/capture.py",
       "kind": "capture-runtime",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "33baec7d52fe2740352304d32589360ba39446c9",
       "size": 6806
     },
     {
       "path": "src/membase_hermes/client.py",
       "kind": "runtime-client",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "77c39605d3fbf65933a25d5f14df56f71b8e7c0f",
       "size": 13196
     },
     {
       "path": "src/membase_hermes/config.py",
       "kind": "native-config",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "072441acfc0344936d25dd5dd53d7b564ef2e785",
       "size": 5637
     },
     {
       "path": "src/membase_hermes/current_date.py",
       "kind": "utility",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "b9f15a72128f09a85339850f65606a8f438ff762",
       "size": 718
     },
     {
       "path": "src/membase_hermes/format.py",
       "kind": "display-formatting",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "0cf3ac5c66bd20b470f34aed0f076ade025720a4",
       "size": 12596
     },
     {
       "path": "src/membase_hermes/mirror.py",
       "kind": "mirror-runtime",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "a7e5c25ca5c582af0a56cc3967eb0598553d1356",
       "size": 5029
     },
     {
       "path": "src/membase_hermes/oauth.py",
       "kind": "oauth-runtime",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "8c288708b34492447073951a8d5a672955ccb810",
       "size": 7805
     },
     {
       "path": "src/membase_hermes/sanitize.py",
       "kind": "content-safety",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "92e0457bd74a47043dd229b98dc3e16c9d66aa99",
       "size": 4563
     },
     {
       "path": "src/membase_hermes/star_prompt.py",
       "kind": "launch-prompt",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "04b7ae57177f1eb13cd2862500503f468ef09cef",
       "size": 2752
     },
     {
       "path": "src/membase_hermes/update_check.py",
       "kind": "update-check",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "bd2d1f27b5040cbc28e72c9f65b97a0574ff71f3",
       "size": 6451
     },
     {
       "path": "src/membase_hermes/wiki_project.py",
       "kind": "wiki-project",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "abbe366b4f3671d38b901a98abe07732259ea0ed",
       "size": 2087
     },
     {
       "path": "tests/test_plugin_cli.py",
       "kind": "test-evidence",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "a3f9ebf02451a6e79dc15cc62c4c794290f7cae0",
       "size": 2607
     },
     {
       "path": "tests/test_provider_capture.py",
       "kind": "test-evidence",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "e831c11fb844961526f5f7983d50a1a3501571b9",
       "size": 8319
     },
     {
       "path": "tests/test_provider_tools.py",
       "kind": "test-evidence",
-      "status": "deferred-review-only",
+      "status": "ported",
       "sha": "54cefc7a4a9507d26802e4a38f8ea77972515d2e",
       "size": 21956
     }
