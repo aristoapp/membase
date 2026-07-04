@@ -7,9 +7,9 @@
     "treeApiUrl": "https://api.github.com/repos/aristoapp/cursor-membase/git/trees/main?recursive=1"
   },
   "policy": {
-    "status": "review-only",
-    "summary": "Snapshot old Cursor-native artifacts before any rules, skills, logo, or changelog copy is ported.",
-    "copyRule": "Do not copy old Cursor rules, skills, logo, or changelog text until the copy is rewritten to the public connector-capability boundary and asset reuse is approved.",
+    "status": "ported",
+    "summary": "Cursor-native artifacts (rules, skills, logo, changelog) are copied in as-is under clients/cursor (consolidation Group C); this snapshot is the historical inventory of the ported source.",
+    "copyRule": "Artifacts copied in as-is from aristoapp/cursor-membase; manifest logo/icon reference stays a launch-time choice (D5).",
     "publicBoundary": [
       "remember",
       "search",
@@ -18,10 +18,6 @@
       "diagnostics",
       "manifest",
       "install config"
-    ],
-    "forbiddenManifestFieldsUntilAssetsPorted": [
-      "logo",
-      "icon"
     ]
   },
   "artifacts": [
@@ -48,7 +44,7 @@
       "kind": "cursor-rule",
       "sha": "cdd0349b32f7f8d31de6976cd6dc593ac4b57bea",
       "size": 2539,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/rules/membase.mdc",
       "note": "Requires rewrite and scope decision before copy."
     },
@@ -57,7 +53,7 @@
       "kind": "cursor-skill",
       "sha": "d279a0b217fdca2b6f713ae3dd5ac6c7a13af56f",
       "size": 928,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/skills/membase-overview/SKILL.md",
       "note": "Requires rewrite and scope decision before copy."
     },
@@ -66,7 +62,7 @@
       "kind": "cursor-skill",
       "sha": "287cb97accb63de566f8b0cae948026403804918",
       "size": 1836,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/skills/memory-save/SKILL.md",
       "note": "Requires rewrite and scope decision before copy."
     },
@@ -75,7 +71,7 @@
       "kind": "cursor-skill",
       "sha": "2d62cf78cf60e086007c7617f01b85b492c43fb2",
       "size": 1769,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/skills/memory-search/SKILL.md",
       "note": "Requires rewrite and scope decision before copy."
     },
@@ -84,7 +80,7 @@
       "kind": "cursor-skill",
       "sha": "6bf22ef53cf5724575c645d3b38874f85f013b26",
       "size": 1828,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/skills/wiki-manage/SKILL.md",
       "note": "Requires rewrite and scope decision before copy."
     },
@@ -93,7 +89,7 @@
       "kind": "asset",
       "sha": "f08331f3010394757a5e1ba6c83070866f0a7868",
       "size": 909,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/assets/logo.svg",
       "note": "Requires design/legal review before copy and manifest reference."
     },
@@ -102,7 +98,7 @@
       "kind": "changelog",
       "sha": "dea36ce7c273aa20c96a5938f86292318ff04f9e",
       "size": 1680,
-      "status": "deferred-review-only",
+      "status": "ported",
       "integratedTarget": "clients/cursor/CHANGELOG.md",
       "note": "Requires connector-capability launch note rewrite before copy."
     }

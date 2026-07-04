@@ -38,10 +38,10 @@ const requiredDecisionRows = [
     id: "D4",
     cells: [
       "Client-native runtime parity scope",
-      "Claude commands/hooks/skills copy",
-      "Cursor rules/skills/assets copy",
-      "Hermes live behavior",
-      "OpenClaw hooks/tools copy"
+      "DONE (consolidation Groups B + C",
+      "clients/claude/runtime",
+      "clients/openclaw/runtime",
+      "clients/hermes/python"
     ]
   },
   {
@@ -49,7 +49,7 @@ const requiredDecisionRows = [
     cells: [
       "Marketplace asset reuse",
       "Accepted direction",
-      "asset files still pending"
+      "clients/cursor/assets/logo.svg"
     ]
   },
   {
