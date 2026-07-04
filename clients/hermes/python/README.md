@@ -1,27 +1,28 @@
-# Hermes Python Runtime Review Scaffold
+# Hermes Python Runtime
 
-This directory preserves the Hermes Agent Python package shape as a local
-review artifact for the integrated Plugin/MCP repo.
+The real Hermes Agent runtime for Membase, copied in as-is from the standalone
+`aristoapp/hermes-membase` repo (consolidation Group B). It ships the memory
+provider, HTTP client with OAuth (browser login and headless
+`client_credentials`), auto-capture, built-in-memory mirroring, the CLI, and
+the installer.
 
-It is intentionally non-publishing:
+Layout:
 
-- `pyproject.toml` keeps the old `hermes-membase` package name and console
-  script names reviewable.
-- `src/hermes_membase/plugin/plugin.yaml` must stay in sync with
-  `clients/hermes/plugin/plugin.yaml`.
-- `src/hermes_membase/provider.py` and `src/hermes_membase/plugin/__init__.py`
-  preserve the Hermes memory-provider import/register boundary without calling
-  the Membase API.
-- The console scripts are dry-run review entrypoints until Hermes provider
-  runtime API behavior is explicitly migrated.
-- No PyPI upload, marketplace submission, global install, or Hermes install
-  mutation is enabled here.
+- `pyproject.toml` — package `membase-hermes`, console scripts
+  `hermes-membase` (CLI) and `hermes-membase-install` (installer). Version is
+  pinned to the repo-wide `0.0.0` until publishing is decided.
+- `src/membase_hermes/plugin/plugin.yaml` must stay byte-equal to the
+  generator-owned `clients/hermes/plugin/plugin.yaml`.
+- `src/membase_hermes/provider.py` and `src/membase_hermes/plugin/__init__.py`
+  are the Hermes memory-provider import/register boundary.
+- `tests/` — unittest suite copied from the standalone repo; run in CI.
 
-## Local Check
+Not enabled here: PyPI upload, marketplace submission, or global install —
+publishing is a separate launch-time step.
+
+## Local Checks
 
 ```bash
-pnpm hermes:python-parity
+pnpm hermes:python-parity   # metadata, entrypoints, YAML sync, syntax, runtime presence
+pnpm hermes:test            # unittest suite (needs httpx + PyYAML on PYTHONPATH)
 ```
-
-The parity check validates metadata, entrypoints, native YAML sync, Python
-syntax, the provider import/register boundary, and the non-publishing boundary.
