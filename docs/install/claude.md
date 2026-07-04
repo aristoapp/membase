@@ -27,9 +27,9 @@ pnpm claude:native-artifacts
 `pnpm claude:plugin-parity` runs local Claude Code plugin validation without
 marketplace submission and checks manifest/version/MCP secret-reference drift.
 `pnpm claude:native-artifacts` verifies
-`clients/claude/native-artifacts.json`, the review-only inventory of old Claude
-commands, hooks, skills, agent, bundled runtime scripts, and session-start
-evidence.
+`clients/claude/native-artifacts.json`, the inventory of the Claude-native
+commands, hooks, skills, agent, and bundled runtime scripts now ported at
+`clients/claude/runtime` (consolidation Group C).
 
 ## MCP Config Placement
 
@@ -97,18 +97,19 @@ public connector surface.
 `pnpm smoke:execute` additionally runs the adapter-declared local commands
 without publishing or calling the Membase API.
 
-Host-level Claude MCP connection checks remain pending until the plugin-local
-`scripts/mcp-server.cjs` runtime is migrated into this repo or otherwise made
-available in a test-only review path.
+The plugin-local stdio server is ported at
+`clients/claude/runtime/plugin/scripts/mcp-server.cjs`; a host-level install
+check against it is part of the manual gate in
+`docs/north-star-readiness.md`.
 
 ## Review Checklist
 
 - `clients/claude/.claude-plugin/plugin.json` has connector capability copy
   only.
 - `manifests/claude/mcp.json` contains `mcpServers.membase`.
-- `clients/claude/native-artifacts.json` lists old Claude command, hook, skill,
-  agent, runtime bundle, and session-start evidence without copying deferred
-  files.
+- `clients/claude/native-artifacts.json` lists the Claude command, hook, skill,
+  agent, runtime bundle, and session-start inventory, all ported at
+  `clients/claude/runtime` and asserted present by `pnpm claude:native-artifacts`.
 - No raw token or API key appears in any committed config; the bundled plugin
   manages login.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
