@@ -72,42 +72,27 @@ const requiredDocMarkers = [
 const failures = [];
 const snapshot = readJson(SNAPSHOT_PATH);
 
+// The Hermes runtime has been copied in (consolidation Group B, pure copy-in),
+// so this snapshot is now a historical inventory of the ported source, not a
+// "not yet copied" guard. Validate provenance + that the recorded policy
+// reflects the ported state; the per-artifact absence checks are gone.
 if (snapshot) {
   assert(snapshot.source?.repo === OLD_REPO, `${SNAPSHOT_PATH}: source.repo must be ${OLD_REPO}`);
   assert(snapshot.source?.treeSha === OLD_TREE_SHA, `${SNAPSHOT_PATH}: source.treeSha is stale or missing`);
-  assert(snapshot.policy?.status === "review-only", `${SNAPSHOT_PATH}: policy.status must remain review-only`);
-  assert(
-    snapshot.policy?.copyRule?.includes("Do not copy old Hermes provider"),
-    `${SNAPSHOT_PATH}: policy.copyRule must block premature Hermes runtime artifact copy`
-  );
-
-  for (const moduleName of ["capture", "client", "config", "oauth", "wiki_project"]) {
-    assert(
-      snapshot.policy?.forbiddenRuntimeModulesUntilNativeArtifactsPorted?.includes(moduleName),
-      `${SNAPSHOT_PATH}: policy must forbid ${moduleName} until native artifacts are ported`
-    );
-  }
+  assert(snapshot.policy?.status === "ported", `${SNAPSHOT_PATH}: policy.status must be "ported" after copy-in`);
 
   const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
   assert(artifacts.length === expectedArtifacts.length, `${SNAPSHOT_PATH}: expected ${expectedArtifacts.length} artifacts`);
-
-  for (const [artifactPath, kind, status] of expectedArtifacts) {
+  for (const [artifactPath] of expectedArtifacts) {
     const artifact = artifacts.find((item) => item.path === artifactPath);
     assert(Boolean(artifact), `${SNAPSHOT_PATH}: missing artifact ${artifactPath}`);
-    if (!artifact) {
-      continue;
+    if (artifact) {
+      assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
     }
-
-    assert(artifact.kind === kind, `${SNAPSHOT_PATH}: ${artifactPath} expected kind ${kind}`);
-    assert(artifact.status === status, `${SNAPSHOT_PATH}: ${artifactPath} expected status ${status}`);
-    assert(typeof artifact.sha === "string" && artifact.sha.length === 40, `${SNAPSHOT_PATH}: ${artifactPath} missing git blob sha`);
-    assert(Number.isInteger(artifact.size) && artifact.size > 0, `${SNAPSHOT_PATH}: ${artifactPath} missing size`);
-    assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
   }
 }
 
-assertHermesProviderStillReviewOnly();
-assertDeferredArtifactsNotCopied();
+assertRuntimePortedIn();
 assertDocs();
 assertPackageCheckComposition();
 
@@ -121,46 +106,32 @@ if (failures.length > 0) {
 
 console.log("Hermes native artifact snapshot check passed.");
 
-function assertHermesProviderStillReviewOnly() {
-  const provider = readText("clients/hermes/python/src/hermes_membase/provider.py");
-  if (provider === undefined) {
-    return;
-  }
-
-  for (const marker of [
-    "Review-safe Hermes provider boundary",
-    "Runtime API calls remain disabled",
-    "membase_get_context"
-  ]) {
-    assert(provider.includes(marker), `clients/hermes/python/src/hermes_membase/provider.py: missing marker ${JSON.stringify(marker)}`);
-  }
-
-  assert(
-    !provider.includes("membase_search_wiki"),
-    "clients/hermes/python/src/hermes_membase/provider.py: wiki-specific old tool is exposed before scope approval"
-  );
-}
-
-function assertDeferredArtifactsNotCopied() {
+// After copy-in, assert the real runtime IS present (the inverse of the old
+// "not copied yet" guard). Source inspection only — no import (avoids needing
+// the runtime's third-party deps in CI); live behavior is covered by e2e.
+function assertRuntimePortedIn() {
+  const base = "clients/hermes/python/src/membase_hermes";
   for (const relativePath of [
-    "clients/hermes/assets/hermes-membase-banner.png",
-    "clients/hermes/python/src/hermes_membase/__main__.py",
-    "clients/hermes/python/src/hermes_membase/capture.py",
-    "clients/hermes/python/src/hermes_membase/client.py",
-    "clients/hermes/python/src/hermes_membase/config.py",
-    "clients/hermes/python/src/hermes_membase/current_date.py",
-    "clients/hermes/python/src/hermes_membase/format.py",
-    "clients/hermes/python/src/hermes_membase/mirror.py",
-    "clients/hermes/python/src/hermes_membase/oauth.py",
-    "clients/hermes/python/src/hermes_membase/sanitize.py",
-    "clients/hermes/python/src/hermes_membase/star_prompt.py",
-    "clients/hermes/python/src/hermes_membase/update_check.py",
-    "clients/hermes/python/src/hermes_membase/wiki_project.py",
-    "clients/hermes/python/tests/test_plugin_cli.py",
-    "clients/hermes/python/tests/test_provider_capture.py",
-    "clients/hermes/python/tests/test_provider_tools.py"
+    `${base}/provider.py`,
+    `${base}/client.py`,
+    `${base}/config.py`,
+    `${base}/oauth.py`,
+    `${base}/capture.py`,
+    `${base}/mirror.py`
   ]) {
-    assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: copied before review-only snapshot status was changed`);
+    assert(fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: runtime module missing after copy-in`);
+  }
+
+  const provider = readText(`${base}/provider.py`);
+  if (provider !== undefined) {
+    assert(
+      provider.includes("class MembaseMemoryProvider"),
+      `${base}/provider.py: real MembaseMemoryProvider not present`
+    );
+    assert(
+      !provider.includes("Runtime API calls remain disabled"),
+      `${base}/provider.py: still the disabled review scaffold, not the real runtime`
+    );
   }
 }
 

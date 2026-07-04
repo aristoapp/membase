@@ -8,7 +8,7 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const CLIENT_PACKAGE_PATH = "clients/hermes/package.json";
 const PYTHON_ROOT = "clients/hermes/python";
 const PYPROJECT_PATH = `${PYTHON_ROOT}/pyproject.toml`;
-const PYTHON_SRC_DIR = `${PYTHON_ROOT}/src/hermes_membase`;
+const PYTHON_SRC_DIR = `${PYTHON_ROOT}/src/membase_hermes`;
 const NATIVE_MANIFEST_PATH = "clients/hermes/plugin/plugin.yaml";
 const PACKAGE_MANIFEST_PATH = `${PYTHON_SRC_DIR}/plugin/plugin.yaml`;
 
@@ -45,9 +45,9 @@ if (pyproject !== undefined) {
   assertMarkers(PYPROJECT_PATH, pyproject, [
     'name = "hermes-membase"',
     'requires-python = ">=3.11"',
-    'hermes-membase = "hermes_membase.cli:main"',
-    'hermes-membase-install = "hermes_membase.installer:main"',
-    'hermes_membase = ["plugin/*.yaml"]'
+    'hermes-membase = "membase_hermes.cli:main"',
+    'hermes-membase-install = "membase_hermes.installer:main"',
+    'membase_hermes = ["plugin/*.yaml"]'
   ]);
   assertNoPublishingText(PYPROJECT_PATH, pyproject);
   runPythonTomlCheck();
@@ -57,7 +57,7 @@ assertSyncedNativeManifest();
 
 if (failures.length === 0) {
   runPythonSyntaxCheck();
-  runPythonProviderBoundaryCheck();
+  assertRuntimePresent();
 }
 
 if (failures.length > 0) {
@@ -80,10 +80,10 @@ function runPythonTomlCheck() {
       "scripts = project['scripts']",
       "assert project['name'] == 'hermes-membase'",
       "assert project['requires-python'] == '>=3.11'",
-      "assert scripts['hermes-membase'] == 'hermes_membase.cli:main'",
-      "assert scripts['hermes-membase-install'] == 'hermes_membase.installer:main'",
+      "assert scripts['hermes-membase'] == 'membase_hermes.cli:main'",
+      "assert scripts['hermes-membase-install'] == 'membase_hermes.installer:main'",
       "package_data = data['tool']['setuptools']['package-data']",
-      "assert 'plugin/*.yaml' in package_data['hermes_membase']"
+      "assert 'plugin/*.yaml' in package_data['membase_hermes']"
     ].join("; "),
     path.join(ROOT_DIR, PYPROJECT_PATH)
   ]);
@@ -103,48 +103,32 @@ function runPythonSyntaxCheck() {
   ]);
 }
 
-function runPythonProviderBoundaryCheck() {
-  run("python3", [
-    "-c",
-    [
-      "import argparse",
-      "import importlib",
-      "import sys",
-      "from pathlib import Path",
-      "root = Path(sys.argv[1])",
-      "sys.path.insert(0, str(root / 'src'))",
-      "from hermes_membase.provider import MembaseMemoryProvider, PUBLIC_TOOL_NAMES",
-      "provider = MembaseMemoryProvider()",
-      "assert provider.name == 'membase'",
-      "assert provider.is_available() is True",
-      "schema = provider.get_config_schema()",
-      "assert schema[0]['key'] == 'apiUrl'",
-      "assert schema[1]['key'] == 'apiKeyEnv'",
-      "tools = provider.get_tool_schemas()",
-      "names = {tool['name'] for tool in tools}",
-      "assert set(PUBLIC_TOOL_NAMES) <= names",
-      "assert 'membase_search_wiki' not in names",
-      "provider.initialize('review-session')",
-      "text = provider.handle_tool_call('membase_search', {'query': 'launch'})",
-      "assert 'review scaffold' in text",
-      "class Context:",
-      "    def __init__(self):",
-      "        self.providers = []",
-      "    def register_memory_provider(self, provider):",
-      "        self.providers.append(provider)",
-      "plugin = importlib.import_module('hermes_membase.plugin')",
-      "ctx = Context()",
-      "plugin.register(ctx)",
-      "assert len(ctx.providers) == 1",
-      "assert ctx.providers[0].name == 'membase'",
-      "parser = argparse.ArgumentParser()",
-      "plugin_cli = importlib.import_module('hermes_membase.plugin.cli')",
-      "plugin_cli.register_cli(parser)",
-      "parsed = parser.parse_args(['status'])",
-      "assert callable(parsed.func)"
-    ].join("\n"),
-    path.join(ROOT_DIR, PYTHON_ROOT)
-  ]);
+// The real Hermes provider runtime has been copied into the repo (consolidation
+// Group B, pure copy-in). This validates the runtime is PRESENT and exposes its
+// public connector surface, by source inspection only — it does NOT import the
+// modules (that would require the runtime's third-party deps, e.g. httpx, in CI).
+// Live behavior is covered by the e2e tiers.
+function assertRuntimePresent() {
+  const provider = readText(`${PYTHON_SRC_DIR}/provider.py`);
+  if (provider !== undefined) {
+    assertMarkers(`${PYTHON_SRC_DIR}/provider.py`, provider, [
+      "class MembaseMemoryProvider",
+      '"membase_search"',
+      '"membase_store"',
+      '"membase_forget"'
+    ]);
+  }
+
+  const pluginInit = readText(`${PYTHON_SRC_DIR}/plugin/__init__.py`);
+  if (pluginInit !== undefined) {
+    assertMarkers(`${PYTHON_SRC_DIR}/plugin/__init__.py`, pluginInit, ["def register("]);
+  }
+
+  // The disabled "review scaffold" runtime must be gone (real client present).
+  const client = readText(`${PYTHON_SRC_DIR}/client.py`);
+  if (client === undefined) {
+    failures.push(`${PYTHON_SRC_DIR}/client.py: runtime client is missing after copy-in`);
+  }
 }
 
 function assertSyncedNativeManifest() {

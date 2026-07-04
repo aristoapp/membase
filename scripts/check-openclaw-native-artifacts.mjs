@@ -74,39 +74,23 @@ const snapshot = readJson(SNAPSHOT_PATH);
 if (snapshot) {
   assert(snapshot.source?.repo === OLD_REPO, `${SNAPSHOT_PATH}: source.repo must be ${OLD_REPO}`);
   assert(snapshot.source?.treeSha === OLD_TREE_SHA, `${SNAPSHOT_PATH}: source.treeSha is stale or missing`);
-  assert(snapshot.policy?.status === "review-only", `${SNAPSHOT_PATH}: policy.status must remain review-only`);
-  assert(
-    snapshot.policy?.copyRule?.includes("Do not copy old OpenClaw commands"),
-    `${SNAPSHOT_PATH}: policy.copyRule must block premature OpenClaw artifact copy`
-  );
-
-  for (const directory of ["commands", "hooks", "tools", "skills"]) {
-    assert(
-      snapshot.policy?.forbiddenRuntimeDirectoriesUntilNativeArtifactsPorted?.includes(directory),
-      `${SNAPSHOT_PATH}: policy must forbid ${directory} until native artifacts are ported`
-    );
-  }
+  // Runtime copied into clients/openclaw/runtime (Group B, pure copy-in), so the
+  // snapshot is now a historical inventory of the ported source.
+  assert(snapshot.policy?.status === "ported", `${SNAPSHOT_PATH}: policy.status must be "ported" after copy-in`);
 
   const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
   assert(artifacts.length === expectedArtifacts.length, `${SNAPSHOT_PATH}: expected ${expectedArtifacts.length} artifacts`);
-
-  for (const [artifactPath, kind, status] of expectedArtifacts) {
+  for (const [artifactPath] of expectedArtifacts) {
     const artifact = artifacts.find((item) => item.path === artifactPath);
     assert(Boolean(artifact), `${SNAPSHOT_PATH}: missing artifact ${artifactPath}`);
-    if (!artifact) {
-      continue;
+    if (artifact) {
+      assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
     }
-
-    assert(artifact.kind === kind, `${SNAPSHOT_PATH}: ${artifactPath} expected kind ${kind}`);
-    assert(artifact.status === status, `${SNAPSHOT_PATH}: ${artifactPath} expected status ${status}`);
-    assert(typeof artifact.sha === "string" && artifact.sha.length === 40, `${SNAPSHOT_PATH}: ${artifactPath} missing git blob sha`);
-    assert(Number.isInteger(artifact.size) && artifact.size > 0, `${SNAPSHOT_PATH}: ${artifactPath} missing size`);
-    assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
   }
 }
 
 assertOpenClawMetadataStillRuntimeFree();
-assertDeferredArtifactsNotCopied();
+assertRuntimePortedIn();
 assertDocs();
 assertPackageCheckComposition();
 
@@ -138,32 +122,33 @@ function assertOpenClawMetadataStillRuntimeFree() {
   }
 }
 
-function assertDeferredArtifactsNotCopied() {
+// After copy-in, the runtime lives in clients/openclaw/runtime/ (kept separate
+// from the adapter at clients/openclaw/src/index.ts). Assert the runtime IS
+// present there, and that it did NOT land in the adapter's src/ (which must stay
+// adapter-only). Source inspection only — no import/build of the runtime here.
+function assertRuntimePortedIn() {
+  const runtime = "clients/openclaw/runtime/src";
+  for (const relativePath of [
+    `${runtime}/index.ts`,
+    `${runtime}/client.ts`,
+    `${runtime}/config.ts`,
+    `${runtime}/commands/cli.ts`,
+    `${runtime}/hooks/capture.ts`,
+    `${runtime}/hooks/recall.ts`,
+    `${runtime}/tools/search.ts`,
+    `${runtime}/tools/store.ts`,
+    `${runtime}/tools/forget.ts`
+  ]) {
+    assert(fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: runtime file missing after copy-in`);
+  }
+
+  // The adapter package must remain adapter-only (runtime went to runtime/).
   for (const relativePath of [
     "clients/openclaw/src/client.ts",
     "clients/openclaw/src/config.ts",
-    "clients/openclaw/src/commands/cli.ts",
-    "clients/openclaw/src/hooks/capture.ts",
-    "clients/openclaw/src/hooks/recall.ts",
-    "clients/openclaw/src/tools/add-wiki.ts",
-    "clients/openclaw/src/tools/current-date.ts",
-    "clients/openclaw/src/tools/delete-wiki.ts",
-    "clients/openclaw/src/tools/forget.ts",
-    "clients/openclaw/src/tools/profile.ts",
-    "clients/openclaw/src/tools/search-wiki.ts",
-    "clients/openclaw/src/tools/search.ts",
-    "clients/openclaw/src/tools/store.ts",
-    "clients/openclaw/src/tools/update-wiki.ts",
-    "clients/openclaw/src/format.ts",
-    "clients/openclaw/src/star-prompt.ts",
-    "clients/openclaw/src/update-check.ts",
-    "clients/openclaw/src/wiki-project.ts",
-    "clients/openclaw/src/membase-tools.test.ts",
-    "clients/openclaw/src/star-prompt.test.ts",
-    "clients/openclaw/src/update-check.test.ts",
-    "clients/openclaw/skills"
+    "clients/openclaw/src/tools/search.ts"
   ]) {
-    assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: copied before review-only snapshot status was changed`);
+    assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: runtime must live under runtime/, not the adapter src/`);
   }
 }
 
