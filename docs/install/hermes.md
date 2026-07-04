@@ -89,7 +89,7 @@ test-only credentials.
 ## Review Checklist
 
 - `clients/hermes/plugin/plugin.yaml` has connector capability copy only.
-- `clients/hermes/python/src/hermes_membase/provider.py` imports locally and
+- `clients/hermes/python/src/membase_hermes/provider.py` imports locally and
   exposes only remember, search, task context, and forget tool schemas.
 - `clients/hermes/native-artifacts.json` is present and
   `pnpm hermes:native-artifacts` passes before any old provider, capture,

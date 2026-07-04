@@ -7,22 +7,9 @@
     "treeUrl": "https://api.github.com/repos/aristoapp/hermes-membase/git/trees/main?recursive=1"
   },
   "policy": {
-    "status": "review-only",
+    "status": "ported",
     "summary": "Snapshot old Hermes-native provider, capture, CLI, OAuth, wiki, formatting, update-check, asset, and test evidence before any live behavior is ported.",
-    "copyRule": "Do not copy old Hermes provider runtime, capture, config, OAuth, wiki, formatting, update-check, asset, or test behavior until each behavior is accepted and rewritten to the public connector-capability boundary.",
-    "forbiddenRuntimeModulesUntilNativeArtifactsPorted": [
-      "capture",
-      "client",
-      "config",
-      "current_date",
-      "format",
-      "mirror",
-      "oauth",
-      "sanitize",
-      "star_prompt",
-      "update_check",
-      "wiki_project"
-    ]
+    "copyRule": "Hermes runtime has been copied into clients/hermes/python/src/membase_hermes as-is (consolidation Group B). Refactor toward a shared core later; this snapshot is now a historical inventory of the source that was ported."
   },
   "artifacts": [
     {

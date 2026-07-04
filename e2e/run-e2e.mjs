@@ -204,6 +204,13 @@ async function evalLiveFast(entry, url) {
   const sessionId = entry.sessionId;
   const sentinel = `membase-e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   entry.sentinel = sentinel;
+  // Per-run project tag: test memories are never deleted on staging (no
+  // delete-memory tool), so every past run leaves a semantically identical
+  // "launch codeword" memory behind. Without a unique tag the Tier 3 context
+  // query competes against all of them and the newest sentinel falls out of
+  // the top-N as runs accumulate. Independent of the sentinel so the query
+  // still never contains the answer string.
+  entry.projectTag = `Testland-${Math.floor(Math.random() * 1e9).toString(36)}`;
 
   const tl = await listTools(url, { token: TOKEN, sessionId });
   entry.latency.toolsList = round(tl.ms);
@@ -232,7 +239,7 @@ async function evalLiveFast(entry, url) {
   // remember: the live server acknowledges storage with text (no id is returned).
   const r = await callTool(url, {
     token: TOKEN, sessionId, id: 10, name: roles.remember.name,
-    args: argsFor(roles.remember, { primary: `[e2e-test] The secret launch codeword for project Testland is ${sentinel}. (safe to delete)` })
+    args: argsFor(roles.remember, { primary: `[e2e-test] The secret launch codeword for project ${entry.projectTag} is ${sentinel}. (safe to delete)` })
   });
   entry.latency.remember = round(r.ms);
   const ack = !r.payload?.error && r.status < 400 && (r.raw ?? "").length > 0;
@@ -376,7 +383,7 @@ async function evalLiveDeep(entry, url, roles) {
   // context-style retrieval through the same search surface
   const c = await callTool(url, {
     token: TOKEN, sessionId, id: 30, name: (roles.getContext ?? roles.search).name,
-    args: argsFor(roles.getContext ?? roles.search, { primary: "What is the launch codeword for project Testland?" })
+    args: argsFor(roles.getContext ?? roles.search, { primary: `What is the launch codeword for project ${entry.projectTag}?` })
   });
   entry.latency.getContext = round(c.ms);
   const ctxOk = !c.payload?.error && c.status < 400;
