@@ -64,7 +64,7 @@ export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
   manifest: {
     dir: ".codex-plugin",
     mcpConfigRef: CODEX_MCP_CONFIG_FILE,
-    template: ({ version, mcpConfigRef }) => ({
+    template: ({ version }) => ({
       // Codex requires a kebab-case plugin name.
       name: "membase",
       version,
@@ -75,7 +75,7 @@ export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
       repository: MEMBASE_REPOSITORY,
       license: "MIT",
       keywords: ["agent-memory", "context", "mcp", "codex", "membase"],
-      mcpServers: mcpConfigRef ?? CODEX_MCP_CONFIG_FILE,
+      mcpServers: CODEX_MCP_CONFIG_FILE,
     }),
   },
 });
@@ -89,11 +89,7 @@ export function defineCodexRuntimeConfig(
 export function generateCodexPluginManifest(
   config: ConnectorRuntimeConfig,
 ): CodexPluginManifest {
-  const manifest = codexAgent.generateManifest(config);
-  if (!manifest) {
-    throw new Error("codex descriptor declares no manifest template");
-  }
-  return manifest;
+  return codexAgent.generateRequiredManifest(config);
 }
 
 export function generateCodexMcpConfig(

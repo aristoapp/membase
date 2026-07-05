@@ -49,8 +49,6 @@ export type InstallMethod =
 
 export interface ManifestTemplateContext {
   version: string;
-  /** Relative path to the bundled MCP config, when the manifest references one. */
-  mcpConfigRef?: string;
 }
 
 export interface AgentConfigFile {
@@ -66,9 +64,11 @@ export interface AgentManifestSpec<
 > {
   /** Manifest directory relative to the client package, e.g. ".codex-plugin". */
   dir: string;
-  /** Manifest filename. Defaults to "plugin.json". */
-  file?: string;
-  /** Relative path the manifest's mcpServers field points at, if any. */
+  /**
+   * Relative path the manifest's mcpServers field points at, if any.
+   * Packaging metadata for the E2 install-doc renderer; the template itself
+   * references the client's constant directly.
+   */
   mcpConfigRef?: string;
   /**
    * Declarative manifest template. Key order is preserved into the generated
@@ -127,6 +127,8 @@ export interface McpHostAgent<
     input?: McpHostAgentRuntimeConfigInput,
   ): ConnectorRuntimeConfig;
   generateManifest(config: ConnectorRuntimeConfig): TManifest | undefined;
+  /** Like generateManifest, but throws when the descriptor has no manifest. */
+  generateRequiredManifest(config: ConnectorRuntimeConfig): TManifest;
   generateMcpConfig(config: ConnectorRuntimeConfig): McpConfigDocument;
 }
 
@@ -157,8 +159,19 @@ export function defineMcpHostAgent<
 
     return descriptor.manifest.template({
       version: config.client.version ?? "0.0.0",
-      mcpConfigRef: descriptor.manifest.mcpConfigRef,
     });
+  };
+
+  const generateRequiredManifest = (
+    config: ConnectorRuntimeConfig,
+  ): TManifest => {
+    const manifest = generateManifest(config);
+    if (!manifest) {
+      throw new Error(
+        `${descriptor.id} descriptor declares no manifest template`,
+      );
+    }
+    return manifest;
   };
 
   const generateMcpConfig = (
@@ -201,6 +214,7 @@ export function defineMcpHostAgent<
     adapter,
     defineRuntimeConfig,
     generateManifest,
+    generateRequiredManifest,
     generateMcpConfig,
   };
 }
