@@ -58,5 +58,5 @@ Only then, in order (each its own reviewed change):
    marketplace submissions per `docs/marketplace-assets.md`.
 3. Old-repo deprecation notices + archive per `docs/deprecation-plan.md`
    (READMEs point here; repos archived, not deleted).
-4. Retire the standalone working copies under `~/Desktop/membase/` and the
-   iCloud automation checkout.
+4. Retire the standalone working copies under `~/Desktop/membase/` once launch
+   gates pass.
