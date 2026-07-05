@@ -1,20 +1,22 @@
-import {
-  createHttpMcpConfigDocument,
-  defineConnectorConfig,
-  type ConnectorConfigInput,
-  type ConnectorRuntimeConfig,
-  type McpConfigDocument
+import type {
+  ConnectorRuntimeConfig,
+  McpConfigDocument,
 } from "@membase/plugin-core";
 import {
-  defineAdapter,
+  MEMBASE_HOMEPAGE,
+  MEMBASE_MCP_SERVER_NAME,
+  MEMBASE_MCP_SERVER_URL,
+  MEMBASE_PUBLISHER,
+  MEMBASE_REPOSITORY,
+  defineMcpHostAgent,
   type ClientAdapter,
-  type SmokeTestCommand
+  type McpHostAgentRuntimeConfigInput,
 } from "@membase/connector-sdk";
 
 export const CURSOR_CLIENT_ID = "cursor";
 export const CURSOR_DISPLAY_NAME = "Cursor";
-export const CURSOR_MCP_SERVER_NAME = "membase";
-export const CURSOR_MCP_SERVER_URL = "https://mcp.membase.so/mcp";
+export const CURSOR_MCP_SERVER_NAME = MEMBASE_MCP_SERVER_NAME;
+export const CURSOR_MCP_SERVER_URL = MEMBASE_MCP_SERVER_URL;
 
 export interface CursorPluginManifest {
   name: string;
@@ -32,90 +34,71 @@ export interface CursorPluginManifest {
   keywords: string[];
 }
 
-export type CursorRuntimeConfigInput = Omit<ConnectorConfigInput, "client"> & {
-  version?: string;
-};
+export type CursorRuntimeConfigInput = McpHostAgentRuntimeConfigInput;
 
 export interface CursorConnectorArtifacts {
   plugin: CursorPluginManifest;
   mcp: McpConfigDocument;
 }
 
-export function defineCursorRuntimeConfig(
-  input: CursorRuntimeConfigInput = {}
-): ConnectorRuntimeConfig {
-  const { version, ...config } = input;
+/** ADR 0003 descriptor — Cursor is packaging data over the shared MCP host agent. */
+export const cursorAgent = defineMcpHostAgent({
+  id: CURSOR_CLIENT_ID,
+  displayName: CURSOR_DISPLAY_NAME,
+  install: [
+    { kind: "deeplink", source: "Membase dashboard → Add to Cursor" },
+    { kind: "config-file" },
+  ],
+  configFile: {
+    path: "~/.cursor/mcp.json",
+    format: "json",
+    key: "mcpServers.membase",
+  },
+  manifest: {
+    dir: ".cursor-plugin",
+    template: ({ version }) => ({
+      name: "membase",
+      displayName: "Membase",
+      description:
+        "Connect Cursor to Membase context APIs for remember, search, task context, and forget actions.",
+      version,
+      author: { ...MEMBASE_PUBLISHER },
+      homepage: MEMBASE_HOMEPAGE,
+      repository: MEMBASE_REPOSITORY,
+      license: "MIT",
+      keywords: ["agent-memory", "context", "mcp", "cursor", "membase"],
+    }),
+  },
+  extras: ["rules", "skills", "assets"],
+});
 
-  return defineConnectorConfig({
-    ...config,
-    client: {
-      id: CURSOR_CLIENT_ID,
-      displayName: CURSOR_DISPLAY_NAME,
-      version: version ?? "0.0.0"
-    }
-  });
+export function defineCursorRuntimeConfig(
+  input: CursorRuntimeConfigInput = {},
+): ConnectorRuntimeConfig {
+  return cursorAgent.defineRuntimeConfig(input);
 }
 
 export function generateCursorPluginManifest(
-  config: ConnectorRuntimeConfig
+  config: ConnectorRuntimeConfig,
 ): CursorPluginManifest {
-  return {
-    name: "membase",
-    displayName: "Membase",
-    description:
-      "Connect Cursor to Membase context APIs for remember, search, task context, and forget actions.",
-    version: config.client.version ?? "0.0.0",
-    author: {
-      name: "Membase",
-      email: "support@aristo.so",
-      url: "https://membase.so"
-    },
-    homepage: "https://membase.so",
-    repository: "https://github.com/aristoapp/membase-plugin-mcp",
-    license: "MIT",
-    keywords: [
-      "agent-memory",
-      "context",
-      "mcp",
-      "cursor",
-      "membase"
-    ]
-  };
+  return cursorAgent.generateManifest(
+    config,
+  ) as unknown as CursorPluginManifest;
 }
 
 export function generateCursorMcpConfig(
-  _config: ConnectorRuntimeConfig
+  config: ConnectorRuntimeConfig,
 ): McpConfigDocument {
-  return createHttpMcpConfigDocument(CURSOR_MCP_SERVER_NAME, {
-    url: CURSOR_MCP_SERVER_URL,
-    headers: {}
-  });
+  return cursorAgent.generateMcpConfig(config);
 }
 
 export function generateCursorArtifacts(
-  config: ConnectorRuntimeConfig
+  config: ConnectorRuntimeConfig,
 ): CursorConnectorArtifacts {
   return {
     plugin: generateCursorPluginManifest(config),
-    mcp: generateCursorMcpConfig(config)
+    mcp: generateCursorMcpConfig(config),
   };
 }
 
-export const cursorAdapter: ClientAdapter = defineAdapter({
-  id: CURSOR_CLIENT_ID,
-  displayName: CURSOR_DISPLAY_NAME,
-  generateManifest: generateCursorPluginManifest,
-  generateMcpConfig: generateCursorMcpConfig,
-  smokeTests(): SmokeTestCommand[] {
-    return [
-      {
-        name: "cursor-adapter-typecheck",
-        command: ["pnpm", "--filter", "@membase/client-cursor", "typecheck"]
-      },
-      {
-        name: "public-surface-guard",
-        command: ["pnpm", "public-surface"]
-      }
-    ];
-  }
-});
+export const cursorAdapter: ClientAdapter = cursorAgent.adapter;

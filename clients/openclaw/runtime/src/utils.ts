@@ -1,16 +1,19 @@
 // OpenClaw-runtime text utilities, now composed from @membase/capture-core
-// (ADR 0002 / D1). Public API and behavior are unchanged. OpenClaw-specific
-// pieces stay here: the gateway timestamp prefix, heartbeat noise lines, the
-// larger memory-keyword list, and event extraction helpers.
+// (ADR 0002 / D1). OpenClaw-specific pieces stay here: the gateway timestamp
+// prefix, heartbeat noise lines, the larger memory-keyword list, and event
+// extraction helpers.
 //
-// Divergence kept intact for D1 (reconcile in D2): unlike the Claude runtime,
-// sanitizeMembaseText here does NOT redact secrets on the capture path — only
-// the recall-query path redacts assignments (basic keyword set).
+// Redaction convergence (2026-07-05): the capture path now applies the full
+// capture-core secret redaction rule set before anything leaves the machine,
+// reconciling the D1 slice 1 divergence toward the Claude policy. The
+// recall-query path keeps its narrower assignment-only redaction (basic
+// keyword set) — full recall reconciliation stays in D2.
 import {
   buildSecretAssignmentRe,
   clampRecallQuery,
   isCasualChat as coreIsCasualChat,
   normalizeLines,
+  redactSecrets,
   SECRET_ASSIGNMENT_KEYWORDS_BASIC,
   stripContextBlocks,
 } from "@membase/capture-core";
@@ -89,6 +92,16 @@ export function sanitizeMembaseText(raw: string): string {
   return normalizeLines(cleaned, (line) =>
     HEARTBEAT_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line)),
   );
+}
+
+/**
+ * Capture-path sanitizer: strip OpenClaw noise, then redact secrets with the
+ * full capture-core rule set (private keys, assignments, bearer tokens, CLI
+ * secret flags, provider token formats). Secrets must be filtered before the
+ * text leaves the machine (ADR 0002 §3 hard client-side residue).
+ */
+export function sanitizeCaptureText(raw: string): string {
+  return redactSecrets(sanitizeMembaseText(raw));
 }
 
 export function sanitizeRecallQuery(raw: string): string {
