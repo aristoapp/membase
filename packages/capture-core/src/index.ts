@@ -81,9 +81,9 @@ export function normalizeLines(
 }
 
 // ---------------------------------------------------------------------------
-// Secret redaction (Claude runtime's full rule set; OpenClaw/Hermes use the
-// assignment rule only, on the recall-query path — a live divergence kept
-// intact for D1 and reconciled in D2)
+// Secret redaction (the full rule set is the capture-path policy: Claude, and
+// since E1/PR #12 the OpenClaw capture path too. Recall-query paths in
+// OpenClaw/Hermes keep the basic assignment rule until D2.)
 // ---------------------------------------------------------------------------
 
 export const SECRET_ASSIGNMENT_KEYWORDS_FULL = [
@@ -109,6 +109,10 @@ export function buildSecretAssignmentRe(
   );
 }
 
+// The default keyword set never varies, so build the assignment pattern once
+// instead of per redactSecrets call (it runs per captured message at runtime).
+const SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
+
 export const BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 export const CLI_SECRET_FLAG_RE =
   /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
@@ -121,7 +125,7 @@ export const PRIVATE_KEY_RE =
 export function redactSecrets(text: string): string {
   return text
     .replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]")
-    .replace(buildSecretAssignmentRe(), "$1=[REDACTED]")
+    .replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]")
     .replace(BEARER_TOKEN_RE, "$1[REDACTED]")
     .replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]")
     .replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
@@ -135,7 +139,7 @@ function patternTest(pattern: RegExp, text: string): boolean {
 /** True when text still smells like it carries a credential. */
 export function looksSensitive(text: string): boolean {
   return (
-    patternTest(buildSecretAssignmentRe(), text) ||
+    patternTest(SECRET_ASSIGNMENT_FULL_RE, text) ||
     patternTest(BEARER_TOKEN_RE, text) ||
     patternTest(CLI_SECRET_FLAG_RE, text) ||
     patternTest(COMMON_TOKEN_RE, text) ||

@@ -1,6 +1,6 @@
 import type {
   ConnectorRuntimeConfig,
-  McpConfigDocument
+  McpConfigDocument,
 } from "@membase/plugin-core";
 
 export interface SmokeTestCommand {
@@ -20,3 +20,19 @@ export interface ClientAdapter {
 export function defineAdapter(adapter: ClientAdapter): ClientAdapter {
   return adapter;
 }
+
+export {
+  MEMBASE_HOMEPAGE,
+  MEMBASE_MCP_SERVER_NAME,
+  MEMBASE_MCP_SERVER_URL,
+  MEMBASE_PUBLISHER,
+  MEMBASE_REPOSITORY,
+  defineMcpHostAgent,
+  type AgentConfigFile,
+  type AgentManifestSpec,
+  type InstallMethod,
+  type ManifestTemplateContext,
+  type McpHostAgent,
+  type McpHostAgentDescriptor,
+  type McpHostAgentRuntimeConfigInput,
+} from "./mcp-host-agent.js";

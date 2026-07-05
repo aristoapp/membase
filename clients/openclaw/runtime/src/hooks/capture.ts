@@ -1,6 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { extractTextContent, sanitizeMembaseText } from "../utils";
+import { extractTextContent, sanitizeCaptureText } from "../utils";
 
 const SILENCE_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_BUFFER_SIZE = 20;
@@ -121,7 +121,9 @@ export function registerCaptureHook(
         if (m.role !== "user") continue;
 
         let text = extractTextContent(m.content);
-        text = sanitizeMembaseText(text);
+        // Full secret redaction before buffering — captured text must never
+        // carry credentials off the machine (ADR 0002 §3).
+        text = sanitizeCaptureText(text);
         if (isOperationalMessage(text)) continue;
         if (text.length >= 10) {
           newMessages.push({ text });
