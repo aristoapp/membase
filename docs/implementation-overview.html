@@ -611,90 +611,7 @@ private memory engine (실제 기억 저장소)</code></pre>
       </section>
 
       <section>
-        <h2>6. 통합 타임라인</h2>
-        <ul class="timeline">
-          <li>
-            <span class="t-title">스캐폴딩 + 경계 확정</span>
-            pnpm 워크스페이스 뼈대, ADR 0001 작성, public-surface/secret 가드
-            설치, 어댑터 SDK와 4개 클라이언트 어댑터의 틀.
-          </li>
-          <li>
-            <span class="t-title">패리티 문서화</span>
-            코드를 복사하기 <em>전에</em>, 옛 레포 4개에 뭐가 있는지(런타임,
-            테스트, 패키징, 이미지 에셋)를 먼저 문서로 전수 조사
-            (<code>migration-parity</code>, <code>test-coverage-parity</code>,
-            <code>packaging-action-parity</code>). "옮기다 빠뜨림"을 막기 위한
-            체크리스트 확보.
-          </li>
-          <li>
-            <span class="t-title">E2E 파이프라인</span>
-            커넥터 모델 확정(membase.so 로그인 방식), client_credentials 서비스
-            인증, Tier 1~3 스테이징 검증 게이트 구축.
-          </li>
-          <li>
-            <span class="t-title">Group A — Codex</span>
-            신규 Codex CLI 커넥터 추가 (PR #2).
-          </li>
-          <li>
-            <span class="t-title">Group B — Hermes + OpenClaw</span>
-            두 런타임을 통째로 복사해 오고, 각각의 테스트(Python unittest,
-            bun 테스트)를 CI에 편입. PR 리뷰에서 나온 런타임 버그 수정 (PR #3).
-          </li>
-          <li>
-            <span class="t-title">Group C — Claude + Cursor</span>
-            Claude 플러그인 번들(동봉 stdio MCP 서버 포함)과 Cursor 정적
-            아티팩트 복사 (PR #4). 이 시점에서 "옛 레포의 모든 것이 이 레포
-            안에 있음" 달성.
-          </li>
-          <li>
-            <span class="t-title">/membase-connect 스킬</span>
-            5개 클라이언트를 이 레포에서 바로 로컬 설치·연동·검증하는 대화형
-            셋업 스킬 추가 (PR #5). 설치 규칙을 명문화: 기존 설정을 덮어쓰지
-            않고 병합(백업 생성), 토큰·비밀값을 파일에 쓰지 않음(항상 OAuth
-            또는 환경변수), 매 클라이언트마다 검증(VERIFY) 단계로 마무리.
-          </li>
-          <li>
-            <span class="t-title">런칭 이후 로드맵 확정 — ADR 0002 · 0003</span>
-            남은 두 가지 구조적 결정을 ADR로 확정 (PR #6). 아래 8절 참고.
-            둘 다 런칭(투키 게이트)을 막지 않는 <em>이후</em> 작업이며,
-            서로 독립적이라 어느 쪽이 먼저 진행돼도 됩니다.
-          </li>
-          <li>
-            <span class="t-title">Group D1 — capture-core 추출 완료</span>
-            3개 slice로 분할 머지 (PR #7~#9): ① sanitize + 골든 벡터,
-            ② <code>MembaseTransport</code>(OAuth 갱신·재시도), ③ 디스크
-            캡처 스풀. Claude·OpenClaw 런타임이 공유 core를 import하고
-            기존 테스트는 무변경 통과. 남은 D1 항목은 capture kinds 하나.
-          </li>
-          <li>
-            <span class="t-title">자동화 루프 은퇴</span>
-            스케줄 codex 루프(20-run scaffold)의 임무 종료를 선언하고
-            스크립트·plist·프롬프트를 삭제 (PR #11). 이후 모든 작업은
-            대화형 세션의 브랜치 → <code>pnpm check</code> → PR 흐름으로
-            단일화 — 작성자가 하나가 되면서 작업 사본 경쟁 문제 자체가
-            사라짐.
-          </li>
-          <li>
-            <span class="t-title">Group E1 — descriptor 메커니즘</span>
-            <code>defineMcpHostAgent</code> 구현 + cursor/codex를
-            descriptor로 이행(골든 바이트 동일성 CI 증명) + OpenClaw 캡처
-            경로 시크릿 리댁션을 capture-core로 조기 수렴 (PR #12).
-            8각도 코드리뷰 2라운드를 거쳐 제네릭 타입 강화·죽은 코드 제거
-            등 리뷰 수정 반영.
-          </li>
-          <li>
-            <span class="t-title">투키 게이트 통과 — 런칭 자격 확보</span>
-            Gate 1(자동 4항목)과 Gate 2(수동 5클라이언트 실사용 검증)를
-            모두 통과하고 증거와 함께 문서화 (PR #13). 핵심 증거: 센티널
-            기억 하나를 Claude Code로 저장 → Cursor·Codex·Hermes·OpenClaw
-            전부에서 검색 성공 — "공유 메모리" 명제의 5클라이언트 실증.
-          </li>
-        </ul>
-      </section>
-
-
-      <section>
-        <h2>7. 현재 위치 — 투키(two-key) 게이트 통과 완료</h2>
+        <h2>6. 현재 상태 — 투키(two-key) 게이트 통과 완료</h2>
         <p>
           <code>docs/north-star-readiness.md</code>의 투키 게이트 —
           자동 검증과 사람 승인 <strong>둘 다</strong> 통과해야 열리는
@@ -736,12 +653,12 @@ private memory engine (실제 기억 저장소)</code></pre>
         <div class="note">
           공개 전환 전 점검 항목: 커밋된 <code>AGENTS.md</code>(에이전트
           온보딩 문서)에 내부 경로·운영 세부가 있어 공개 전 다듬기 필요.
-          런칭과 무관한 후속 코드 작업(E2·D2·D3)은 8절 참고.
+          런칭과 무관한 후속 코드 작업(E2·D2·D3)은 7절 참고.
         </div>
       </section>
 
       <section>
-        <h2>8. 런칭 이후 로드맵 — ADR 0002 / 0003</h2>
+        <h2>7. 런칭 이후 로드맵 — ADR 0002 / 0003</h2>
         <div class="grid">
           <div class="card">
             <h3>ADR 0002 — 공유 capture-core (Group D)</h3>
@@ -813,7 +730,7 @@ private memory engine (실제 기억 저장소)</code></pre>
       </section>
 
       <section>
-        <h2>9. 인터페이스 설계 결정 — 경계마다 무엇을 계약했나</h2>
+        <h2>8. 인터페이스 설계 결정 — 경계마다 무엇을 계약했나</h2>
         <p>
           지금까지의 구현에서 확정된 인터페이스 수준의 결정들입니다.
           공통 원칙은 하나입니다: <strong>경계를 넘는 것은 데이터와 좁은
@@ -821,88 +738,303 @@ private memory engine (실제 기억 저장소)</code></pre>
         </p>
 
         <h3>9.1 descriptor 계약 — <code>defineMcpHostAgent&lt;TManifest&gt;</code></h3>
-        <table>
-          <tr><th>결정</th><th>내용과 이유</th></tr>
-          <tr>
-            <td>설치 방법은 5종 유니언 타입</td>
-            <td>문서화된 10개 에이전트 전수 조사에서 도출:
-              <code>cli</code>(명령어) / <code>deeplink</code>(원클릭) /
-              <code>ui-form</code>(호스티드 폼, 설정 파일 없음) /
-              <code>config-file</code>(수동 병합) /
-              <code>manual-url</code>(URL 붙여넣기). 스키마를 2개 사례가
-              아니라 10개 기준으로 먼저 설계해 E2에서의 스키마 개정을
-              방지</td>
-          </tr>
-          <tr>
-            <td>manifest template은 제네릭으로 컴파일 검증</td>
-            <td><code>TManifest</code> 타입 파라미터로 template 반환값이
-              각 클라이언트의 manifest 인터페이스와 일치함을 컴파일러가
-              강제. 골든 바이트 검증(CI)에 도달하기 전에 타입에서 먼저
-              잡힘 — 리뷰에서 <code>as unknown as</code> 캐스트를 걷어낸
-              결과</td>
-          </tr>
-          <tr>
-            <td><code>generateRequiredManifest()</code>는 SDK에 한 번만</td>
-            <td>"manifest가 반드시 있는 클라이언트"의 throw 가드를
-              클라이언트마다 복붙하지 않고 SDK 메서드 하나로 제공.
-              E2에서 에이전트가 늘어도 가드는 늘지 않음</td>
-          </tr>
-          <tr>
-            <td>manifest 외 필드는 아직 선언만 (명시적)</td>
-            <td><code>install</code>·<code>configFile</code>·
-              <code>extras</code>·<code>requirements</code>·
-              <code>postInstall</code>은 E2의 install-doc 렌더러가 소비할
-              때까지 "선언적 문서"임을 인터페이스 주석에 명시 — 읽는
-              사람이 load-bearing으로 오해하지 않게</td>
-          </tr>
-        </table>
 
-        <h3 style="margin-top: 20px;">9.2 capture-core 계약 — 공유 런타임 프리미티브</h3>
-        <table>
-          <tr><th>결정</th><th>내용과 이유</th></tr>
-          <tr>
-            <td>리댁션 정책 2단계</td>
-            <td><strong>capture 경로(기기를 떠나는 텍스트) = 풀 리댁션</strong>
-              (<code>redactSecrets</code>: 개인키·할당문·bearer·CLI
-              플래그·프로바이더 토큰 5종 패턴) — Claude 정책으로 전
-              클라이언트 수렴, E1에서 OpenClaw까지 완료.
-              <strong>recall 경로(검색 질의) = 좁은 할당문 리댁션</strong> —
-              질의를 과하게 지우면 검색 품질이 떨어지므로 D2에서 의도적
-              수렴 예정. "전부 리댁션"이 아니라 경로별 정책이라는 게 결정의
-              핵심</td>
-          </tr>
-          <tr>
-            <td><code>MembaseTransport</code>는 에러를 주입받음</td>
-            <td>토큰 상태·single-flight 갱신(동시 요청이 갱신을 한 번만
-              수행)·401 시 1회 재시도는 core가 소유하되, 에러
-              <em>클래스</em>와 메시지 문구는 각 런타임이 주입 —
-              <code>instanceof</code> 검사와 사용자 향 문구를 깨지 않고
-              전송 계층만 공유</td>
-          </tr>
-          <tr>
-            <td>디스크 스풀은 파라미터 2개짜리 계약</td>
-            <td>상태 디렉터리 + sanitize 함수만 받는 파일락 스풀.
-              Claude처럼 훅이 단명 프로세스인 클라이언트용이며, D3의
-              Cursor 훅(같은 스폰 모델)이 그대로 재사용할 예정</td>
-          </tr>
-          <tr>
-            <td>큐 3종은 일부러 통합하지 않음</td>
-            <td>디스크 스풀(Claude — 단명 스폰 프로세스) / 인메모리 버퍼
-              (OpenClaw — 장수명 게이트웨이) / bounded 스레드 큐(Hermes —
-              Python 호스트)는 우연한 중복이 아니라 실행 모델의 차이.
-              하나의 추상화로 강제하지 않기로 ADR 0002 slice 3에서 명시
-              결정</td>
-          </tr>
-          <tr>
-            <td>골든 벡터가 언어 경계를 묶음</td>
-            <td><code>spec/sanitize-vectors.json</code> — 입력→출력 정답을
-              언어 중립 JSON으로 고정, TS 테스트와 Python 테스트가 같은
-              파일을 소비. 두 언어 구현의 드리프트가 몇 달 뒤 버그가 아니라
-              지금 CI 실패로 나타남</td>
-          </tr>
-        </table>
+        <div class="card">
+          <h3>설치 방법을 5가지 "보기"로 못 박기</h3>
+          <p>
+            <strong>배경.</strong> Membase 공식 문서에는 연결 가능한
+            에이전트가 10개 나열돼 있습니다(ChatGPT, Claude Code, Codex,
+            Cursor, Gemini CLI, VS Code 등). 연결 원리는 전부 같습니다 —
+            "MCP 서버 주소를 알려주고 로그인 한 번". 다른 건 딱 하나,
+            <em>사용자가 그 설치를 어떻게 하느냐</em>뿐입니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 지금 코드로 등록된 에이전트는
+            Cursor·Codex 2개뿐입니다. 이 2개만 보고 설치 방식의 틀(타입)을
+            짰다면 "명령어 실행"과 "원클릭 링크" 두 가지만 만들었을
+            겁니다. 그런데 ChatGPT는 웹 화면의 폼에 입력하는 방식이라
+            로컬에 설정 파일 자체가 없고, Poke도 마찬가지입니다. 나중에
+            이 둘을 추가하는 순간 타입 정의 자체를 뜯어고쳐야 했을
+            겁니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 코드를 쓰기 전에 문서화된 10개
+            에이전트 페이지를 전부 읽고 설치 방식을 분류했더니, 실제로는
+            5가지 패턴으로 다 들어갔습니다:
+          </p>
+          <ul>
+            <li><code>cli</code> — 터미널 명령어 한 줄 (Codex, Claude
+              Code, Gemini CLI)</li>
+            <li><code>deeplink</code> — 대시보드에서 버튼 클릭 한 번
+              (Cursor, VS Code)</li>
+            <li><code>ui-form</code> — 웹 화면의 폼 입력, 로컬 설정 파일
+              없음 (ChatGPT, Poke)</li>
+            <li><code>config-file</code> — 설정 파일을 직접 열어 병합</li>
+            <li><code>manual-url</code> — 서버 주소만 복사해서 붙여넣기
+              (Generic MCP URL)</li>
+          </ul>
+          <p>
+            이 5개를 타입스크립트의 "유니언 타입"으로 못 박았습니다 —
+            이 5가지 문자열 외에는 아예 코드가 컴파일되지 않게 만드는
+            방식입니다. 객관식 문항의 보기를 코드 레벨에서 강제하는
+            셈입니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 실제로 등록하는 건 2개뿐이지만,
+            "보기 설계"는 10개를 다 보고 미리 끝냈습니다. 다음 단계(E2)에서
+            나머지 8개를 추가할 때는 이미 정해진 보기 중 하나를 고르기만
+            하면 되고, 타입을 다시 고칠 일이 없습니다.
+          </p>
+        </div>
 
-        <h3 style="margin-top: 20px;">9.3 훅 등록 모델 — 클라이언트마다 "언제"가 다르다</h3>
+        <div class="card" style="margin-top: 16px;">
+          <h3>manifest 작성 결과를 컴파일 시점에 검증하기</h3>
+          <p>
+            <strong>배경.</strong> 각 클라이언트는 "manifest"라는 자기소개서
+            파일을 만들어야 합니다. 예를 들어 Codex의 manifest는
+            <code>{ name, version, description, ..., mcpServers }</code>처럼
+            필드 구성과 순서가 정확히 정해져 있고, CI가 "지금 커밋된 정답
+            파일과 한 글자도 다르면 실패"로 검사합니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 공통 함수
+            <code>defineMcpHostAgent</code>가 이 manifest를 만들어 주는데,
+            처음 짠 코드는 이런 모양이었습니다:
+          </p>
+<pre><code>function generateCodexPluginManifest(config): CodexPluginManifest {
+  return codexAgent.generateManifest(config) as unknown as CodexPluginManifest;
+  //                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  //                                          "검사하지 말고 이 타입인 걸로 쳐줘"
+}</code></pre>
+          <p>
+            <code>as unknown as X</code>는 타입스크립트에게 "일단 믿어
+            달라"고 우기는 문법입니다. 문제는 실제로 필드를 빼먹거나
+            순서를 바꿔도 컴파일러가 그대로 통과시킨다는 것 — 실수는
+            CI의 정답 비교 단계에 가서야, 혹은 그마저 놓치면 배포된 뒤에야
+            발견됩니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 함수를 "이 타입은 나중에 채워
+            넣을게"라는 뜻의 <strong>제네릭</strong>으로 바꿨습니다:
+          </p>
+<pre><code>function defineMcpHostAgent&lt;TManifest&gt;(descriptor: {
+  manifest: { template: (ctx) =&gt; TManifest }
+})
+
+// 사용하는 쪽에서 실제 타입을 채워 넣음
+defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
+          <p>
+            이러면 template 함수가 <code>CodexPluginManifest</code> 모양이
+            아닌 값을 반환하는 순간 그 자리에서 컴파일 에러가 납니다.
+            우기는 캐스트가 필요 없어집니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 오타나 필드 누락이 몇 달 뒤 CI에서
+            잡히는 게 아니라, 코드를 짜는 그 순간 에디터에서 바로
+            빨간 줄로 보입니다. 검증 시점이 "배포 직전"에서 "타이핑하는
+            중"으로 앞당겨진 것입니다.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>"manifest 필수" 가드는 SDK에 한 번만</h3>
+          <p>
+            <strong>배경.</strong> Codex와 Cursor는 둘 다 manifest가
+            반드시 있어야 하는 클라이언트입니다. 함수가 manifest를 못
+            만들면 (이론상 있을 수 없는 상황이지만) 에러를 던져야 안전한데,
+            이 방어 코드를 두 클라이언트 모두 손으로 복붙해 넣었습니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 지금은 2벌뿐이라 괜찮아 보이지만,
+            E2에서 8개 에이전트가 추가되면 똑같은 방어 코드가 8번 더
+            복사됩니다. 나중에 이 로직을 고쳐야 할 일이 생기면 10곳을
+            찾아다니며 고쳐야 합니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> <code>generateRequiredManifest()</code>
+            라는 메서드를 SDK(공통 라이브러리) 쪽에 딱 한 번 만들어서,
+            모든 클라이언트가 이 메서드 하나만 호출하게 했습니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 앞으로 에이전트가 몇 개가 추가되든
+            방어 코드의 개수는 늘지 않습니다 — 하나가 전부를 커버합니다.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>아직 쓰이지 않는 필드는 "선언뿐"이라고 못 박기</h3>
+          <p>
+            <strong>배경.</strong> descriptor에는 <code>install</code>
+            (설치 방법), <code>configFile</code>(설정 파일 위치),
+            <code>extras</code>(부가 자료), <code>requirements</code>
+            (요구 조건), <code>postInstall</code>(설치 후 할 일) 같은
+            필드가 있습니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 이 필드들은 지금 당장은 아무
+            코드도 읽지 않습니다 — 실제로 설치 문서를 자동 생성하는
+            기능(E2에서 만들 렌더러)이 아직 없기 때문입니다. 주석 없이
+            두면, 나중에 코드를 보는 사람이 "이 필드를 채우면 뭔가 자동으로
+            반영되겠지"라고 오해하고 값을 넣었는데 아무 일도 안 일어나는
+            혼란이 생깁니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 인터페이스 정의 바로 위에 "이
+            필드들은 E2의 렌더러가 생기기 전까지는 선언적 문서일 뿐,
+            아무것도 자동 생성하지 않는다"고 명시적으로 주석을 달았습니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 코드가 아직 못 하는 일을 코드가
+            정직하게 말해 줍니다 — "여기 값을 넣어도 아직은 장식일
+            뿐"이라는 걸 읽는 사람이 바로 알 수 있습니다.
+          </p>
+        </div>
+
+        <h3 style="margin-top: 28px;">9.2 capture-core 계약 — 공유 런타임 프리미티브</h3>
+
+        <div class="card">
+          <h3>리댁션(비밀값 가리기) 정책을 경로별로 다르게</h3>
+          <p>
+            <strong>배경.</strong> 사용자가 AI와 나눈 대화를 "기억"으로
+            저장할 때, 그 안에 API 키나 비밀번호가 섞여 있으면 서버로
+            보내기 전에 가려야 합니다(<code>[REDACTED]</code>로 치환).
+            그런데 리댁션을 적용하는 곳이 두 군데입니다 — ① 대화를
+            기록으로 저장할 때(capture), ② 기억을 찾기 위해 검색어를 보낼
+            때(recall).
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> "다 무조건 심하게 가리면
+            안전하지 않나?"라고 생각하기 쉽지만, 검색어까지 심하게
+            가리면 검색 자체가 망가집니다. 예를 들어 "내 API 토큰 만료
+            문제 어떻게 해결했었지"라는 검색어에서 "토큰"이라는 단어까지
+            지워버리면 검색 품질이 떨어집니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 경로별로 다른 세기의 정책을
+            정했습니다:
+          </p>
+          <ul>
+            <li><strong>capture 경로(기기를 떠나 저장되는 텍스트) = 풀
+              리댁션</strong> — 개인키·할당문(<code>KEY=값</code> 형태)·
+              Bearer 토큰·CLI 비밀 플래그·주요 프로바이더 토큰까지 5종
+              패턴을 전부 적용. Claude가 원래 쓰던 정책이고, 이번에
+              OpenClaw도 이 정책으로 맞췄습니다(E1, PR #12).</li>
+            <li><strong>recall 경로(검색 질의) = 좁은 리댁션</strong> —
+              할당문 패턴만 지웁니다. 검색 품질을 지키려는 의도적 선택이고,
+              완전히 통일하는 작업은 다음 단계(D2)로 미뤄 뒀습니다.</li>
+          </ul>
+          <p>
+            <strong>왜 좋은가.</strong> "무조건 다 가린다"가 아니라
+            "무엇이 어디로 가는지"에 따라 정책 세기를 다르게 둬서, 보안과
+            검색 품질을 둘 다 챙깁니다.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>공유 전송 계층이 "에러 모양"만은 각자에게 맡김</h3>
+          <p>
+            <strong>배경.</strong> Claude와 OpenClaw 런타임 둘 다 Membase
+            서버에 HTTP로 접속하고, 토큰이 만료되면 자동으로 갱신하고,
+            401 에러가 나면 한 번 재시도하는 로직이 필요합니다. 이 로직이
+            두 런타임에 거의 토씨 하나 안 틀리고 복사돼 있었습니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 그대로 두면 나중에 버그를 고칠
+            때 두 곳을 따로 고쳐야 하고, 실제로 리뷰에서 "한쪽에만 있고
+            다른 쪽엔 없는 버그"가 발견된 적이 있습니다. 그런데 완전히
+            하나로 합치기엔 걸림돌이 있었습니다 — 각 런타임이 자기만의
+            에러 클래스(예: Claude는 <code>ClaudeApiError</code>)와
+            사용자에게 보여줄 문구를 갖고 있고, 그걸 <code>instanceof</code>
+            검사로 구분하는 코드가 이미 여기저기 있었습니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 토큰 상태 관리·동시 요청이 갱신을
+            중복으로 하지 않게 막는 것(single-flight)·401 시 재시도까지의
+            "전송 로직"만 <code>MembaseTransport</code>라는 공유 부품으로
+            뽑아내고, 에러를 만드는 함수와 메시지 문구는 각 런타임이
+            "주입"하는 방식으로 남겼습니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 버그가 잦은 어려운 부분(재시도·갱신
+            타이밍)은 한 곳에서만 고치면 되고, 각 런타임 고유의
+            <code>instanceof</code> 검사와 사용자 문구는 그대로 유지됩니다.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>디스크 스풀은 "상태 폴더 + 리댁션 함수" 2개만 받음</h3>
+          <p>
+            <strong>배경.</strong> Claude Code의 훅은 이벤트가 생길 때마다
+            새 프로세스를 짧게 띄웠다 끕니다(스폰). 그 짧은 순간 안에
+            서버로 전송을 못 마치면 데이터를 잃어버리니, 로컬 디스크에
+            먼저 쌓아 두고 나중에 순서대로 보내는 "스풀"이 필요합니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> 이 스풀을 capture-core로 뽑아내면서
+            받는 입력을 딱 2개로 제한했습니다 — 어디에 쌓을지(상태
+            디렉터리)와 저장 전에 어떻게 걸러낼지(sanitize 함수). 그 외의
+            것(무엇을 언제 보낼지 등)은 스풀이 몰라도 되게 설계했습니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 입력이 단순해서 다음 사용처에
+            바로 재사용할 수 있습니다 — Cursor도 Claude와 같은 "짧게
+            떴다 꺼지는 프로세스" 모델이라, D3에서 훅을 추가할 때 이
+            스풀을 그대로 갖다 쓰면 됩니다.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>대기열(큐) 3종을 일부러 하나로 합치지 않음</h3>
+          <p>
+            <strong>배경.</strong> 캡처한 내용을 서버로 보내기 전 잠깐
+            대기시키는 큐가 런타임마다 다르게 구현돼 있습니다 — Claude는
+            디스크 스풀, OpenClaw는 인메모리 버퍼, Hermes는 개수 제한이
+            있는 스레드 큐.
+          </p>
+          <p>
+            <strong>왜 하나로 안 합쳤나.</strong> 겉보기엔 "중복 코드
+            3벌"처럼 보이지만, 실제로는 각 런타임이 처한 상황이 다릅니다.
+            Claude의 훅 프로세스는 몇 초 만에 죽으니 디스크에 남겨야
+            하고, OpenClaw의 게이트웨이는 몇 주씩 계속 켜져 있으니 메모리
+            버퍼로 충분하고, Hermes는 파이썬 스레드 모델에 맞는 큐가
+            따로 있습니다. 이 차이를 무시하고 하나의 추상화로 억지로
+            묶으면, 오히려 각자에게 안 맞는 타협안이 나옵니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> ADR 0002(설계 결정 문서)에 "이 3개는
+            우연한 중복이 아니라 의도된 차이"라고 명시적으로 적어 뒀습니다
+            — 나중에 누군가 "이거 왜 안 합쳤지?"라고 묻지 않도록.
+          </p>
+        </div>
+
+        <div class="card" style="margin-top: 16px;">
+          <h3>골든 벡터로 TS와 Python 구현을 묶기</h3>
+          <p>
+            <strong>배경.</strong> 리댁션 로직은 TypeScript(Claude,
+            OpenClaw)와 Python(Hermes) 두 언어로 각각 구현돼 있습니다.
+            "같은 입력에 같은 출력이 나와야 한다"는 게 당연한 요구지만,
+            사람이 두 언어 코드를 매번 눈으로 비교하며 맞추는 건 실수가
+            나기 쉽습니다.
+          </p>
+          <p>
+            <strong>고친 방법.</strong> <code>spec/sanitize-vectors.json</code>
+            라는 파일에 "이 문장을 넣으면 이 결과가 나와야 한다"는 정답
+            목록을 언어와 무관한 JSON으로 고정해 뒀습니다. TS 테스트와
+            Python 테스트가 각자 이 같은 파일을 읽어서 검증합니다.
+          </p>
+          <p>
+            <strong>왜 좋은가.</strong> 두 언어 구현이 조금씩 어긋나기
+            시작해도, 몇 달 뒤 사용자가 겪는 이상한 버그로 나타나는 게
+            아니라 지금 당장 CI 테스트 실패로 드러납니다.
+          </p>
+        </div>
+
+        <h3 style="margin-top: 28px;">9.3 훅 등록 모델 — 클라이언트마다 "언제"가 다르다</h3>
+        <p>
+          공통 로직(capture-core)은 같지만, 그 로직을 <em>언제</em>
+          실행할지 결정하는 방식은 클라이언트마다 완전히 다릅니다 — 각
+          호스트 프로그램이 원래 그렇게 설계돼 있기 때문입니다.
+        </p>
         <table>
           <tr><th>클라이언트</th><th>등록 방식</th><th>이벤트와 역할</th></tr>
           <tr>
@@ -942,6 +1074,14 @@ private memory engine (실제 기억 저장소)</code></pre>
               이벤트 이름·페이로드 변환만 하는 어댑터</td>
           </tr>
         </table>
+        <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
+          <strong>OpenClaw 함정 하나 더 설명:</strong> 게이트웨이 소프트웨어가
+          업데이트되면서, "이 플러그인이 대화 내용에 접근해도 된다"는
+          허락을 명시적으로 받지 않으면 캡처 훅이 아무 에러 메시지도 없이
+          그냥 조용히 꺼져 있는 정책이 생겼습니다. 실제로 오늘 라이브
+          검증 중 이 문제를 발견해서(로그를 뒤져서 원인을 찾음), 설정에
+          허락 항목을 추가하고 설치 문서에도 남겼습니다.
+        </p>
 
         <h3 style="margin-top: 20px;">9.4 어댑터 계약 — <code>ClientAdapter</code></h3>
         <p>
