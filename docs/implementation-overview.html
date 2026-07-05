@@ -401,8 +401,15 @@
       </section>
 
       <section>
-        <h2>2. 핵심 설계 — ADR 0001</h2>
-        <p>설계 결정은 두 가지 원칙으로 요약됩니다.</p>
+        <h2>2. 핵심 설계 — ADR 0001·0002·0003</h2>
+        <p>
+          이 레포의 구조를 결정한 세 개의 ADR(Architecture Decision
+          Record)입니다. 0001이 처음에 전체 뼈대를 정했고, 0002·0003은
+          그 뼈대 위에서 나중에 생긴 두 가지 구체적 문제(중복 코드,
+          에이전트 개수 폭증)를 각각 해결합니다.
+        </p>
+
+        <h3>ADR 0001 — 계층 구조와 공개 경계</h3>
         <div class="grid">
           <div class="card">
             <h3>계층 구조</h3>
@@ -438,6 +445,83 @@ private memory engine (실제 기억 저장소)</code></pre>
               위반 시 검사를 실패시켜서 지킵니다.
             </p>
           </div>
+        </div>
+
+        <h3 style="margin-top: 24px;">ADR 0002 — 공유 capture-core</h3>
+        <div class="card">
+          <p>
+            <strong>배경.</strong> 옛 레포 4개를 통합하면서 Claude·
+            OpenClaw·Hermes 런타임을 전부 복사해 왔는데, 세 런타임에
+            거의 같은 로직이 3벌씩 있었습니다 — 비밀값 필터링, 캡처
+            큐/재시도, HTTP+OAuth 클라이언트, recall 조립.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 실제로 PR 리뷰 중에 "같은
+            종류의 버그가 한 벌에만 있고 다른 벌엔 없는" 사례가
+            발견됐습니다 — 셋 중 하나만 고쳐진 채 나머지 둘은 여전히
+            버그를 안고 있었던 것입니다. 코드가 3벌이면 버그도 3벌이
+            될 수 있다는 게 실측으로 확인된 셈입니다.
+          </p>
+          <p><strong>고친 방법 — 세 가지 결정:</strong></p>
+          <ul>
+            <li><strong>"무엇을"과 "언제"를 분리</strong> — 공통 로직은
+              <code>packages/capture-core</code> 하나로 모으고, 클라이언트별
+              어댑터는 "언제 실행되는지"(훅 이벤트 이름·페이로드 변환)만
+              담당하게 했습니다. 어댑터끼리 옆으로 합치지 않고, 공통 행동은
+              항상 core로 내립니다.</li>
+            <li><strong>언어 정책</strong> — 완전한 단일 언어는 불가능합니다
+              (OpenClaw는 TS를, Hermes는 Python을 프로세스 안에서 직접
+              로드하는 구조라서). TS를 서브프로세스로 감싸는 방법과 Python
+              전체를 MCP 전용으로 강등하는 방법을 검토했지만 둘 다 기각하고,
+              <strong>TS core 1개 + 최소한의 Python shim 1개 + 언어 중립
+              스펙(골든 벡터)</strong>으로 확정했습니다.</li>
+            <li><strong>서버로 올리기가 가장 강한 통합</strong> — 사용자
+              기기에서 꼭 돌 필요가 없는 것(recall/context 조립, 캡처
+              정규화)은 아예 Membase 서버로 옮겨서 언어 문제 자체를
+              없앱니다. 단 <em>sanitize</em>(비밀값은 기기를 떠나기 전에
+              걸러야 함)와 <em>오프라인 스풀</em>은 정의상 서버로 못
+              올립니다 — 기기가 오프라인이면 서버가 대신 버퍼링해 줄 수
+              없기 때문입니다.</li>
+          </ul>
+        </div>
+
+        <h3 style="margin-top: 24px;">ADR 0003 — 에이전트는 코드가 아니라 descriptor</h3>
+        <div class="card">
+          <p>
+            <strong>배경.</strong> Membase 공식 문서는 커넥터를 "Agents
+            10종 + 런타임 2종(OpenClaw·Hermes)"으로 분류합니다. Agents
+            10종은 전부 "MCP 호스트를 <code>mcp.membase.so</code>에 연결
+            + OAuth"라는 같은 기능이고, 다른 건 설정 파일 위치·형식 같은
+            데이터뿐입니다.
+          </p>
+          <p>
+            <strong>문제였던 것.</strong> 그런데 레포는 에이전트마다
+            ~122줄짜리 어댑터를 손으로 쓰고 있었습니다. 실제로 cursor와
+            codex 두 어댑터를 줄 단위로 비교해 보니 차이는 81줄뿐이었고,
+            그 81줄도 전부 "동작"이 아니라 "데이터"였습니다. 이 패턴대로
+            나머지 8개 에이전트를 추가하면 사실상 똑같은 코드를 10벌
+            손으로 베끼는 셈이 됩니다.
+          </p>
+          <p><strong>고친 방법 — 네 가지 결정:</strong></p>
+          <ul>
+            <li><strong>원칙 정련</strong> — "행동이 다르면 코드로
+              분리하고, 데이터만 다르면 데이터로 축약한다." 런타임 3종
+              (Claude·OpenClaw·Hermes)은 ADR 0001/0002대로 코드를
+              유지하고, 설정 전용 에이전트(나머지 7개)는 공통 구현 1개 +
+              descriptor 데이터로 처리합니다.</li>
+            <li><code>defineMcpHostAgent(descriptor)</code>를 connector-sdk에
+              추가 — descriptor 하나만 넘기면 manifest·설정·설치 문서·
+              스모크 테스트 선언까지 전부 자동으로 만들어 줍니다.</li>
+            <li><strong>커버리지 목표</strong> — 문서화된 10개 에이전트
+              전부를 이 방식으로 커버합니다. 새 에이전트를 추가하는 작업이
+              "새 구현 작성"에서 "수십 줄짜리 데이터 채우기"로 바뀝니다.</li>
+            <li><strong>대량 이름 변경 없음</strong> — 디렉터리는
+              <code>clients/&lt;id&gt;</code> 구조를 그대로 유지합니다.
+              "이 에이전트가 코드 구현인지 데이터 선언인지"는 폴더를
+              옮겨서 표현하지 않고, <code>runtime/</code> 폴더가 있는지
+              없는지로 표현합니다. Claude Code는 의도적 하이브리드입니다
+              (descriptor로 설정을 만들지만 runtime은 그대로 유지).</li>
+          </ul>
         </div>
       </section>
 
@@ -658,73 +742,43 @@ private memory engine (실제 기억 저장소)</code></pre>
       </section>
 
       <section>
-        <h2>7. 런칭 이후 로드맵 — ADR 0002 / 0003</h2>
+        <h2>7. 런칭 이후 로드맵 — ADR 0002 / 0003 진행 상황</h2>
+        <p>
+          ADR 0002·0003이 <em>무엇을, 왜</em> 결정했는지는 2절에 있습니다.
+          여기는 <em>지금 어디까지 진행됐는지</em>만 다룹니다.
+        </p>
         <div class="grid">
           <div class="card">
-            <h3>ADR 0002 — 공유 capture-core (Group D)</h3>
+            <h3><span class="pill done">D1</span> ADR 0002 — 공유 capture-core</h3>
             <p>
-              Group B/C로 복사해 온 3개 런타임(Claude·OpenClaw는 TS,
-              Hermes는 Python)에는 같은 로직이 3벌 존재합니다 — 비밀값
-              필터링, 캡처 큐/재시도, HTTP+OAuth 클라이언트, recall 조립.
-              PR #3 리뷰에서 실제로 "같은 종류의 버그가 한 벌에만 있고 다른
-              벌엔 없는" 비용이 확인됐습니다. 결정:
+              <strong>사실상 완료</strong> — slice 1~3이 전부 머지됐습니다:
+              ① sanitize + 골든 벡터, ② <code>MembaseTransport</code>
+              (OAuth 갱신·재시도), ③ 디스크 캡처 스풀. Claude·OpenClaw
+              런타임이 공유 core를 import하고, 기존 테스트는 무변경
+              통과합니다. 캡처 경로 리댁션 수렴은 원래 D2 계획이었지만
+              보안을 우선해 E1에서 조기 반영했습니다. 남은 D1 항목은
+              capture kinds 하나뿐입니다.
             </p>
-            <ul>
-              <li><strong>"무엇을"과 "언제"를 분리</strong> — 공통 로직은
-                <code>packages/capture-core</code> 하나로, 클라이언트별
-                어댑터는 "언제 실행되는지"(훅 이벤트 이름·페이로드 변환)만
-                담당. 어댑터끼리 옆으로 합치지 않고, 공통 행동은 항상 core로
-                내림.</li>
-              <li><strong>언어 정책</strong> — 완전한 단일 언어는 불가능
-                (OpenClaw는 TS를, Hermes는 Python을 프로세스 안에서 직접
-                로드). TS 서브프로세스 shim·MCP 전용 강등·Python 단일화를
-                모두 검토 후 기각하고, <strong>TS core 1개 + 최소 Python
-                shim 1개 + 언어 중립 스펙(골든 벡터)</strong>으로 확정.</li>
-              <li><strong>서버로 올리기가 가장 강한 통합</strong> — 사용자
-                기기에서 돌 필요 없는 것(recall/context 조립, 캡처 정규화)은
-                Membase 서버로 이전. 단 <em>sanitize</em>(비밀값은 기기를
-                떠나기 전에 걸러야 함)와 <em>오프라인 스풀</em>은 절대 서버로
-                못 올림.</li>
-            </ul>
-            <p>진행: <strong>D1 사실상 완료</strong> (slice 1~3 머지,
-              capture kinds만 잔여). 캡처 경로 리댁션 수렴은 원래 D2
-              계획이었으나 보안 우선으로 E1에서 조기 반영. 남은 단계:
-              D1 잔여 → D2(골든 벡터에 Hermes 연결 + shim 축소 + recall
-              경로 리댁션 수렴) → D3(Cursor·Codex 훅 어댑터 — 자동
-              캡처/리콜이 5개 클라이언트 전부에 도달).</p>
+            <p style="margin-top: 8px;">
+              <strong>다음:</strong> D1 잔여 → D2(골든 벡터에 Hermes 연결 +
+              Python shim 축소 + recall 경로 리댁션 수렴) → D3(Cursor·Codex
+              훅 어댑터 신설 — 자동 캡처/리콜이 5개 클라이언트 전부에 도달).
+            </p>
           </div>
           <div class="card">
-            <h3>ADR 0003 — 에이전트는 코드가 아니라 descriptor (Group E)</h3>
+            <h3><span class="pill done">E1</span> ADR 0003 — descriptor 전환</h3>
             <p>
-              공식 문서(docs.membase.so)에 커넥터는 "Agents 10종 + 런타임
-              2종(OpenClaw·Hermes)"으로 분류되는데, Agents 10종은 전부
-              "MCP 호스트를 <code>mcp.membase.so</code>에 연결 + OAuth"라는
-              <em>같은 기능</em>이고 차이는 설정 파일 위치·형식 같은 데이터뿐.
-              그런데 레포는 에이전트마다 ~122줄짜리 어댑터를 손으로 쓰고
-              있었고(cursor·codex 두 어댑터의 실측 차이는 81줄, 전부 데이터),
-              이대로면 10벌 복사가 됩니다. 결정:
+              <strong>완료</strong> — <code>defineMcpHostAgent</code>
+              구현 + cursor/codex를 descriptor로 이행(골든 바이트
+              동일성을 CI가 증명). 리뷰 2라운드를 거쳐 제네릭 타입
+              강화·죽은 코드 제거 등 수정도 반영했습니다.
             </p>
-            <ul>
-              <li><strong>원칙 정련</strong> — "행동이 다르면 코드로 분리,
-                데이터만 다르면 데이터로 축약". 런타임 3종은 ADR 0001/0002대로
-                코드 유지, 설정 전용 에이전트는 공통 구현 1개 +
-                descriptor.</li>
-              <li><code>defineMcpHostAgent(descriptor)</code>를 connector-sdk에
-                추가 — descriptor 하나로 manifest·설정·설치 문서·스모크 선언을
-                전부 렌더링.</li>
-              <li><strong>커버리지 목표</strong> — 문서화된 10개 에이전트
-                전부(현재 2개 → ChatGPT, Gemini CLI, VS Code 등 8개 추가).
-                각각 수십 줄짜리 descriptor + e2e 설정 항목이면 끝.</li>
-              <li><strong>대량 이름 변경 없음</strong> — 디렉터리는
-                <code>clients/&lt;id&gt;</code> 유지. 계층은 폴더 이동이 아니라
-                "runtime/ 폴더가 있느냐"로 표현. Claude는 의도적 하이브리드
-                (descriptor 어댑터 + runtime 유지).</li>
-            </ul>
-            <p>진행: <strong>E1 완료</strong> (PR #12 — cursor/codex
-              이행, 골든 바이트 동일성 CI 증명). 남은 단계: E2(나머지
-              에이전트 descriptor 등록 + install-doc 렌더러 — 지금은
-              선언만 있는 descriptor 필드들을 실제로 소비하게 만드는
-              단계).</p>
+            <p style="margin-top: 8px;">
+              <strong>다음:</strong> E2 — 나머지 8개 에이전트를 descriptor로
+              등록 + install-doc 렌더러 신설(지금은 선언만 있는
+              <code>install</code>·<code>configFile</code> 등 descriptor
+              필드들을 실제로 소비하게 만드는 단계).
+            </p>
           </div>
         </div>
       </section>
