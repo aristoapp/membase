@@ -1,3 +1,4 @@
+import { MembaseTransport } from "@membase/capture-core";
 import pkg from "../package.json" with { type: "json" };
 import type {
   EpisodeBundle,
@@ -22,18 +23,17 @@ export interface MembaseClientOptions {
   timeoutMs?: number;
 }
 
+// Transport (token state, single-flight refresh, retry-on-401) lives in
+// @membase/capture-core (ADR 0002 / D1 slice 2); this class keeps the
+// OpenClaw product API surface, text-first response parsing, and debug
+// logging behavior.
 export class MembaseClient {
-  private accessToken: string;
-  private refreshToken: string;
-  private clientId: string;
-  private refreshPromise: Promise<void> | null = null;
+  private readonly transport: MembaseTransport;
   private readonly debug: boolean;
   private readonly logger: Logger | null;
-  private readonly timeoutMs: number;
-  private readonly onTokenRefresh?: TokenRefreshCallback;
 
   constructor(
-    private readonly apiUrl: string,
+    apiUrl: string,
     auth: {
       accessToken: string;
       refreshToken: string;
@@ -41,13 +41,33 @@ export class MembaseClient {
     },
     opts?: MembaseClientOptions,
   ) {
-    this.accessToken = auth.accessToken;
-    this.refreshToken = auth.refreshToken;
-    this.clientId = auth.clientId;
-    this.onTokenRefresh = opts?.onTokenRefresh;
     this.debug = opts?.debug ?? false;
     this.logger = opts?.logger ?? null;
-    this.timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.transport = new MembaseTransport({
+      apiUrl,
+      tokens: {
+        accessToken: auth.accessToken,
+        refreshToken: auth.refreshToken,
+        clientId: auth.clientId,
+      },
+      userAgent: USER_AGENT,
+      timeoutMs: opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      log: (msg) => this.log(msg),
+      createError: (message, status, body) =>
+        new MembaseApiError(message, status, body),
+      notAuthenticatedMessage:
+        "Session expired. Run 'openclaw membase login' to re-authenticate.",
+      refreshFailedMessage: (status) =>
+        `Token refresh failed (${status}). Run 'openclaw membase login' to re-authenticate.`,
+      apiErrorMessage: (status, text) =>
+        `Membase API error (${status}): ${text}`,
+      onTokenRefresh: (tokens) => {
+        opts?.onTokenRefresh?.({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        });
+      },
+    });
   }
 
   private log(msg: string, ...args: unknown[]) {
@@ -56,74 +76,8 @@ export class MembaseClient {
     }
   }
 
-  private async refreshAccessToken(): Promise<void> {
-    if (this.refreshPromise) return this.refreshPromise;
-    this.refreshPromise = this.doRefresh().finally(() => {
-      this.refreshPromise = null;
-    });
-    return this.refreshPromise;
-  }
-
-  private async doRefresh(): Promise<void> {
-    if (!this.refreshToken || !this.clientId) {
-      throw new MembaseApiError(
-        "Session expired. Run 'openclaw membase login' to re-authenticate.",
-        401,
-      );
-    }
-    this.log("refreshing access token");
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: this.refreshToken,
-      client_id: this.clientId,
-    });
-    const response = await fetch(`${this.apiUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT,
-      },
-      body: body.toString(),
-      signal: AbortSignal.timeout(this.timeoutMs),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError(
-        `Token refresh failed (${response.status}). Run 'openclaw membase login' to re-authenticate.`,
-        response.status,
-        text,
-      );
-    }
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-    };
-    this.accessToken = data.access_token;
-    if (data.refresh_token) {
-      this.refreshToken = data.refresh_token;
-    }
-    this.log("token refreshed successfully");
-    this.onTokenRefresh?.({
-      accessToken: this.accessToken,
-      refreshToken: this.refreshToken,
-    });
-  }
-
   isAuthenticated(): boolean {
-    return Boolean(this.accessToken && this.clientId);
-  }
-
-  private doFetch(path: string, options: RequestInit = {}): Promise<Response> {
-    return fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.accessToken}`,
-        "User-Agent": USER_AGENT,
-        ...(options.headers ?? {}),
-      },
-    });
+    return this.transport.isAuthenticated();
   }
 
   private async request<T>(
@@ -152,28 +106,11 @@ export class MembaseClient {
     await response.body?.cancel();
   }
 
-  private async authorizedFetch(
+  private authorizedFetch(
     path: string,
     options: RequestInit = {},
   ): Promise<Response> {
-    this.log(`${options.method ?? "GET"} ${path}`);
-    let response = await this.doFetch(path, options);
-
-    if (response.status === 401 && this.refreshToken) {
-      await response.body?.cancel();
-      await this.refreshAccessToken();
-      response = await this.doFetch(path, options);
-    }
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError(
-        `Membase API error (${response.status}): ${text}`,
-        response.status,
-        text,
-      );
-    }
-    return response;
+    return this.transport.authorizedFetch(path, options);
   }
 
   async search(

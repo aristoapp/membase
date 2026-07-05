@@ -1,10 +1,9 @@
+// Transport (token state, single-flight refresh, retry-on-401) lives in
+// @membase/capture-core (ADR 0002 / D1 slice 2); this class keeps the Claude
+// product API surface, response parsing, and TokenState persistence shape.
+import { MembaseTransport } from "@membase/capture-core";
 import { MEMORY_SOURCE, USER_AGENT } from "../constants.js";
-import type {
-  EpisodeBundle,
-  MembaseApiError as MembaseApiErrorType,
-  TokenState,
-  WikiDocument,
-} from "../types.js";
+import type { EpisodeBundle, TokenState, WikiDocument } from "../types.js";
 import { MembaseApiError } from "../types.js";
 
 export interface ClientOptions {
@@ -16,109 +15,41 @@ export interface ClientOptions {
 
 export class MembaseClient {
   private tokens: TokenState;
-  private refreshPromise: Promise<void> | null = null;
-  private readonly apiUrl: string;
-  private readonly timeoutMs: number;
-  private readonly onTokenRefresh?: (tokens: TokenState) => void;
+  private readonly transport: MembaseTransport;
 
   constructor(options: ClientOptions) {
-    this.apiUrl = options.apiUrl.replace(/\/$/, "");
     this.tokens = options.tokens;
-    this.timeoutMs = options.timeoutMs ?? 15_000;
-    this.onTokenRefresh = options.onTokenRefresh;
-  }
-
-  private async doRefresh(): Promise<void> {
-    if (!this.tokens.refreshToken || !this.tokens.clientId) {
-      throw new MembaseApiError("Not authenticated", 401);
-    }
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: this.tokens.refreshToken,
-      client_id: this.tokens.clientId,
-    });
-    const response = await fetch(`${this.apiUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT,
+    this.transport = new MembaseTransport({
+      apiUrl: options.apiUrl,
+      tokens: {
+        accessToken: options.tokens.accessToken,
+        refreshToken: options.tokens.refreshToken,
+        clientId: options.tokens.clientId,
+        expiresAt: options.tokens.expiresAt,
+        scope: options.tokens.scope,
       },
-      body,
-      signal: AbortSignal.timeout(this.timeoutMs),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError("Token refresh failed", response.status, text);
-    }
-    const data = (await response.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      expires_in?: number;
-      scope?: string;
-    };
-    this.tokens = {
-      ...this.tokens,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
-      expiresAt: data.expires_in
-        ? Math.floor(Date.now() / 1000) + data.expires_in
-        : undefined,
-      scope: data.scope ?? this.tokens.scope,
-    };
-    this.onTokenRefresh?.(this.tokens);
-  }
-
-  private async refreshAccessToken(): Promise<void> {
-    if (!this.refreshPromise) {
-      this.refreshPromise = this.doRefresh().finally(() => {
-        this.refreshPromise = null;
-      });
-    }
-    await this.refreshPromise;
-  }
-
-  private async rawFetch(
-    path: string,
-    options: RequestInit = {},
-  ): Promise<Response> {
-    return fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.tokens.accessToken}`,
-        "User-Agent": USER_AGENT,
-        ...(options.headers ?? {}),
+      userAgent: USER_AGENT,
+      timeoutMs: options.timeoutMs,
+      createError: (message, status, body) =>
+        new MembaseApiError(message, status, body),
+      onTokenRefresh: (tokens) => {
+        this.tokens = {
+          ...this.tokens,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+          scope: tokens.scope,
+        };
+        options.onTokenRefresh?.(this.tokens);
       },
     });
-  }
-
-  private async authorizedFetch(
-    path: string,
-    options: RequestInit = {},
-  ): Promise<Response> {
-    let response = await this.rawFetch(path, options);
-    if (response.status === 401 && this.tokens.refreshToken) {
-      await response.body?.cancel();
-      await this.refreshAccessToken();
-      response = await this.rawFetch(path, options);
-    }
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError(
-        `Membase API error ${response.status}`,
-        response.status,
-        text,
-      ) as MembaseApiErrorType;
-    }
-    return response;
   }
 
   private async request<T>(
     path: string,
     options: RequestInit = {},
   ): Promise<T> {
-    const response = await this.authorizedFetch(path, options);
+    const response = await this.transport.authorizedFetch(path, options);
     if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
