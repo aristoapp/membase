@@ -47,6 +47,8 @@ jobs:
 
       - run: pnpm claude:runtime-test
 
+      - run: pnpm capture-core:test
+
       - run: pnpm smoke:execute
 
   e2e-tier1:

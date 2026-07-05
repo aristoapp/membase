@@ -1,13 +1,19 @@
-const CASUAL_PATTERNS = [
-  /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
-  /^(good\s*(morning|afternoon|evening|night))\b/,
-  /^(thanks|thank you|thx|ty)\b/,
-  /^(ok|okay|sure|got it|sounds good|cool|nice|great|awesome|perfect)\b/,
-  /^(bye|goodbye|see you|later|gn|ttyl)\b/,
-  /^(yes|no|yep|nope|yeah|nah)\b/,
-  /^(lol|lmao|haha|heh)\b/,
-  /^(how are you|what's up|whats up|wassup)\b/,
-];
+// OpenClaw-runtime text utilities, now composed from @membase/capture-core
+// (ADR 0002 / D1). Public API and behavior are unchanged. OpenClaw-specific
+// pieces stay here: the gateway timestamp prefix, heartbeat noise lines, the
+// larger memory-keyword list, and event extraction helpers.
+//
+// Divergence kept intact for D1 (reconcile in D2): unlike the Claude runtime,
+// sanitizeMembaseText here does NOT redact secrets on the capture path — only
+// the recall-query path redacts assignments (basic keyword set).
+import {
+  buildSecretAssignmentRe,
+  clampRecallQuery,
+  isCasualChat as coreIsCasualChat,
+  normalizeLines,
+  SECRET_ASSIGNMENT_KEYWORDS_BASIC,
+  stripContextBlocks,
+} from "@membase/capture-core";
 
 const MEMORY_KEYWORDS = [
   "remember",
@@ -42,11 +48,6 @@ const MEMORY_KEYWORDS = [
   "error",
 ];
 
-const METADATA_BLOCK_RE =
-  /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
-const MEMBASE_CONTEXT_BLOCK_RE =
-  /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
-const SIMPLE_TAG_RE = /<\/?final>/gi;
 const HEARTBEAT_NOISE_LINE_PATTERNS = [
   /read heartbeat\.md if it exists \(workspace context\)/i,
   /when reading heartbeat\.md, use workspace file/i,
@@ -57,25 +58,17 @@ const HEARTBEAT_NOISE_LINE_PATTERNS = [
   /^agent main \| session main \(heartbeat\)/i,
   /^[-─]{8,}$/i,
 ];
-const SECRET_ASSIGNMENT_RE =
-  /\b([A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*=\s*[^\s`]+/gi;
+
+const SECRET_ASSIGNMENT_RE = buildSecretAssignmentRe(
+  SECRET_ASSIGNMENT_KEYWORDS_BASIC,
+);
+
 // OpenClaw prepends a timestamp to every user message, e.g. "[Mon 2026-03-23 15:19 GMT+9] "
 const OPENCLAW_TIMESTAMP_PREFIX_RE =
   /^\[[A-Za-z]{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+GMT[+-]\d+\]\s*/gim;
-function hasMemoryKeywords(text: string): boolean {
-  return MEMORY_KEYWORDS.some((kw) => text.includes(kw));
-}
 
 export function isCasualChat(text: string): boolean {
-  const lower = text.toLowerCase().trim();
-
-  if (hasMemoryKeywords(lower) || lower.includes("?")) return false;
-
-  for (const pattern of CASUAL_PATTERNS) {
-    if (pattern.test(lower)) return true;
-  }
-
-  return false;
+  return coreIsCasualChat(text, MEMORY_KEYWORDS);
 }
 
 export function extractTextContent(content: unknown): string {
@@ -90,30 +83,20 @@ export function extractTextContent(content: unknown): string {
 }
 
 export function sanitizeMembaseText(raw: string): string {
-  let cleaned = raw;
-  cleaned = cleaned.replace(OPENCLAW_TIMESTAMP_PREFIX_RE, " ");
-  cleaned = cleaned.replace(MEMBASE_CONTEXT_BLOCK_RE, " ");
-  cleaned = cleaned.replace(METADATA_BLOCK_RE, " ");
-  cleaned = cleaned.replace(SIMPLE_TAG_RE, " ");
-
-  const lines = cleaned
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter(
-      (line) =>
-        !HEARTBEAT_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line)),
-    );
-
-  return lines.join("\n").trim();
+  const cleaned = stripContextBlocks(
+    raw.replace(OPENCLAW_TIMESTAMP_PREFIX_RE, " "),
+  );
+  return normalizeLines(cleaned, (line) =>
+    HEARTBEAT_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line)),
+  );
 }
 
 export function sanitizeRecallQuery(raw: string): string {
-  let cleaned = sanitizeMembaseText(raw);
-  cleaned = cleaned.replace(SECRET_ASSIGNMENT_RE, "$1=[REDACTED]");
-  cleaned = cleaned.replace(/```[\s\S]*?```/g, " ");
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return cleaned.slice(0, 240);
+  const cleaned = sanitizeMembaseText(raw).replace(
+    SECRET_ASSIGNMENT_RE,
+    "$1=[REDACTED]",
+  );
+  return clampRecallQuery(cleaned);
 }
 
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {

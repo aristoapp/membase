@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw",
-    "check": "pnpm generated-artifacts && pnpm core:contract && node smoke/client-smoke.mjs && pnpm smoke:live:preflight && pnpm runtime-decision-ledger && pnpm launch-handoff && pnpm packaging-action-parity && pnpm version-parity && pnpm claude:plugin-parity && pnpm claude:native-artifacts && pnpm claude:runtime-typecheck && pnpm cursor:transport-parity && pnpm cursor:native-artifacts && pnpm hermes:python-parity && pnpm hermes:native-artifacts && pnpm openclaw:native-artifacts && pnpm openclaw:native-parity && pnpm openclaw:runtime-typecheck && pnpm secret-hygiene && pnpm public-surface && pnpm review-readiness",
+    "check": "pnpm generated-artifacts && pnpm core:contract && pnpm capture-core:typecheck && node smoke/client-smoke.mjs && pnpm smoke:live:preflight && pnpm runtime-decision-ledger && pnpm launch-handoff && pnpm packaging-action-parity && pnpm version-parity && pnpm claude:plugin-parity && pnpm claude:native-artifacts && pnpm claude:runtime-typecheck && pnpm cursor:transport-parity && pnpm cursor:native-artifacts && pnpm hermes:python-parity && pnpm hermes:native-artifacts && pnpm openclaw:native-artifacts && pnpm openclaw:native-parity && pnpm openclaw:runtime-typecheck && pnpm secret-hygiene && pnpm public-surface && pnpm review-readiness",
     "claude:plugin-parity": "node scripts/check-claude-plugin-parity.mjs",
     "claude:native-artifacts": "node scripts/check-claude-native-artifacts.mjs",
     "claude:runtime-typecheck": "pnpm --filter @membase/claude-membase-runtime typecheck",
@@ -40,7 +40,9 @@
     "smoke:execute": "pnpm typecheck && node smoke/client-smoke.mjs --execute",
     "smoke:live:preflight": "node smoke/live-smoke-preflight.mjs",
     "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw --pretty false",
-    "version-parity": "node scripts/check-version-parity.mjs"
+    "version-parity": "node scripts/check-version-parity.mjs",
+    "capture-core:typecheck": "pnpm --filter @membase/capture-core typecheck",
+    "capture-core:test": "cd packages/capture-core && bun test"
   },
   "devDependencies": {
     "typescript": "^6.0.3"
