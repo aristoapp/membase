@@ -1947,3 +1947,11 @@ Next step:
 
 - Remaining launch work is unchanged: port outstanding marketplace assets, make
   the repo public, then execute old-repo deprecation (deferred per the user).
+
+## 2026-07-05 — Retired Codex scheduled automation loop
+
+- Removed `automation/run-loop.sh`, `automation/codex-prompt.md`, and
+  `automation/com.aristo.membase-plugin-mcp-loop.plist`.
+- All implementation work is now interactive (Cursor / Claude Code). Use git
+  branches, conventional commits, and PRs; do not append new scaffold-style
+  entries to this file unless documenting a major milestone.
