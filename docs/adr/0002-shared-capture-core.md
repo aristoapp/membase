@@ -91,6 +91,11 @@ surfacing as a per-client bug months later. Seed the sanitize vectors from
 - **D1** — extract `packages/capture-core` (TS) from the Claude + OpenClaw
   runtimes: client/OAuth, sanitize, spool/buffer, capture kinds. Both runtimes
   import it; their bun tests keep passing unchanged. No behavior change.
+  - slice 1 (sanitize + golden vectors): DONE — PR #7, 2026-07-05. Observed
+    divergence recorded for D2: the OpenClaw capture path does not redact
+    secrets (Claude's does); reconcile deliberately toward the Claude policy.
+  - slice 2 (MembaseClient + OAuth): next.
+  - slice 3 (spool/buffer + capture kinds): after slice 2.
 - **D2** — golden vector spec + wire Hermes's Python tests to the vectors;
   shrink `membase_hermes` to the shim surface (server-side lifting lands here
   as membase API work, tracked separately in the membase repo).

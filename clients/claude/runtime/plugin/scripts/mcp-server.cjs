@@ -30955,6 +30955,136 @@ var StdioServerTransport = class {
   }
 };
 
+// ../../../packages/capture-core/src/index.ts
+var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
+  "API_KEY",
+  "TOKEN",
+  "SECRET",
+  "PASSWORD",
+  "PRIVATE_KEY"
+];
+function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
+  return new RegExp(
+    `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
+    "gi"
+  );
+}
+var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
+var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
+var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
+var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+function patternTest(pattern, text) {
+  pattern.lastIndex = 0;
+  return pattern.test(text);
+}
+function looksSensitive(text) {
+  return patternTest(buildSecretAssignmentRe(), text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
+}
+function truncateText(value, max = 500) {
+  if (!value) return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+var MembaseTransport = class {
+  constructor(opts) {
+    this.opts = opts;
+    this.apiUrl = opts.apiUrl.replace(/\/$/, "");
+    this.tokens = opts.tokens;
+    this.timeoutMs = opts.timeoutMs ?? 15e3;
+  }
+  tokens;
+  refreshPromise = null;
+  apiUrl;
+  timeoutMs;
+  get currentTokens() {
+    return this.tokens;
+  }
+  isAuthenticated() {
+    return Boolean(this.tokens.accessToken && this.tokens.clientId);
+  }
+  rawFetch(path, options = {}) {
+    return fetch(`${this.apiUrl}${path}`, {
+      ...options,
+      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.tokens.accessToken}`,
+        "User-Agent": this.opts.userAgent,
+        ...options.headers ?? {}
+      }
+    });
+  }
+  async doRefresh() {
+    if (!this.tokens.refreshToken || !this.tokens.clientId) {
+      throw this.opts.createError(
+        this.opts.notAuthenticatedMessage ?? "Not authenticated",
+        401,
+        ""
+      );
+    }
+    this.opts.log?.("refreshing access token");
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.tokens.refreshToken,
+      client_id: this.tokens.clientId
+    });
+    const response = await fetch(`${this.apiUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": this.opts.userAgent
+      },
+      body,
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.refreshFailedMessage?.(response.status) ?? "Token refresh failed",
+        response.status,
+        text
+      );
+    }
+    const data = await response.json();
+    this.tokens = {
+      ...this.tokens,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
+      expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
+      scope: data.scope ?? this.tokens.scope
+    };
+    this.opts.log?.("token refreshed successfully");
+    this.opts.onTokenRefresh?.(this.tokens);
+  }
+  async refreshAccessToken() {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.doRefresh().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    await this.refreshPromise;
+  }
+  /** Authenticated fetch with single-flight refresh and one retry on 401. */
+  async authorizedFetch(path, options = {}) {
+    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
+    let response = await this.rawFetch(path, options);
+    if (response.status === 401 && this.tokens.refreshToken) {
+      await response.body?.cancel();
+      await this.refreshAccessToken();
+      response = await this.rawFetch(path, options);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.apiErrorMessage?.(response.status, text) ?? `Membase API error ${response.status}`,
+        response.status,
+        text
+      );
+    }
+    return response;
+  }
+};
+
 // src/constants.ts
 var PLUGIN_VERSION = "0.1.4";
 var DEFAULT_API_URL = "https://api.membase.so";
@@ -30978,87 +31108,35 @@ var MembaseApiError = class extends Error {
 // src/api/client.ts
 var MembaseClient = class {
   tokens;
-  refreshPromise = null;
-  apiUrl;
-  timeoutMs;
-  onTokenRefresh;
+  transport;
   constructor(options) {
-    this.apiUrl = options.apiUrl.replace(/\/$/, "");
     this.tokens = options.tokens;
-    this.timeoutMs = options.timeoutMs ?? 15e3;
-    this.onTokenRefresh = options.onTokenRefresh;
-  }
-  async doRefresh() {
-    if (!this.tokens.refreshToken || !this.tokens.clientId) {
-      throw new MembaseApiError("Not authenticated", 401);
-    }
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: this.tokens.refreshToken,
-      client_id: this.tokens.clientId
-    });
-    const response = await fetch(`${this.apiUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT
+    this.transport = new MembaseTransport({
+      apiUrl: options.apiUrl,
+      tokens: {
+        accessToken: options.tokens.accessToken,
+        refreshToken: options.tokens.refreshToken,
+        clientId: options.tokens.clientId,
+        expiresAt: options.tokens.expiresAt,
+        scope: options.tokens.scope
       },
-      body,
-      signal: AbortSignal.timeout(this.timeoutMs)
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError("Token refresh failed", response.status, text);
-    }
-    const data = await response.json();
-    this.tokens = {
-      ...this.tokens,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
-      expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
-      scope: data.scope ?? this.tokens.scope
-    };
-    this.onTokenRefresh?.(this.tokens);
-  }
-  async refreshAccessToken() {
-    if (!this.refreshPromise) {
-      this.refreshPromise = this.doRefresh().finally(() => {
-        this.refreshPromise = null;
-      });
-    }
-    await this.refreshPromise;
-  }
-  async rawFetch(path, options = {}) {
-    return fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.tokens.accessToken}`,
-        "User-Agent": USER_AGENT,
-        ...options.headers ?? {}
+      userAgent: USER_AGENT,
+      timeoutMs: options.timeoutMs,
+      createError: (message, status, body) => new MembaseApiError(message, status, body),
+      onTokenRefresh: (tokens) => {
+        this.tokens = {
+          ...this.tokens,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+          scope: tokens.scope
+        };
+        options.onTokenRefresh?.(this.tokens);
       }
     });
   }
-  async authorizedFetch(path, options = {}) {
-    let response = await this.rawFetch(path, options);
-    if (response.status === 401 && this.tokens.refreshToken) {
-      await response.body?.cancel();
-      await this.refreshAccessToken();
-      response = await this.rawFetch(path, options);
-    }
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw new MembaseApiError(
-        `Membase API error ${response.status}`,
-        response.status,
-        text
-      );
-    }
-    return response;
-  }
   async request(path, options = {}) {
-    const response = await this.authorizedFetch(path, options);
+    const response = await this.transport.authorizedFetch(path, options);
     if (response.status === 204) return void 0;
     return await response.json();
   }
@@ -31476,37 +31554,6 @@ function clearTokens() {
 // src/spool/index.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-
-// ../../../packages/capture-core/src/index.ts
-var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
-  "API_KEY",
-  "TOKEN",
-  "SECRET",
-  "PASSWORD",
-  "PRIVATE_KEY"
-];
-function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
-  return new RegExp(
-    `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
-    "gi"
-  );
-}
-var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
-var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
-var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
-var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-function patternTest(pattern, text) {
-  pattern.lastIndex = 0;
-  return pattern.test(text);
-}
-function looksSensitive(text) {
-  return patternTest(buildSecretAssignmentRe(), text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
-}
-function truncateText(value, max = 500) {
-  if (!value) return "";
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
-}
 
 // src/sanitize/index.ts
 var looksSensitive2 = looksSensitive;
