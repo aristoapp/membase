@@ -94,8 +94,18 @@ surfacing as a per-client bug months later. Seed the sanitize vectors from
   - slice 1 (sanitize + golden vectors): DONE — PR #7, 2026-07-05. Observed
     divergence recorded for D2: the OpenClaw capture path does not redact
     secrets (Claude's does); reconcile deliberately toward the Claude policy.
-  - slice 2 (MembaseClient + OAuth): next.
-  - slice 3 (spool/buffer + capture kinds): after slice 2.
+  - slice 2 (MembaseClient + OAuth transport): DONE — PR #8, 2026-07-05.
+    `MembaseTransport` owns token state / single-flight refresh / retry-on-401;
+    runtimes inject their error class (instanceof preserved) and message texts.
+  - slice 3 (spool): scope decision — the three queue implementations are
+    NOT accidental duplication: Claude needs a disk-persisted, file-locked
+    spool because its hooks are short-lived spawned processes; OpenClaw's
+    in-memory buffers fit its long-lived gateway; Hermes's bounded thread
+    queue fits its Python host. Do NOT force one abstraction over them.
+    Slice 3 therefore promotes the Claude DISK spool into capture-core
+    (parameterized by state dir + sanitize fn) because D3's Cursor hook
+    adapter — also a spawned stdio process — needs exactly that spool.
+    OpenClaw's buffer and Hermes's worker stay runtime-local by design.
 - **D2** — golden vector spec + wire Hermes's Python tests to the vectors;
   shrink `membase_hermes` to the shim surface (server-side lifting lands here
   as membase API work, tracked separately in the membase repo).

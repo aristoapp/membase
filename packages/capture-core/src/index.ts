@@ -166,6 +166,8 @@ export function truncateText(
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
 
+export * from "./spool.js";
+
 // ---------------------------------------------------------------------------
 // OAuth HTTP transport (D1 slice 2)
 //
