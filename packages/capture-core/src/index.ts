@@ -165,3 +165,153 @@ export function truncateText(
   const compact = value.replace(/\s+/g, " ").trim();
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
+
+// ---------------------------------------------------------------------------
+// OAuth HTTP transport (D1 slice 2)
+//
+// The token-state + single-flight-refresh + retry-on-401 machinery was
+// byte-duplicated in the Claude and OpenClaw clients. Product API methods and
+// response parsing stay in each runtime; only the transport lives here.
+// Error TEXTS and the error CLASS are injected so each runtime keeps its
+// exact messages and `instanceof MembaseApiError` semantics.
+// ---------------------------------------------------------------------------
+
+export interface OAuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+  expiresAt?: number;
+  scope?: string;
+}
+
+export interface TransportOptions {
+  apiUrl: string;
+  tokens: OAuthTokens;
+  userAgent: string;
+  timeoutMs?: number;
+  onTokenRefresh?: (tokens: OAuthTokens) => void;
+  log?: (message: string) => void;
+  /** Construct the runtime's own error type (preserves instanceof checks). */
+  createError: (message: string, status: number, body: string) => Error;
+  notAuthenticatedMessage?: string;
+  refreshFailedMessage?: (status: number) => string;
+  apiErrorMessage?: (status: number, bodyText: string) => string;
+}
+
+export class MembaseTransport {
+  private tokens: OAuthTokens;
+  private refreshPromise: Promise<void> | null = null;
+  private readonly apiUrl: string;
+  private readonly timeoutMs: number;
+
+  constructor(private readonly opts: TransportOptions) {
+    this.apiUrl = opts.apiUrl.replace(/\/$/, "");
+    this.tokens = opts.tokens;
+    this.timeoutMs = opts.timeoutMs ?? 15_000;
+  }
+
+  get currentTokens(): OAuthTokens {
+    return this.tokens;
+  }
+
+  isAuthenticated(): boolean {
+    return Boolean(this.tokens.accessToken && this.tokens.clientId);
+  }
+
+  private rawFetch(path: string, options: RequestInit = {}): Promise<Response> {
+    return fetch(`${this.apiUrl}${path}`, {
+      ...options,
+      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.tokens.accessToken}`,
+        "User-Agent": this.opts.userAgent,
+        ...(options.headers ?? {}),
+      },
+    });
+  }
+
+  private async doRefresh(): Promise<void> {
+    if (!this.tokens.refreshToken || !this.tokens.clientId) {
+      throw this.opts.createError(
+        this.opts.notAuthenticatedMessage ?? "Not authenticated",
+        401,
+        "",
+      );
+    }
+    this.opts.log?.("refreshing access token");
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.tokens.refreshToken,
+      client_id: this.tokens.clientId,
+    });
+    const response = await fetch(`${this.apiUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": this.opts.userAgent,
+      },
+      body,
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.refreshFailedMessage?.(response.status) ??
+          "Token refresh failed",
+        response.status,
+        text,
+      );
+    }
+    const data = (await response.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+      scope?: string;
+    };
+    this.tokens = {
+      ...this.tokens,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
+      expiresAt: data.expires_in
+        ? Math.floor(Date.now() / 1000) + data.expires_in
+        : undefined,
+      scope: data.scope ?? this.tokens.scope,
+    };
+    this.opts.log?.("token refreshed successfully");
+    this.opts.onTokenRefresh?.(this.tokens);
+  }
+
+  async refreshAccessToken(): Promise<void> {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.doRefresh().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    await this.refreshPromise;
+  }
+
+  /** Authenticated fetch with single-flight refresh and one retry on 401. */
+  async authorizedFetch(
+    path: string,
+    options: RequestInit = {},
+  ): Promise<Response> {
+    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
+    let response = await this.rawFetch(path, options);
+    if (response.status === 401 && this.tokens.refreshToken) {
+      await response.body?.cancel();
+      await this.refreshAccessToken();
+      response = await this.rawFetch(path, options);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.apiErrorMessage?.(response.status, text) ??
+          `Membase API error ${response.status}`,
+        response.status,
+        text,
+      );
+    }
+    return response;
+  }
+}
