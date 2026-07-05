@@ -33,7 +33,6 @@ export {
   type InstallMethod,
   type ManifestTemplateContext,
   type McpHostAgent,
-  type McpHostAgentArtifacts,
   type McpHostAgentDescriptor,
   type McpHostAgentRuntimeConfigInput,
 } from "./mcp-host-agent.js";

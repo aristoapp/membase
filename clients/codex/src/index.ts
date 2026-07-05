@@ -46,7 +46,7 @@ export interface CodexConnectorArtifacts {
 }
 
 /** ADR 0003 descriptor — Codex is packaging data over the shared MCP host agent. */
-export const codexAgent = defineMcpHostAgent({
+export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
   id: CODEX_CLIENT_ID,
   displayName: CODEX_DISPLAY_NAME,
   install: [
@@ -75,7 +75,7 @@ export const codexAgent = defineMcpHostAgent({
       repository: MEMBASE_REPOSITORY,
       license: "MIT",
       keywords: ["agent-memory", "context", "mcp", "codex", "membase"],
-      mcpServers: mcpConfigRef,
+      mcpServers: mcpConfigRef ?? CODEX_MCP_CONFIG_FILE,
     }),
   },
 });
@@ -89,7 +89,11 @@ export function defineCodexRuntimeConfig(
 export function generateCodexPluginManifest(
   config: ConnectorRuntimeConfig,
 ): CodexPluginManifest {
-  return codexAgent.generateManifest(config) as unknown as CodexPluginManifest;
+  const manifest = codexAgent.generateManifest(config);
+  if (!manifest) {
+    throw new Error("codex descriptor declares no manifest template");
+  }
+  return manifest;
 }
 
 export function generateCodexMcpConfig(
