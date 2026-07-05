@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Membase Plugin/MCP 구현 개요</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --text: #1f2933;
+        --muted: #5f6b7a;
+        --border: #d9e1ea;
+        --accent: #116d6e;
+        --accent-soft: #e8f5f5;
+        --warn: #8a5a00;
+        --warn-soft: #fff4d6;
+        --done: #247a48;
+        --done-soft: #e6f4ec;
+        --todo: #3451a4;
+        --todo-soft: #e9edfa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+
+      header {
+        margin-bottom: 28px;
+      }
+
+      h1, h2, h3, p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 8px;
+        font-size: 34px;
+        line-height: 1.15;
+      }
+
+      h2 {
+        margin-bottom: 12px;
+        font-size: 21px;
+        color: var(--accent);
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      p, li {
+        color: var(--muted);
+      }
+
+      strong {
+        color: var(--text);
+      }
+
+      code {
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: #f3f6f8;
+        color: var(--text);
+        padding: 1px 5px;
+        font-size: 0.92em;
+      }
+
+      pre {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #f3f6f8;
+        padding: 16px;
+        overflow-x: auto;
+        line-height: 1.5;
+      }
+
+      pre code {
+        border: 0;
+        background: none;
+        padding: 0;
+      }
+
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+      }
+
+      .lede {
+        font-size: 17px;
+      }
+
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+
+      .pill.done { background: var(--done-soft); color: var(--done); }
+      .pill.todo { background: var(--todo-soft); color: var(--todo); }
+      .pill.warn { background: var(--warn-soft); color: var(--warn); }
+      .pill.accent { background: var(--accent-soft); color: var(--accent); }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th, td {
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+
+      td {
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--bg);
+      }
+
+      .card h3 {
+        color: var(--accent);
+      }
+
+      dl.glossary {
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 12px 20px;
+      }
+
+      dl.glossary > div {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        padding: 12px 14px;
+      }
+
+      dl.glossary dt {
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+
+      dl.glossary dd {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .timeline li {
+        position: relative;
+        padding: 0 0 20px 28px;
+        border-left: 2px solid var(--border);
+        margin-left: 8px;
+      }
+
+      .timeline li:last-child {
+        padding-bottom: 0;
+      }
+
+      .timeline li::before {
+        content: "";
+        position: absolute;
+        left: -7px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: 2px solid var(--panel);
+      }
+
+      .timeline .t-title {
+        font-weight: 600;
+        color: var(--text);
+        display: block;
+        margin-bottom: 2px;
+      }
+
+      .note {
+        border-left: 4px solid var(--warn);
+        background: var(--warn-soft);
+        border-radius: 0 8px 8px 0;
+        padding: 12px 16px;
+        color: var(--warn);
+      }
+
+      footer {
+        margin-top: 32px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="pill accent">Linear: Plugin/MCP 통합 레포 출시</span>
+        <h1>Membase Plugin/MCP 구현 개요</h1>
+        <p class="lede">
+          흩어져 있던 4개의 클라이언트 커넥터 레포를 하나의 공개 통합 레포로
+          합친 과정과 현재 구현 상태를 설명합니다. 근거 문서:
+          <code>docs/adr/0001</code>~<code>0003</code>,
+          <code>docs/architecture.md</code>,
+          <code>docs/north-star-readiness.md</code>.
+        </p>
+      </header>
+
+      <section>
+        <h2>0. 먼저 알아두면 좋은 용어</h2>
+        <dl class="glossary">
+          <div>
+            <dt>MCP (Model Context Protocol)</dt>
+            <dd>AI 앱(Claude, Cursor 등)이 외부 도구·데이터에 접속할 때 쓰는
+              표준 프로토콜. "AI용 USB 포트"라고 생각하면 됩니다. Membase가
+              MCP 서버가 되고, AI 클라이언트가 거기 꽂혀서
+              기억 저장/검색 도구를 씁니다.</dd>
+          </div>
+          <div>
+            <dt>커넥터 (connector) / 어댑터 (adapter)</dt>
+            <dd>커넥터 = "이 AI 클라이언트를 Membase에 연결해 주는 것" 전체.
+              어댑터 = 그중 클라이언트마다 다른 부분(설정 파일 형식, 설치 경로
+              등)을 담당하는 코드 조각. 콘센트 모양이 나라마다 달라서
+              여행용 어댑터를 끼우는 것과 같은 개념입니다.</dd>
+          </div>
+          <div>
+            <dt>manifest (매니페스트)</dt>
+            <dd>플러그인의 "자기소개서" 파일. 이름, 버전, 제공하는 기능,
+              실행 방법 등을 적은 JSON/YAML 문서로, 클라이언트가 이걸 읽고
+              플러그인을 로드합니다.</dd>
+          </div>
+          <div>
+            <dt>ADR (Architecture Decision Record)</dt>
+            <dd>"아키텍처를 왜 이렇게 정했는지"를 남기는 짧은 결정 기록 문서.
+              나중에 "왜 이랬더라?"를 코드가 아니라 문서에서 찾을 수 있게
+              합니다. 이 레포의 ADR 0001이 전체 구조를 정한 문서입니다.</dd>
+          </div>
+          <div>
+            <dt>smoke test (스모크 테스트)</dt>
+            <dd>"전원 켰을 때 연기 안 나는지" 보는 수준의 얕고 빠른 기본 동작
+              확인. 세세한 로직 검증이 아니라 "설정이 만들어지고, 연결되고,
+              기본 흐름이 도는가"만 봅니다.</dd>
+          </div>
+          <div>
+            <dt>E2E (end-to-end) 테스트</dt>
+            <dd>부품 단위가 아니라 실제 사용자 경로 전체를 처음부터 끝까지
+              태워 보는 테스트. 여기서는 "기억을 저장하고 → 실제 서버를 거쳐 →
+              검색하면 나오는가"까지 확인합니다.</dd>
+          </div>
+          <div>
+            <dt>parity (패리티)</dt>
+            <dd>"동등함". 옛 레포가 하던 것을 새 레포도 빠짐없이 똑같이 하는지
+              비교하는 작업. "패리티 가드"는 그 동등함이 깨지면 검사를
+              실패시키는 스크립트입니다.</dd>
+          </div>
+          <div>
+            <dt>가드 (guard)</dt>
+            <dd>정해 둔 규칙이 깨졌는지 자동으로 검사해서, 깨졌으면 빌드/체크를
+              실패시키는 스크립트. 사람이 매번 눈으로 확인하는 대신 기계가
+              막아줍니다.</dd>
+          </div>
+          <div>
+            <dt>redaction (리댁션)</dt>
+            <dd>로그나 진단 출력에서 비밀값(API 키 등)을
+              <code>****</code>처럼 가려서 내보내는 것. 실수로 비밀이
+              화면·로그에 찍히는 사고를 막습니다.</dd>
+          </div>
+          <div>
+            <dt>stdio vs HTTP (MCP 전송 방식)</dt>
+            <dd>MCP 서버와 대화하는 두 가지 통로. <strong>stdio</strong>는 내
+              컴퓨터에서 프로그램을 직접 실행해 표준입출력으로 대화(로컬 실행),
+              <strong>HTTP</strong>는 인터넷 주소로 원격 서버에 접속.
+              이 레포에서 Claude만 stdio(플러그인에 서버가 동봉됨)이고,
+              Cursor·Hermes·OpenClaw의 MCP 설정은 전부 원격 HTTP
+              (<code>mcp.membase.so</code>)를 씁니다.</dd>
+          </div>
+          <div>
+            <dt>OAuth / client_credentials</dt>
+            <dd>OAuth는 비밀번호를 직접 주지 않고 "허가 토큰"을 발급받는 로그인
+              표준. 보통 브라우저 로그인 화면이 뜹니다.
+              <strong>client_credentials</strong>는 그중 사람 없이
+              프로그램(CI 등)이 자체 자격증명으로 토큰을 받는 방식 —
+              그래서 "브라우저 없이(headless)" 자동 테스트가 가능합니다.</dd>
+          </div>
+          <div>
+            <dt>CI (Continuous Integration)</dt>
+            <dd>코드를 push할 때마다 GitHub이 자동으로 빌드·테스트를 돌려주는
+              것 (여기서는 GitHub Actions). "CI 그린" = 그 자동 검사가 전부
+              통과한 상태.</dd>
+          </div>
+          <div>
+            <dt>모노레포 / pnpm 워크스페이스</dt>
+            <dd>여러 패키지(core, sdk, 클라이언트 5개)를 한 저장소 안에서
+              함께 관리하는 방식. pnpm 워크스페이스는 그 패키지들이 서로를
+              로컬에서 바로 참조하고 한 번에 빌드/검사되게 해 주는 도구
+              설정입니다.</dd>
+          </div>
+          <div>
+            <dt>deprecation / archive</dt>
+            <dd>deprecation(폐기 예고) = "이 레포는 더 이상 관리 안 하니 새
+              레포로 가세요"라고 공지하는 것. archive(보관) = GitHub에서 레포를
+              읽기 전용으로 잠그는 것. 삭제가 아니라서 기록은 남습니다.</dd>
+          </div>
+          <div>
+            <dt>스캐폴딩 (scaffolding)</dt>
+            <dd>건물 지을 때 먼저 세우는 비계처럼, 실제 기능 전에 만드는
+              뼈대 — 폴더 구조, 빌드 설정, 빈 패키지 틀 같은 것들.</dd>
+          </div>
+          <div>
+            <dt>descriptor (기술서)</dt>
+            <dd>코드 대신 "이 클라이언트는 설정 파일이 여기, 형식은 TOML,
+              설치 명령은 이것"처럼 <em>데이터만</em> 적어 놓은 선언.
+              공통 구현 하나가 이 데이터를 읽어 manifest·설정·설치 문서를
+              자동 생성합니다. (ADR 0003의 핵심 개념)</dd>
+          </div>
+          <div>
+            <dt>골든 벡터 (golden vectors)</dt>
+            <dd>"이 입력이면 정확히 이 출력"을 언어 중립 JSON 파일로 고정해
+              둔 정답지. TS 코드와 Python 코드가 같은 정답지로 테스트를
+              돌리므로, 두 언어 구현이 서로 어긋나면 CI가 잡아냅니다.
+              (ADR 0002의 핵심 장치)</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section>
+        <h2>1. 왜 만들었나</h2>
+        <p>
+          Membase 커넥터는 원래 <code>claude-membase</code>,
+          <code>cursor-membase</code>, <code>hermes-membase</code>,
+          <code>openclaw-membase</code> 4개의 독립 레포로 존재했습니다. 인증,
+          설정 생성, 설치, 비밀값 처리 로직이 4벌로 중복됐고 — 버그 하나를
+          네 군데에서 고쳐야 하는 상태 — 배포·관리·GitHub 스타도 분산됐습니다.
+          이 레포는 그 전부를 흡수하는
+          <strong>단일 공개 통합 커넥터 레포</strong>입니다
+          (Linear 이슈 백로그: <code>MEM-327</code> ~ <code>MEM-332</code>).
+        </p>
+      </section>
+
+      <section>
+        <h2>2. 핵심 설계 — ADR 0001</h2>
+        <p>설계 결정은 두 가지 원칙으로 요약됩니다.</p>
+        <div class="grid">
+          <div class="card">
+            <h3>계층 구조</h3>
+            <p>
+              공유 코드와 클라이언트별 코드를 엄격히 분리합니다. 위에서
+              아래로 "의존"하는 방향입니다 — 클라이언트 어댑터는 SDK에,
+              SDK는 core에 기대고, 그 반대는 없습니다.
+            </p>
+<pre><code>clients/{claude,cursor,codex,hermes,openclaw}
+   │  클라이언트마다 다른 부분 (설정 형식, 설치 경로)
+   ▼
+packages/connector-sdk
+   │  어댑터가 구현해야 할 공통 인터페이스(ClientAdapter)
+   ▼
+packages/core
+   │  인증·서버 주소·MCP 설정 생성·비밀값 가리기 (공통 로직)
+   ▼
+Membase Context API   ← 여기부터 서버, 비공개 영역
+   ▼
+private memory engine (실제 기억 저장소)</code></pre>
+          </div>
+          <div class="card">
+            <h3>공개/비공개 경계</h3>
+            <p>
+              이 레포가 외부에 공개하는 기능(공개 계약)은 딱 4가지 +
+              진단입니다: <code>remember</code>(기억 저장) /
+              <code>search</code>(기억 검색) / <code>getContext</code>(작업
+              맥락 요청) / <code>deleteOrForget</code>(기억 삭제).
+              Membase 서버 내부가 기억을 <em>어떻게</em> 저장하고 랭킹하는지
+              (저장 스키마, 그래프 구조, 임베딩, 랭킹 파이프라인)는 절대 이
+              레포에 노출하지 않습니다. 이 경계는 사람이 리뷰로 지키는 게
+              아니라 <code>pnpm check</code>의 public-surface 가드 스크립트가
+              위반 시 검사를 실패시켜서 지킵니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. 레포 구조</h2>
+        <table>
+          <tr><th>경로</th><th>역할</th></tr>
+          <tr>
+            <td><code>packages/core</code></td>
+            <td>모든 클라이언트가 공유하는 기본 로직: 커넥터 이름/버전 같은
+              정체성, 서버 주소와 타임아웃, API 키를 값이 아닌
+              환경변수 이름(<code>${MEMBASE_API_KEY}</code>)으로 참조하기,
+              MCP 설정 파일 생성, 진단 출력 시 비밀값 가리기(redaction)</td>
+          </tr>
+          <tr>
+            <td><code>packages/connector-sdk</code></td>
+            <td>어댑터와 core 사이의 경계. 각 클라이언트 패키지가 구현해야 할
+              <code>ClientAdapter</code> 인터페이스 정의: "manifest와 MCP
+              설정을 만들어라, 스모크 테스트 명령을 선언해라"라는 계약</td>
+          </tr>
+          <tr>
+            <td><code>clients/claude</code></td>
+            <td>Claude Code용 어댑터 + <code>runtime/</code>에 옛 레포의
+              플러그인 번들 전체 — 슬래시 커맨드, 훅(세션 시작 시 자동 실행되는
+              스크립트), 스킬, 에이전트, 그리고 플러그인에 동봉된 stdio MCP
+              서버와 테스트</td>
+          </tr>
+          <tr>
+            <td><code>clients/cursor</code></td>
+            <td>Cursor용 어댑터 + rules/skills 같은 정적 파일. Cursor는 로컬
+              서버를 띄우지 않고 원격 HTTP MCP
+              (<code>https://mcp.membase.so/mcp</code>)에 바로 접속</td>
+          </tr>
+          <tr>
+            <td><code>clients/codex</code></td>
+            <td>OpenAI Codex CLI용 커넥터. 옛 레포가 없던, 통합 과정에서
+              새로 추가된 클라이언트</td>
+          </tr>
+          <tr>
+            <td><code>clients/hermes</code></td>
+            <td>Hermes Agent용 어댑터 + <code>python/</code>에 Python 런타임
+              전체 — provider(Hermes에 기능을 꽂는 진입점), OAuth 로그인
+              (브라우저 없는 client_credentials 포함), 대화 자동 캡처, CLI,
+              설치 스크립트, 테스트. 주 실행 경로는 이 네이티브 pip 패키지이고,
+              MCP 설정 예시는 원격 HTTP 엔드포인트를 씀</td>
+          </tr>
+          <tr>
+            <td><code>clients/openclaw</code></td>
+            <td>OpenClaw용 어댑터 + <code>runtime/</code>에 플러그인 런타임
+              전체 — API 클라이언트, 훅, 도구(tools), 커맨드, manifest,
+              테스트. 주 실행 경로는 네이티브 확장이고, MCP 설정 예시는 원격
+              HTTP 엔드포인트를 씀</td>
+          </tr>
+          <tr>
+            <td><code>manifests/</code></td>
+            <td>어댑터 코드가 생성한 plugin/MCP 설정의 "정답 예시" 사본.
+              리뷰어가 코드를 실행하지 않고도 결과물을 볼 수 있게 커밋해 둠</td>
+          </tr>
+          <tr>
+            <td><code>smoke/</code>, <code>e2e/</code></td>
+            <td>공개 계약 경계만 검사하는 스모크 하네스 + 실제 스테이징 서버를
+              때리는 E2E 테스트</td>
+          </tr>
+          <tr>
+            <td><code>scripts/</code>, <code>docs/</code></td>
+            <td>결정을 기록한 문서와, 그 결정이 깨지지 않는지 검사하는 가드
+              스크립트 쌍</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2>4. 구현 방식 — "문서 + 가드" 쌍</h2>
+        <p>
+          이 레포의 가장 특징적인 패턴: 모든 결정을 문서로 기록하고, 그 결정이
+          나중에 슬그머니 어긋나지 않는지(회귀하지 않는지) 검사하는 스크립트를
+          <code>pnpm check</code> 한 명령에 전부 묶었습니다. 사람뿐 아니라
+          자동화 루프(스케줄에 따라 도는 codex AI)도 이 레포를 수정하기 때문에,
+          "AI가 실수로 경계를 넘는 것"을 기계적으로 막는 구조입니다.
+        </p>
+        <p>
+          <code>pnpm check</code>는 실제로 21개 검사를 체인으로 실행합니다.
+          아래는 그중 대표적인 것들이고, 이 외에도 공유 core의 계약 검사
+          (<code>core:contract</code>), 공개 표면 단어 검사
+          (<code>public-surface</code>), 실제 Claude Code CLI로 플러그인을
+          검증하는 <code>claude:plugin-parity</code>, 클라이언트별 런타임
+          typecheck 등이 함께 돕니다.
+        </p>
+        <table>
+          <tr><th>가드</th><th>검증 내용</th></tr>
+          <tr>
+            <td><code>check-generated-artifacts</code></td>
+            <td>커밋된 manifest/MCP 예시 파일이 어댑터 코드가 실제로 생성하는
+              결과와 한 글자도 다르지 않은지. 코드만 고치고 예시를 안 고치는
+              (또는 그 반대) 실수를 잡음</td>
+          </tr>
+          <tr>
+            <td><code>check-secret-hygiene</code></td>
+            <td>API 키 같은 비밀값이 실제 값으로 커밋되지 않았는지 —
+              <code>${MEMBASE_API_KEY}</code> 같은 환경변수 참조만 허용.
+              진단 출력도 redaction을 통과하는지 가짜 비밀값으로 검사</td>
+          </tr>
+          <tr>
+            <td><code>*:native-artifacts</code> (클라이언트별)</td>
+            <td>옛 레포에서 무엇을 가져왔고 무엇을 아직 보류 중인지를
+              <code>native-artifacts.json</code>이라는 목록 파일로 고정.
+              "가져왔다고 착각"과 "몰래 더 가져옴"을 둘 다 방지</td>
+          </tr>
+          <tr>
+            <td><code>version-parity</code></td>
+            <td>버전 번호가 워크스페이스 패키지·plugin manifest·Python
+              메타데이터 등 모든 곳에서 동일한지</td>
+          </tr>
+          <tr>
+            <td><code>runtime-decision-ledger</code></td>
+            <td>런칭 관련 결정 6개(D1~D6)의 현재 상태를 장부(ledger)처럼
+              명시적으로 유지. 현재 D1(공개 repo URL)·D2/D3(전송·인증 방식)은
+              확정, D4(런타임 이전)는 완료, D6(라이브 스모크)만 테스트 계정
+              등이 없어 보류 중. "결정 안 됐는데 된 것처럼 진행"하는 것을
+              차단</td>
+          </tr>
+          <tr>
+            <td><code>packaging-action-parity</code></td>
+            <td>npm/PyPI/마켓플레이스 배포가 Jaehwan의 명시 승인 전까지
+              꺼져 있음을 검증. 자동화가 임의로 외부 배포하는 사고 방지</td>
+          </tr>
+          <tr>
+            <td><code>review-readiness</code></td>
+            <td>필수 문서·설치 가이드·manifest·클라이언트 아티팩트가 전부
+              존재하고 서로 올바르게 연결돼 있는지</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2>5. 검증 체계 — 스모크와 E2E 3티어</h2>
+        <p>
+          인증 모델: 사용자가 API 키를 직접 발급받아 붙여넣는 방식이 아니라,
+          <code>membase.so</code> 서버에 로그인해서 쓰는 방식입니다. 자동
+          테스트는 사람이 브라우저로 로그인할 수 없으므로
+          <code>client_credentials</code> 방식(프로그램 자체 자격증명으로 토큰
+          발급)을 씁니다. 검증은 얕고 빠른 것부터 깊고 느린 것 순으로 4겹입니다.
+        </p>
+        <ul>
+          <li><strong>스모크 (dry-run/execute)</strong> — 서버 없이 로컬에서:
+            어댑터가 만드는 MCP 설정의 형태, 비밀값 가리기, 그리고 가짜 서버
+            (stub — 진짜 서버 흉내만 내는 간단한 대역)를 상대로
+            remember→search→context→forget 공개 계약이 도는지</li>
+          <li><strong>Tier 1</strong> (크리덴셜 불필요) — 커밋된 각 클라이언트
+            MCP 설정의 엔드포인트가 실제로 살아 있고 MCP 스펙·OAuth 규격을
+            지키는 서버인지 확인 (접속, initialize 핸드셰이크, 지연시간).
+            Membase 서버 장애가 빌드 실패로 오인되지 않도록 CI에서 별도
+            job으로 분리</li>
+          <li><strong>Tier 2</strong> (스테이징 서버 + 서비스 토큰) — 진짜
+            스테이징 서버(운영 전 단계 서버)에 인증하고 remember/search가
+            받아들여지는지 보는 수 초짜리 빠른 스모크. 매 push/PR마다 CI에서
+            돌고, 시크릿이 없는 외부 fork PR에서는 조용히 건너뜀</li>
+          <li><strong>Tier 3</strong> (심층 품질 게이트, 수 분 소요) — 기억을
+            저장한 뒤 실제로 검색되는지(remember→recall), 없어야 할 게 안
+            나오는지(negative case), 검색 지연시간 백분위까지 확인. 저장
+            직후엔 검색 인덱스 반영이 늦을 수 있어 재시도와 실행별 고유
+            프로젝트 태그로 흔들림을 줄임. 매번 돌리기엔 느려서 매일 밤 자동
+            실행 + 필요 시 수동 실행</li>
+        </ul>
+        <p>
+          여기에 더해, 복사해 온 런타임들은 검사만 하는 게 아니라 CI에서
+          <strong>실제로 실행</strong>됩니다 — Hermes는 Python unittest,
+          Claude와 OpenClaw는 bun 테스트. 패리티 가드가 "파일이 있는지"를
+          본다면, 이 테스트들은 "코드가 진짜 도는지"를 봅니다.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. 통합 타임라인</h2>
+        <ul class="timeline">
+          <li>
+            <span class="t-title">스캐폴딩 + 경계 확정</span>
+            pnpm 워크스페이스 뼈대, ADR 0001 작성, public-surface/secret 가드
+            설치, 어댑터 SDK와 4개 클라이언트 어댑터의 틀.
+          </li>
+          <li>
+            <span class="t-title">패리티 문서화</span>
+            코드를 복사하기 <em>전에</em>, 옛 레포 4개에 뭐가 있는지(런타임,
+            테스트, 패키징, 이미지 에셋)를 먼저 문서로 전수 조사
+            (<code>migration-parity</code>, <code>test-coverage-parity</code>,
+            <code>packaging-action-parity</code>). "옮기다 빠뜨림"을 막기 위한
+            체크리스트 확보.
+          </li>
+          <li>
+            <span class="t-title">E2E 파이프라인</span>
+            커넥터 모델 확정(membase.so 로그인 방식), client_credentials 서비스
+            인증, Tier 1~3 스테이징 검증 게이트 구축.
+          </li>
+          <li>
+            <span class="t-title">Group A — Codex</span>
+            신규 Codex CLI 커넥터 추가 (PR #2).
+          </li>
+          <li>
+            <span class="t-title">Group B — Hermes + OpenClaw</span>
+            두 런타임을 통째로 복사해 오고, 각각의 테스트(Python unittest,
+            bun 테스트)를 CI에 편입. PR 리뷰에서 나온 런타임 버그 수정 (PR #3).
+          </li>
+          <li>
+            <span class="t-title">Group C — Claude + Cursor</span>
+            Claude 플러그인 번들(동봉 stdio MCP 서버 포함)과 Cursor 정적
+            아티팩트 복사 (PR #4). 이 시점에서 "옛 레포의 모든 것이 이 레포
+            안에 있음" 달성.
+          </li>
+          <li>
+            <span class="t-title">/membase-connect 스킬</span>
+            5개 클라이언트를 이 레포에서 바로 로컬 설치·연동·검증하는 대화형
+            셋업 스킬 추가 (PR #5). 설치 규칙을 명문화: 기존 설정을 덮어쓰지
+            않고 병합(백업 생성), 토큰·비밀값을 파일에 쓰지 않음(항상 OAuth
+            또는 환경변수), 매 클라이언트마다 검증(VERIFY) 단계로 마무리.
+          </li>
+          <li>
+            <span class="t-title">런칭 이후 로드맵 확정 — ADR 0002 · 0003</span>
+            남은 두 가지 구조적 결정을 ADR로 확정 (PR #6). 아래 8절 참고.
+            둘 다 런칭(투키 게이트)을 막지 않는 <em>이후</em> 작업이며,
+            서로 독립적이라 어느 쪽이 먼저 진행돼도 됩니다.
+          </li>
+          <li>
+            <span class="t-title">Group D1 착수 (진행 중)</span>
+            <code>feature/group-d1-capture-core</code> 브랜치에서 capture-core
+            추출 작업 시작.
+          </li>
+        </ul>
+      </section>
+
+
+      <section>
+        <h2>7. 현재 위치 — 폐기 직전 투키(two-key) 게이트</h2>
+        <p>
+          <code>docs/north-star-readiness.md</code>가 마지막 관문입니다.
+          "투키"는 핵미사일 발사처럼 열쇠 두 개를 동시에 돌려야 작동하는
+          안전장치를 말합니다 — 자동 검증과 사람 승인 <strong>둘 다</strong>
+          통과해야 옛 레포 폐기가 진행됩니다.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3><span class="pill todo">Gate 1</span> 자동 검증 (기계 열쇠)</h3>
+            <ul>
+              <li><code>pnpm check</code> + CI 전체 그린</li>
+              <li>Tier 3 스테이징 E2E 그린</li>
+              <li>실제 게이트웨이에서 OpenClaw 라이브 동작 검증</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3><span class="pill todo">Gate 2</span> 수동 서명 (사람 열쇠, Jaehwan)</h3>
+            <ul>
+              <li>5개 클라이언트 각각을 실제 사용자가 하듯 설치해서
+                끝까지(end-to-end) 확인</li>
+              <li>설치 가이드 문서와 방금 한 실제 절차가 일치하는지 확인</li>
+            </ul>
+          </div>
+        </div>
+        <p style="margin-top: 16px;">
+          두 게이트 통과 후에만 순서대로: 릴리스 태그(버전 확정) →
+          npm/PyPI/마켓플레이스 배포 → 옛 레포에 deprecation 공지 후
+          archive(읽기 전용 보관) → 로컬 작업 사본 정리.
+        </p>
+        <div class="note">
+          의도적으로 미룬 것: 복사해 온 3개 런타임의 중복 코드 정리(ADR
+          0002로 계획 확정, 8절), 에이전트 descriptor 전환과 문서화된 10개
+          에이전트 커버(ADR 0003, 8절), 외부 배포, 옛 레포 archive.
+          전부 런칭 이후 작업입니다 — "먼저 옮기고, 나중에 다듬는다".
+        </div>
+      </section>
+
+      <section>
+        <h2>8. 런칭 이후 로드맵 — ADR 0002 / 0003</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>ADR 0002 — 공유 capture-core (Group D)</h3>
+            <p>
+              Group B/C로 복사해 온 3개 런타임(Claude·OpenClaw는 TS,
+              Hermes는 Python)에는 같은 로직이 3벌 존재합니다 — 비밀값
+              필터링, 캡처 큐/재시도, HTTP+OAuth 클라이언트, recall 조립.
+              PR #3 리뷰에서 실제로 "같은 종류의 버그가 한 벌에만 있고 다른
+              벌엔 없는" 비용이 확인됐습니다. 결정:
+            </p>
+            <ul>
+              <li><strong>"무엇을"과 "언제"를 분리</strong> — 공통 로직은
+                <code>packages/capture-core</code> 하나로, 클라이언트별
+                어댑터는 "언제 실행되는지"(훅 이벤트 이름·페이로드 변환)만
+                담당. 어댑터끼리 옆으로 합치지 않고, 공통 행동은 항상 core로
+                내림.</li>
+              <li><strong>언어 정책</strong> — 완전한 단일 언어는 불가능
+                (OpenClaw는 TS를, Hermes는 Python을 프로세스 안에서 직접
+                로드). TS 서브프로세스 shim·MCP 전용 강등·Python 단일화를
+                모두 검토 후 기각하고, <strong>TS core 1개 + 최소 Python
+                shim 1개 + 언어 중립 스펙(골든 벡터)</strong>으로 확정.</li>
+              <li><strong>서버로 올리기가 가장 강한 통합</strong> — 사용자
+                기기에서 돌 필요 없는 것(recall/context 조립, 캡처 정규화)은
+                Membase 서버로 이전. 단 <em>sanitize</em>(비밀값은 기기를
+                떠나기 전에 걸러야 함)와 <em>오프라인 스풀</em>은 절대 서버로
+                못 올림.</li>
+            </ul>
+            <p>단계: D1(TS core 추출, 동작 변화 없음) → D2(골든 벡터 +
+              Hermes shim 축소) → D3(Cursor·Codex 훅 어댑터 신설 —
+              자동 캡처/리콜이 5개 클라이언트 전부에 도달).</p>
+          </div>
+          <div class="card">
+            <h3>ADR 0003 — 에이전트는 코드가 아니라 descriptor (Group E)</h3>
+            <p>
+              공식 문서(docs.membase.so)에 커넥터는 "Agents 10종 + 런타임
+              2종(OpenClaw·Hermes)"으로 분류되는데, Agents 10종은 전부
+              "MCP 호스트를 <code>mcp.membase.so</code>에 연결 + OAuth"라는
+              <em>같은 기능</em>이고 차이는 설정 파일 위치·형식 같은 데이터뿐.
+              그런데 레포는 에이전트마다 ~122줄짜리 어댑터를 손으로 쓰고
+              있었고(cursor·codex 두 어댑터의 실측 차이는 81줄, 전부 데이터),
+              이대로면 10벌 복사가 됩니다. 결정:
+            </p>
+            <ul>
+              <li><strong>원칙 정련</strong> — "행동이 다르면 코드로 분리,
+                데이터만 다르면 데이터로 축약". 런타임 3종은 ADR 0001/0002대로
+                코드 유지, 설정 전용 에이전트는 공통 구현 1개 +
+                descriptor.</li>
+              <li><code>defineMcpHostAgent(descriptor)</code>를 connector-sdk에
+                추가 — descriptor 하나로 manifest·설정·설치 문서·스모크 선언을
+                전부 렌더링.</li>
+              <li><strong>커버리지 목표</strong> — 문서화된 10개 에이전트
+                전부(현재 2개 → ChatGPT, Gemini CLI, VS Code 등 8개 추가).
+                각각 수십 줄짜리 descriptor + e2e 설정 항목이면 끝.</li>
+              <li><strong>대량 이름 변경 없음</strong> — 디렉터리는
+                <code>clients/&lt;id&gt;</code> 유지. 계층은 폴더 이동이 아니라
+                "runtime/ 폴더가 있느냐"로 표현. Claude는 의도적 하이브리드
+                (descriptor 어댑터 + runtime 유지).</li>
+            </ul>
+            <p>단계: E1(descriptor 메커니즘 + cursor/codex 이행 —
+              커밋된 manifest와 바이트 단위로 동일해야 함) →
+              E2(나머지 7개 에이전트 추가).</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        기준 시점: 2026-07-05 · main 브랜치 (7be0127) · 상세 근거는
+        <code>docs/architecture.md</code>와 <code>docs/adr/</code> 참고.
+      </footer>
+    </main>
+  </body>
+</html>
