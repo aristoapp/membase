@@ -29,9 +29,31 @@ Private surface:
 - ranking and freshness algorithm
 - internal governance implementation
 
-## 20-Run Automation Loop
+## Development Workflow
 
-Each scheduled run should:
+Interactive sessions in **Cursor** or **Claude Code** own all implementation
+work in this repo.
+
+- **Branch**: `feature/<group>-<short-name>` off `main` (example:
+  `feature/group-e1-agent-descriptors`).
+- **Commits**: small, logical units with Conventional Commit prefixes (`feat:`,
+  `fix:`, `refactor:`, `chore:`, `docs:`).
+- **Before PR**: run `pnpm check`; add `pnpm smoke:execute` when runtime paths
+  change.
+- **PR**: one focused change set; link the relevant ADR or Linear issue when
+  useful.
+- **History**: git log and PR descriptions are the source of truth. `RUN_LOG.md`
+  is a historical archive from the retired Codex automation scaffold phase only.
+
+### Retired: Codex scheduled loop
+
+The 20-run LaunchAgent/Codex automation loop is **retired** (2026-07-05). Do not
+re-enable it. The scaffold allocation below is kept only as archive context.
+
+<details>
+<summary>Archived 20-run scaffold allocation (historical)</summary>
+
+Each scheduled run used to:
 
 1. Read this file, `RUN_LOG.md`, and current repo state.
 2. Inspect the relevant Linear issue scope.
@@ -62,6 +84,8 @@ Run allocation:
 18. Old repo deprecation plan.
 19. End-to-end local verification.
 20. Final repo quality pass and Linear-ready summary.
+
+</details>
 
 ## Post-20 Runtime Parity Plan
 
