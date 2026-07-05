@@ -1,0 +1,27 @@
+{
+  "name": "membase-plugins",
+  "metadata": {
+    "description": "Membase plugins for AI agents."
+  },
+  "owner": {
+    "name": "Aristo Technologies",
+    "email": "support@membase.so"
+  },
+  "plugins": [
+    {
+      "name": "membase",
+      "version": "0.1.4",
+      "description": "Persistent memory and wiki workflows for Claude Code.",
+      "source": "./plugin",
+      "homepage": "https://membase.so",
+      "repository": "https://github.com/aristoapp/membase-plugin-mcp",
+      "license": "MIT",
+      "keywords": [
+        "membase",
+        "memory",
+        "mcp",
+        "claude-code"
+      ]
+    }
+  ]
+}
