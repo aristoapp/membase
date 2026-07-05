@@ -94,6 +94,10 @@ surfacing as a per-client bug months later. Seed the sanitize vectors from
   - slice 1 (sanitize + golden vectors): DONE — PR #7, 2026-07-05. Observed
     divergence recorded for D2: the OpenClaw capture path does not redact
     secrets (Claude's does); reconcile deliberately toward the Claude policy.
+    UPDATE 2026-07-05: the capture-path convergence landed early with E1
+    (PR #12) — `sanitizeCaptureText` applies the full capture-core rule set
+    before buffering. The recall-query path keeps its narrower assignment-only
+    redaction; that reconciliation remains D2 scope.
   - slice 2 (MembaseClient + OAuth transport): DONE — PR #8, 2026-07-05.
     `MembaseTransport` owns token state / single-flight refresh / retry-on-401;
     runtimes inject their error class (instanceof preserved) and message texts.

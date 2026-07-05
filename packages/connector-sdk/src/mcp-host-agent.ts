@@ -61,7 +61,9 @@ export interface AgentConfigFile {
   key: string;
 }
 
-export interface AgentManifestSpec {
+export interface AgentManifestSpec<
+  TManifest extends object = Record<string, unknown>,
+> {
   /** Manifest directory relative to the client package, e.g. ".codex-plugin". */
   dir: string;
   /** Manifest filename. Defaults to "plugin.json". */
@@ -70,12 +72,23 @@ export interface AgentManifestSpec {
   mcpConfigRef?: string;
   /**
    * Declarative manifest template. Key order is preserved into the generated
-   * JSON, so templates must list fields in the committed golden order.
+   * JSON, so templates must list fields in the committed golden order. Typing
+   * TManifest to the client's manifest interface makes the compiler enforce
+   * that order-sensitive shape (no casting at the call site).
    */
-  template: (context: ManifestTemplateContext) => Record<string, unknown>;
+  template: (context: ManifestTemplateContext) => TManifest;
 }
 
-export interface McpHostAgentDescriptor {
+/**
+ * Fields beyond `manifest` (install, configFile, extras, requirements,
+ * postInstall, docSlug) are consumed by the E2 install-doc renderer (ADR 0003
+ * §3). Until that lands they are declarative documentation only — nothing
+ * generates from them, so treat the install/config pages as the source of
+ * truth when they disagree.
+ */
+export interface McpHostAgentDescriptor<
+  TManifest extends object = Record<string, unknown>,
+> {
   /** Client id; matches docs.membase.so/connectors/agents/<docSlug ?? id>. */
   id: string;
   displayName: string;
@@ -86,7 +99,7 @@ export interface McpHostAgentDescriptor {
   /** The host's user-editable MCP config location, when one exists. */
   configFile?: AgentConfigFile;
   /** Plugin manifest packaging, for hosts with plugin/marketplace formats. */
-  manifest?: AgentManifestSpec;
+  manifest?: AgentManifestSpec<TManifest>;
   /**
    * Static committed artifact dirs shipped alongside the descriptor
    * (relative to the client package), e.g. Cursor rules/skills/assets.
@@ -105,27 +118,21 @@ export type McpHostAgentRuntimeConfigInput = Omit<
   version?: string;
 };
 
-export interface McpHostAgentArtifacts {
-  plugin?: Record<string, unknown>;
-  mcp: McpConfigDocument;
-}
-
-export interface McpHostAgent {
-  descriptor: McpHostAgentDescriptor;
+export interface McpHostAgent<
+  TManifest extends object = Record<string, unknown>,
+> {
+  descriptor: McpHostAgentDescriptor<TManifest>;
   adapter: ClientAdapter;
   defineRuntimeConfig(
     input?: McpHostAgentRuntimeConfigInput,
   ): ConnectorRuntimeConfig;
-  generateManifest(
-    config: ConnectorRuntimeConfig,
-  ): Record<string, unknown> | undefined;
+  generateManifest(config: ConnectorRuntimeConfig): TManifest | undefined;
   generateMcpConfig(config: ConnectorRuntimeConfig): McpConfigDocument;
-  generateArtifacts(config: ConnectorRuntimeConfig): McpHostAgentArtifacts;
 }
 
-export function defineMcpHostAgent(
-  descriptor: McpHostAgentDescriptor,
-): McpHostAgent {
+export function defineMcpHostAgent<
+  TManifest extends object = Record<string, unknown>,
+>(descriptor: McpHostAgentDescriptor<TManifest>): McpHostAgent<TManifest> {
   const defineRuntimeConfig = (
     input: McpHostAgentRuntimeConfigInput = {},
   ): ConnectorRuntimeConfig => {
@@ -143,7 +150,7 @@ export function defineMcpHostAgent(
 
   const generateManifest = (
     config: ConnectorRuntimeConfig,
-  ): Record<string, unknown> | undefined => {
+  ): TManifest | undefined => {
     if (!descriptor.manifest) {
       return undefined;
     }
@@ -163,17 +170,6 @@ export function defineMcpHostAgent(
       url: MEMBASE_MCP_SERVER_URL,
       headers: {},
     });
-  };
-
-  const generateArtifacts = (
-    config: ConnectorRuntimeConfig,
-  ): McpHostAgentArtifacts => {
-    const plugin = generateManifest(config);
-
-    return {
-      ...(plugin !== undefined ? { plugin } : {}),
-      mcp: generateMcpConfig(config),
-    };
   };
 
   const adapter: ClientAdapter = {
@@ -206,6 +202,5 @@ export function defineMcpHostAgent(
     defineRuntimeConfig,
     generateManifest,
     generateMcpConfig,
-    generateArtifacts,
   };
 }

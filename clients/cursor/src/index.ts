@@ -42,7 +42,7 @@ export interface CursorConnectorArtifacts {
 }
 
 /** ADR 0003 descriptor — Cursor is packaging data over the shared MCP host agent. */
-export const cursorAgent = defineMcpHostAgent({
+export const cursorAgent = defineMcpHostAgent<CursorPluginManifest>({
   id: CURSOR_CLIENT_ID,
   displayName: CURSOR_DISPLAY_NAME,
   install: [
@@ -81,9 +81,11 @@ export function defineCursorRuntimeConfig(
 export function generateCursorPluginManifest(
   config: ConnectorRuntimeConfig,
 ): CursorPluginManifest {
-  return cursorAgent.generateManifest(
-    config,
-  ) as unknown as CursorPluginManifest;
+  const manifest = cursorAgent.generateManifest(config);
+  if (!manifest) {
+    throw new Error("cursor descriptor declares no manifest template");
+  }
+  return manifest;
 }
 
 export function generateCursorMcpConfig(
