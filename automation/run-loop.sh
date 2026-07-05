@@ -47,6 +47,13 @@ Scheduled run number: $next of $MAX_RUNS.
 "
 
 cd "$REPO_DIR" || exit 1
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git pull --ff-only origin main >> "$LOG_FILE" 2>&1 || {
+    echo "[$started_at] warning: git pull --ff-only origin main failed; continuing with local checkout" >> "$LOG_FILE"
+  }
+fi
+
 "$CODEX_BIN" exec \
   --cd "$REPO_DIR" \
   --sandbox workspace-write \

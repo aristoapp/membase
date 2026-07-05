@@ -1947,3 +1947,19 @@ Next step:
 
 - Remaining launch work is unchanged: port outstanding marketplace assets, make
   the repo public, then execute old-repo deprecation (deferred per the user).
+
+## 2026-07-05 (interactive) — Track assignment: Group E owned by the Cursor session
+
+- ADR 0003 Group E (E1 descriptor mechanism + cursor/codex migration, E2
+  remaining documented agents) is being implemented in an interactive Cursor
+  session on branch `feature/group-e1-agent-descriptors`. Scheduled automation
+  runs must NOT pick up Group E work; continue with Group D (D2 golden-vector
+  wiring for Hermes, D3 host adapters) or docs/launch tasks instead.
+- Priority adjustment accepted from review: the OpenClaw capture-path secret
+  redaction gap (recorded in ADR 0002 D1 slice 1 notes) is a security gap in a
+  deployed runtime, not cleanup. It is pulled forward: reconcile OpenClaw
+  capture onto the capture-core sanitize right after (or parallel to) E1,
+  before E2 coverage expansion.
+- The scheduled loop reads `automation/codex-prompt.md` from the iCloud working
+  copy at run time, not from `main` until that copy is pulled. Update both the
+  GitHub repo and the iCloud checkout before re-enabling the loop.

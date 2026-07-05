@@ -131,6 +131,16 @@ It verifies that package versions, public plugin manifest versions, Hermes
 Python/YAML versions, and MCP client-version examples stay synchronized without
 deciding a release tag or enabling publication.
 
+## Track Assignment (2026-07-05)
+
+- **Group E (ADR 0003: descriptors, E1/E2)** — owned by the interactive Cursor
+  session (branch `feature/group-e1-agent-descriptors`). Scheduled automation
+  runs must not implement Group E.
+- **Group D (ADR 0002: capture-core, D2/D3)** and docs/launch tasks — open for
+  scheduled automation runs.
+- **OpenClaw capture redaction convergence** — pulled forward as a security
+  fix; owned by the interactive session alongside E1.
+
 ## Stop Conditions
 
 The repo is ready when:

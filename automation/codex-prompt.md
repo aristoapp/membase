@@ -14,6 +14,14 @@ Source of truth:
 - MEM-331: 통합 레포 README, 설치 문서, marketplace assets 정리
 - MEM-332: 기존 plugin 레포 deprecation 및 GitHub star 집중 launch 정리
 
+Track ownership (2026-07-05):
+- Group E (ADR 0003: E1/E2 agent descriptors) is owned by the interactive Cursor
+  session on branch `feature/group-e1-agent-descriptors`. Do NOT implement Group E.
+- Group D (ADR 0002: D2/D3 capture-core) and docs/launch tasks remain open for
+  this scheduled loop.
+- OpenClaw capture redaction convergence is owned by the interactive session
+  alongside E1; do not pick it up here.
+
 Every run:
 1. Read README.md, PLAN.md, RUN_LOG.md, docs/architecture.md, and git status.
 2. Research open-source references when useful:
