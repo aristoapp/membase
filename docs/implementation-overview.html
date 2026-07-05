@@ -363,6 +363,20 @@
               자동 생성합니다. (ADR 0003의 핵심 개념)</dd>
           </div>
           <div>
+            <dt>스풀 (spool)</dt>
+            <dd>보낼 데이터를 일단 로컬에 쌓아 두는 대기열. 프린터 스풀과
+              같은 개념 — 네트워크가 없거나 프로세스가 곧 죽어도 데이터를
+              잃지 않고, 나중에 순서대로 전송합니다. 여기서는 캡처한
+              기억을 서버로 보내기 전 디스크에 쌓아 두는 부품입니다.</dd>
+          </div>
+          <div>
+            <dt>single-flight (단일 비행)</dt>
+            <dd>같은 작업 요청이 동시에 여러 개 들어와도 실제 실행은 한
+              번만 하고 나머지는 그 결과를 같이 쓰는 패턴. 여기서는 토큰
+              만료 시 여러 요청이 동시에 갱신을 시도해도 갱신 API 호출은
+              한 번만 나가게 합니다.</dd>
+          </div>
+          <div>
             <dt>골든 벡터 (golden vectors)</dt>
             <dd>"이 입력이면 정확히 이 출력"을 언어 중립 JSON 파일로 고정해
               둔 정답지. TS 코드와 Python 코드가 같은 정답지로 테스트를
@@ -646,50 +660,83 @@ private memory engine (실제 기억 저장소)</code></pre>
             서로 독립적이라 어느 쪽이 먼저 진행돼도 됩니다.
           </li>
           <li>
-            <span class="t-title">Group D1 착수 (진행 중)</span>
-            <code>feature/group-d1-capture-core</code> 브랜치에서 capture-core
-            추출 작업 시작.
+            <span class="t-title">Group D1 — capture-core 추출 완료</span>
+            3개 slice로 분할 머지 (PR #7~#9): ① sanitize + 골든 벡터,
+            ② <code>MembaseTransport</code>(OAuth 갱신·재시도), ③ 디스크
+            캡처 스풀. Claude·OpenClaw 런타임이 공유 core를 import하고
+            기존 테스트는 무변경 통과. 남은 D1 항목은 capture kinds 하나.
+          </li>
+          <li>
+            <span class="t-title">자동화 루프 은퇴</span>
+            스케줄 codex 루프(20-run scaffold)의 임무 종료를 선언하고
+            스크립트·plist·프롬프트를 삭제 (PR #11). 이후 모든 작업은
+            대화형 세션의 브랜치 → <code>pnpm check</code> → PR 흐름으로
+            단일화 — 작성자가 하나가 되면서 작업 사본 경쟁 문제 자체가
+            사라짐.
+          </li>
+          <li>
+            <span class="t-title">Group E1 — descriptor 메커니즘</span>
+            <code>defineMcpHostAgent</code> 구현 + cursor/codex를
+            descriptor로 이행(골든 바이트 동일성 CI 증명) + OpenClaw 캡처
+            경로 시크릿 리댁션을 capture-core로 조기 수렴 (PR #12).
+            8각도 코드리뷰 2라운드를 거쳐 제네릭 타입 강화·죽은 코드 제거
+            등 리뷰 수정 반영.
+          </li>
+          <li>
+            <span class="t-title">투키 게이트 통과 — 런칭 자격 확보</span>
+            Gate 1(자동 4항목)과 Gate 2(수동 5클라이언트 실사용 검증)를
+            모두 통과하고 증거와 함께 문서화 (PR #13). 핵심 증거: 센티널
+            기억 하나를 Claude Code로 저장 → Cursor·Codex·Hermes·OpenClaw
+            전부에서 검색 성공 — "공유 메모리" 명제의 5클라이언트 실증.
           </li>
         </ul>
       </section>
 
 
       <section>
-        <h2>7. 현재 위치 — 폐기 직전 투키(two-key) 게이트</h2>
+        <h2>7. 현재 위치 — 투키(two-key) 게이트 통과 완료</h2>
         <p>
-          <code>docs/north-star-readiness.md</code>가 마지막 관문입니다.
-          "투키"는 핵미사일 발사처럼 열쇠 두 개를 동시에 돌려야 작동하는
-          안전장치를 말합니다 — 자동 검증과 사람 승인 <strong>둘 다</strong>
-          통과해야 옛 레포 폐기가 진행됩니다.
+          <code>docs/north-star-readiness.md</code>의 투키 게이트 —
+          자동 검증과 사람 승인 <strong>둘 다</strong> 통과해야 열리는
+          안전장치 — 를 <strong>2026-07-05에 통과</strong>했습니다
+          (PR #13에 항목별 증거 기록).
         </p>
         <div class="grid">
           <div class="card">
-            <h3><span class="pill todo">Gate 1</span> 자동 검증 (기계 열쇠)</h3>
+            <h3><span class="pill done">Gate 1 ✓</span> 자동 검증 (기계 열쇠)</h3>
             <ul>
-              <li><code>pnpm check</code> + CI 전체 그린</li>
-              <li>Tier 3 스테이징 E2E 그린</li>
-              <li>실제 게이트웨이에서 OpenClaw 라이브 동작 검증</li>
+              <li><code>pnpm check</code> + main CI 전체 그린</li>
+              <li>Tier 3 스테이징 E2E 그린 — 첫 실행은 콜드스타트가 부풀린
+                검색 p95 게이트만 실패, 재실행 그린 (재실행 우선 정책 명문화)</li>
+              <li>OpenClaw 라이브 게이트웨이 검증 — 이 레포의 런타임을 로드한
+                실제 Telegram 봇에서 검색·위키검색·위키쓰기 확인</li>
             </ul>
           </div>
           <div class="card">
-            <h3><span class="pill todo">Gate 2</span> 수동 서명 (사람 열쇠, Jaehwan)</h3>
+            <h3><span class="pill done">Gate 2 ✓</span> 수동 서명 (사람 열쇠, Jaehwan)</h3>
             <ul>
-              <li>5개 클라이언트 각각을 실제 사용자가 하듯 설치해서
-                끝까지(end-to-end) 확인</li>
-              <li>설치 가이드 문서와 방금 한 실제 절차가 일치하는지 확인</li>
+              <li>5개 클라이언트 전부 실사용 경로로 설치·검증: Claude Code
+                (동봉 stdio 서버 왕복), Cursor(앱 내 왕복), Codex(관리형
+                OAuth + 세션 recall), Hermes(pip 설치 + OAuth + 세션
+                recall), OpenClaw(라이브 봇)</li>
+              <li>설치 문서 대조 — 낡은 문구 2곳을 발견 즉시 수정</li>
+              <li>각주 2건 수용: Hermes auto-capture는 세션 워커로만 관찰,
+                headless client_credentials는 CI 일일 검증으로 갈음</li>
             </ul>
           </div>
         </div>
         <p style="margin-top: 16px;">
-          두 게이트 통과 후에만 순서대로: 릴리스 태그(버전 확정) →
-          npm/PyPI/마켓플레이스 배포 → 옛 레포에 deprecation 공지 후
-          archive(읽기 전용 보관) → 로컬 작업 사본 정리.
+          이제 남은 것은 <strong>런칭 시퀀스 그 자체</strong>이며, 각각
+          별도 승인·리뷰 단위로 진행합니다: ① 릴리스 태그(버전 확정) →
+          ② npm/PyPI/마켓플레이스 배포 → ③ 옛 레포 deprecation 공지 후
+          archive → ④ 로컬 작업 사본 정리. 배포는 여전히
+          <code>packaging-action-parity</code> 가드가 명시 승인 전까지
+          기계적으로 막고 있습니다.
         </p>
         <div class="note">
-          의도적으로 미룬 것: 복사해 온 3개 런타임의 중복 코드 정리(ADR
-          0002로 계획 확정, 8절), 에이전트 descriptor 전환과 문서화된 10개
-          에이전트 커버(ADR 0003, 8절), 외부 배포, 옛 레포 archive.
-          전부 런칭 이후 작업입니다 — "먼저 옮기고, 나중에 다듬는다".
+          공개 전환 전 점검 항목: 커밋된 <code>AGENTS.md</code>(에이전트
+          온보딩 문서)에 내부 경로·운영 세부가 있어 공개 전 다듬기 필요.
+          런칭과 무관한 후속 코드 작업(E2·D2·D3)은 8절 참고.
         </div>
       </section>
 
@@ -722,9 +769,12 @@ private memory engine (실제 기억 저장소)</code></pre>
                 떠나기 전에 걸러야 함)와 <em>오프라인 스풀</em>은 절대 서버로
                 못 올림.</li>
             </ul>
-            <p>단계: D1(TS core 추출, 동작 변화 없음) → D2(골든 벡터 +
-              Hermes shim 축소) → D3(Cursor·Codex 훅 어댑터 신설 —
-              자동 캡처/리콜이 5개 클라이언트 전부에 도달).</p>
+            <p>진행: <strong>D1 사실상 완료</strong> (slice 1~3 머지,
+              capture kinds만 잔여). 캡처 경로 리댁션 수렴은 원래 D2
+              계획이었으나 보안 우선으로 E1에서 조기 반영. 남은 단계:
+              D1 잔여 → D2(골든 벡터에 Hermes 연결 + shim 축소 + recall
+              경로 리댁션 수렴) → D3(Cursor·Codex 훅 어댑터 — 자동
+              캡처/리콜이 5개 클라이언트 전부에 도달).</p>
           </div>
           <div class="card">
             <h3>ADR 0003 — 에이전트는 코드가 아니라 descriptor (Group E)</h3>
@@ -753,16 +803,163 @@ private memory engine (실제 기억 저장소)</code></pre>
                 "runtime/ 폴더가 있느냐"로 표현. Claude는 의도적 하이브리드
                 (descriptor 어댑터 + runtime 유지).</li>
             </ul>
-            <p>단계: E1(descriptor 메커니즘 + cursor/codex 이행 —
-              커밋된 manifest와 바이트 단위로 동일해야 함) →
-              E2(나머지 7개 에이전트 추가).</p>
+            <p>진행: <strong>E1 완료</strong> (PR #12 — cursor/codex
+              이행, 골든 바이트 동일성 CI 증명). 남은 단계: E2(나머지
+              에이전트 descriptor 등록 + install-doc 렌더러 — 지금은
+              선언만 있는 descriptor 필드들을 실제로 소비하게 만드는
+              단계).</p>
           </div>
         </div>
       </section>
 
+      <section>
+        <h2>9. 인터페이스 설계 결정 — 경계마다 무엇을 계약했나</h2>
+        <p>
+          지금까지의 구현에서 확정된 인터페이스 수준의 결정들입니다.
+          공통 원칙은 하나입니다: <strong>경계를 넘는 것은 데이터와 좁은
+          계약뿐, 구현 지식은 넘기지 않는다.</strong>
+        </p>
+
+        <h3>9.1 descriptor 계약 — <code>defineMcpHostAgent&lt;TManifest&gt;</code></h3>
+        <table>
+          <tr><th>결정</th><th>내용과 이유</th></tr>
+          <tr>
+            <td>설치 방법은 5종 유니언 타입</td>
+            <td>문서화된 10개 에이전트 전수 조사에서 도출:
+              <code>cli</code>(명령어) / <code>deeplink</code>(원클릭) /
+              <code>ui-form</code>(호스티드 폼, 설정 파일 없음) /
+              <code>config-file</code>(수동 병합) /
+              <code>manual-url</code>(URL 붙여넣기). 스키마를 2개 사례가
+              아니라 10개 기준으로 먼저 설계해 E2에서의 스키마 개정을
+              방지</td>
+          </tr>
+          <tr>
+            <td>manifest template은 제네릭으로 컴파일 검증</td>
+            <td><code>TManifest</code> 타입 파라미터로 template 반환값이
+              각 클라이언트의 manifest 인터페이스와 일치함을 컴파일러가
+              강제. 골든 바이트 검증(CI)에 도달하기 전에 타입에서 먼저
+              잡힘 — 리뷰에서 <code>as unknown as</code> 캐스트를 걷어낸
+              결과</td>
+          </tr>
+          <tr>
+            <td><code>generateRequiredManifest()</code>는 SDK에 한 번만</td>
+            <td>"manifest가 반드시 있는 클라이언트"의 throw 가드를
+              클라이언트마다 복붙하지 않고 SDK 메서드 하나로 제공.
+              E2에서 에이전트가 늘어도 가드는 늘지 않음</td>
+          </tr>
+          <tr>
+            <td>manifest 외 필드는 아직 선언만 (명시적)</td>
+            <td><code>install</code>·<code>configFile</code>·
+              <code>extras</code>·<code>requirements</code>·
+              <code>postInstall</code>은 E2의 install-doc 렌더러가 소비할
+              때까지 "선언적 문서"임을 인터페이스 주석에 명시 — 읽는
+              사람이 load-bearing으로 오해하지 않게</td>
+          </tr>
+        </table>
+
+        <h3 style="margin-top: 20px;">9.2 capture-core 계약 — 공유 런타임 프리미티브</h3>
+        <table>
+          <tr><th>결정</th><th>내용과 이유</th></tr>
+          <tr>
+            <td>리댁션 정책 2단계</td>
+            <td><strong>capture 경로(기기를 떠나는 텍스트) = 풀 리댁션</strong>
+              (<code>redactSecrets</code>: 개인키·할당문·bearer·CLI
+              플래그·프로바이더 토큰 5종 패턴) — Claude 정책으로 전
+              클라이언트 수렴, E1에서 OpenClaw까지 완료.
+              <strong>recall 경로(검색 질의) = 좁은 할당문 리댁션</strong> —
+              질의를 과하게 지우면 검색 품질이 떨어지므로 D2에서 의도적
+              수렴 예정. "전부 리댁션"이 아니라 경로별 정책이라는 게 결정의
+              핵심</td>
+          </tr>
+          <tr>
+            <td><code>MembaseTransport</code>는 에러를 주입받음</td>
+            <td>토큰 상태·single-flight 갱신(동시 요청이 갱신을 한 번만
+              수행)·401 시 1회 재시도는 core가 소유하되, 에러
+              <em>클래스</em>와 메시지 문구는 각 런타임이 주입 —
+              <code>instanceof</code> 검사와 사용자 향 문구를 깨지 않고
+              전송 계층만 공유</td>
+          </tr>
+          <tr>
+            <td>디스크 스풀은 파라미터 2개짜리 계약</td>
+            <td>상태 디렉터리 + sanitize 함수만 받는 파일락 스풀.
+              Claude처럼 훅이 단명 프로세스인 클라이언트용이며, D3의
+              Cursor 훅(같은 스폰 모델)이 그대로 재사용할 예정</td>
+          </tr>
+          <tr>
+            <td>큐 3종은 일부러 통합하지 않음</td>
+            <td>디스크 스풀(Claude — 단명 스폰 프로세스) / 인메모리 버퍼
+              (OpenClaw — 장수명 게이트웨이) / bounded 스레드 큐(Hermes —
+              Python 호스트)는 우연한 중복이 아니라 실행 모델의 차이.
+              하나의 추상화로 강제하지 않기로 ADR 0002 slice 3에서 명시
+              결정</td>
+          </tr>
+          <tr>
+            <td>골든 벡터가 언어 경계를 묶음</td>
+            <td><code>spec/sanitize-vectors.json</code> — 입력→출력 정답을
+              언어 중립 JSON으로 고정, TS 테스트와 Python 테스트가 같은
+              파일을 소비. 두 언어 구현의 드리프트가 몇 달 뒤 버그가 아니라
+              지금 CI 실패로 나타남</td>
+          </tr>
+        </table>
+
+        <h3 style="margin-top: 20px;">9.3 훅 등록 모델 — 클라이언트마다 "언제"가 다르다</h3>
+        <table>
+          <tr><th>클라이언트</th><th>등록 방식</th><th>이벤트와 역할</th></tr>
+          <tr>
+            <td>Claude Code</td>
+            <td>선언형 <code>hooks.json</code> — 이벤트마다
+              <code>hook.cjs</code>를 스폰(단명 프로세스)</td>
+            <td><code>SessionStart</code>·<code>UserPromptSubmit</code>
+              (동기, recall 주입) / <code>PostToolBatch</code>·
+              <code>Stop</code>·<code>SessionEnd</code>·압축 전후
+              (비동기, 캡처→디스크 스풀)</td>
+          </tr>
+          <tr>
+            <td>OpenClaw</td>
+            <td>코드 등록 <code>api.on(...)</code> — 장수명 게이트웨이
+              프로세스 안</td>
+            <td><code>before_agent_start</code>(recall 주입 + 로그인 안내)
+              / <code>agent_end</code>(캡처→인메모리 버퍼).
+              주의: 호스트 2026.6.x부터
+              <code>hooks.allowConversationAccess: true</code> 없으면
+              캡처 훅이 조용히 차단됨 — 라이브 검증에서 발견해 설치 문서에
+              반영</td>
+          </tr>
+          <tr>
+            <td>Hermes</td>
+            <td>훅이 아니라 <strong>provider 슬롯</strong> — 호스트가
+              provider 메서드를 직접 호출</td>
+            <td><code>on_session_end(messages)</code>(캡처→스레드 큐) /
+              <code>on_memory_write</code>(내장 메모리 미러링) / 검색은
+              호스트가 provider 검색 인터페이스 호출</td>
+          </tr>
+          <tr>
+            <td>Cursor / Codex</td>
+            <td>현재 없음 — 순수 MCP 설정 전용</td>
+            <td>D3에서 추가 예정: Cursor는 <code>hooks.json</code>
+              (Claude와 같은 스폰형이라 디스크 스풀 재사용), Codex는
+              plugin hook/<code>notify</code>. 둘 다 capture-core 위에
+              이벤트 이름·페이로드 변환만 하는 어댑터</td>
+          </tr>
+        </table>
+
+        <h3 style="margin-top: 20px;">9.4 어댑터 계약 — <code>ClientAdapter</code></h3>
+        <p>
+          모든 클라이언트가 구현하는 최소 계약은 4개 멤버뿐입니다:
+          <code>id</code> / <code>displayName</code> /
+          <code>generateManifest</code> / <code>generateMcpConfig</code>
+          (+ 스모크 테스트 선언). descriptor 기반 에이전트는 이 계약을
+          <code>defineMcpHostAgent</code>가 자동 생성하고, 런타임
+          클라이언트는 직접 구현합니다 — 즉 계약은 하나, 충족 방식이 두
+          가지입니다.
+        </p>
+      </section>
+
       <footer>
-        기준 시점: 2026-07-05 · main 브랜치 (7be0127) · 상세 근거는
-        <code>docs/architecture.md</code>와 <code>docs/adr/</code> 참고.
+        기준 시점: 2026-07-05 · main 브랜치 (1043ae9, 투키 게이트 통과) ·
+        상세 근거는 <code>docs/architecture.md</code>,
+        <code>docs/adr/</code>, <code>docs/north-star-readiness.md</code>
+        참고.
       </footer>
     </main>
   </body>
