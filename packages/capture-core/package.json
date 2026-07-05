@@ -1,0 +1,20 @@
+{
+  "name": "@membase/capture-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared client-side capture/recall primitives (sanitize, redaction, casual/noise filters) for the Membase connector runtimes. ADR 0002.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --pretty false",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.14",
+    "typescript": "^6.0.3"
+  }
+}
