@@ -332,17 +332,72 @@ function writeTokens(tokens) {
   writeJsonAtomic(credentialsPath(), tokens);
 }
 
-// src/sanitize/index.ts
+// ../../../packages/capture-core/src/index.ts
 var CASUAL_PATTERNS = [
-  /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/i,
-  /^(good\s*(morning|afternoon|evening|night))\b/i,
-  /^(thanks|thank you|thx|ty)\b/i,
-  /^(ok|okay|sure|got it|sounds good|cool|nice|great|awesome|perfect)\b/i,
-  /^(bye|goodbye|see you|later|gn|ttyl)\b/i,
-  /^(yes|no|yep|nope|yeah|nah)\b/i,
-  /^(lol|lmao|haha|heh)\b/i,
-  /^(how are you|what's up|whats up|wassup)\b/i
+  /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
+  /^(good\s*(morning|afternoon|evening|night))\b/,
+  /^(thanks|thank you|thx|ty)\b/,
+  /^(ok|okay|sure|got it|sounds good|cool|nice|great|awesome|perfect)\b/,
+  /^(bye|goodbye|see you|later|gn|ttyl)\b/,
+  /^(yes|no|yep|nope|yeah|nah)\b/,
+  /^(lol|lmao|haha|heh)\b/,
+  /^(how are you|what's up|whats up|wassup)\b/
 ];
+function isCasualChat(text, keywords, emptyIsCasual = false) {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return emptyIsCasual;
+  if (lower.includes("?") || keywords.some((kw) => lower.includes(kw))) {
+    return false;
+  }
+  return CASUAL_PATTERNS.some((pattern) => pattern.test(lower));
+}
+var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
+var SIMPLE_TAG_RE = /<\/?final>/gi;
+var CODE_BLOCK_RE = /```[\s\S]*?```/g;
+function stripContextBlocks(text) {
+  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
+}
+function normalizeLines(text, dropLine) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
+}
+var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
+  "API_KEY",
+  "TOKEN",
+  "SECRET",
+  "PASSWORD",
+  "PRIVATE_KEY"
+];
+function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
+  return new RegExp(
+    `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
+    "gi"
+  );
+}
+var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
+var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
+var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
+var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+function redactSecrets(text) {
+  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(buildSecretAssignmentRe(), "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
+}
+function patternTest(pattern, text) {
+  pattern.lastIndex = 0;
+  return pattern.test(text);
+}
+function looksSensitive(text) {
+  return patternTest(buildSecretAssignmentRe(), text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
+}
+function clampRecallQuery(sanitized, max = 240) {
+  return sanitized.replace(CODE_BLOCK_RE, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function truncateText(value, max = 500) {
+  if (!value) return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+
+// src/sanitize/index.ts
 var MEMORY_KEYWORDS = [
   "remember",
   "recall",
@@ -365,16 +420,7 @@ var MEMORY_KEYWORDS = [
   "issue",
   "error"
 ];
-var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
 var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
-var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
-var SECRET_ASSIGNMENT_RE = /\b([A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*[^\s`]+/gi;
-var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
-var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
-var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
-var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-var CODE_BLOCK_RE = /```[\s\S]*?```/g;
-var SIMPLE_TAG_RE = /<\/?final>/gi;
 var OPERATIONAL_PATTERNS = [
   /^heartbeat$/i,
   /^heartbeat_ok$/i,
@@ -384,47 +430,25 @@ var OPERATIONAL_PATTERNS = [
   /^heartbeat check$/i,
   /\bcheck\s+heartbeat\.md\b/i
 ];
-function patternTest(pattern, text) {
-  pattern.lastIndex = 0;
-  return pattern.test(text);
-}
 function sanitizeMembaseText(raw) {
-  let cleaned = raw;
-  cleaned = cleaned.replace(PRIVATE_BLOCK_RE, " ");
-  cleaned = cleaned.replace(MEMBASE_CONTEXT_BLOCK_RE, " ");
-  cleaned = cleaned.replace(METADATA_BLOCK_RE, " ");
-  cleaned = cleaned.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]");
-  cleaned = cleaned.replace(SECRET_ASSIGNMENT_RE, "$1=[REDACTED]");
-  cleaned = cleaned.replace(BEARER_TOKEN_RE, "$1[REDACTED]");
-  cleaned = cleaned.replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]");
-  cleaned = cleaned.replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
-  cleaned = cleaned.replace(SIMPLE_TAG_RE, " ");
-  return cleaned.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join("\n").trim();
+  const cleaned = redactSecrets(
+    stripContextBlocks(raw.replace(PRIVATE_BLOCK_RE, " "))
+  );
+  return normalizeLines(cleaned);
 }
 function sanitizeRecallQuery(raw) {
-  return sanitizeMembaseText(raw).replace(CODE_BLOCK_RE, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+  return clampRecallQuery(sanitizeMembaseText(raw));
 }
-function isCasualChat(text) {
-  const lower = text.toLowerCase().trim();
-  if (!lower) return true;
-  if (lower.includes("?") || MEMORY_KEYWORDS.some((kw) => lower.includes(kw))) {
-    return false;
-  }
-  return CASUAL_PATTERNS.some((pattern) => pattern.test(lower));
+function isCasualChat2(text) {
+  return isCasualChat(text, MEMORY_KEYWORDS, true);
 }
 function isOperationalMessage(text) {
   const trimmed = text.trim();
   if (!trimmed) return true;
   return OPERATIONAL_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
-function looksSensitive(text) {
-  return patternTest(SECRET_ASSIGNMENT_RE, text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
-}
-function truncateText(value, max = 500) {
-  if (!value) return "";
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
-}
+var looksSensitive2 = looksSensitive;
+var truncateText2 = truncateText;
 
 // src/format/index.ts
 function formatBundle(bundle, index) {
@@ -432,9 +456,9 @@ function formatBundle(bundle, index) {
   const score = typeof bundle.relevance_score === "number" ? ` score=${bundle.relevance_score.toFixed(3)}` : "";
   const source = episode.source ? ` source=${episode.source}` : "";
   const when = episode.valid_at || episode.created_at || "";
-  const facts = (bundle.edges ?? []).map((edge) => edge.fact).filter((fact) => Boolean(fact)).slice(0, 3).map((fact) => `    - ${truncateText(fact, 180)}`).join("\n");
-  const header = `${index + 1}. ${truncateText(episode.name || episode.summary || "Memory", 180)}${score}${source}${when ? ` at=${when}` : ""}`;
-  const summary = episode.summary ? `   summary: ${truncateText(episode.summary, 240)}` : "";
+  const facts = (bundle.edges ?? []).map((edge) => edge.fact).filter((fact) => Boolean(fact)).slice(0, 3).map((fact) => `    - ${truncateText2(fact, 180)}`).join("\n");
+  const header = `${index + 1}. ${truncateText2(episode.name || episode.summary || "Memory", 180)}${score}${source}${when ? ` at=${when}` : ""}`;
+  const summary = episode.summary ? `   summary: ${truncateText2(episode.summary, 240)}` : "";
   return [header, summary, facts ? `   related facts:
 ${facts}` : ""].filter(Boolean).join("\n");
 }
@@ -442,9 +466,9 @@ function formatWikiDocument(doc, index) {
   const score = typeof doc.similarity === "number" ? ` score=${doc.similarity.toFixed(3)}` : "";
   const collection = doc.collection_name ? ` collection=${doc.collection_name}` : "";
   return [
-    `${index + 1}. ${truncateText(doc.title, 180)}${score}${collection}`,
+    `${index + 1}. ${truncateText2(doc.title, 180)}${score}${collection}`,
     `   id: ${doc.id}`,
-    `   ${truncateText(doc.content, 700)}`
+    `   ${truncateText2(doc.content, 700)}`
   ].join("\n");
 }
 function buildRecallContext(memoryGroups, wikiDocs, maxChars) {
@@ -709,7 +733,7 @@ function enqueueCapture(record) {
     }),
     capture_kind: record.capture_kind,
     content,
-    display_summary: record.display_summary ?? truncateText(content, 180),
+    display_summary: record.display_summary ?? truncateText2(content, 180),
     project: record.project,
     metadata: record.metadata,
     created_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -849,9 +873,9 @@ function summarizeToolCall(tool) {
   }
   const input = objectValue(tool.tool_input ?? tool.input);
   const path = typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : void 0;
-  const command = name === "Bash" && typeof input.command === "string" ? truncateText(input.command, 160) : void 0;
+  const command = name === "Bash" && typeof input.command === "string" ? truncateText2(input.command, 160) : void 0;
   if (name === "Bash") {
-    if (!command || looksSensitive(command)) return null;
+    if (!command || looksSensitive2(command)) return null;
     if (PASSIVE_BASH_RE.test(command) || !IMPORTANT_BASH_RE.test(command)) {
       return null;
     }
@@ -989,7 +1013,7 @@ async function handleUserPromptSubmit(input) {
   if (!tokens) return;
   const prompt = sanitizeRecallQuery(extractPrompt(input));
   if (!prompt || prompt.length < 8) return;
-  if (isCasualChat(prompt) || isOperationalMessage(prompt)) return;
+  if (isCasualChat2(prompt) || isOperationalMessage(prompt)) return;
   const client = createClient(config.apiUrl, tokens, writeTokens, {
     timeoutMs: DEFAULT_RECALL_TIMEOUT_MS
   });
@@ -1043,7 +1067,7 @@ async function spoolToolBatch(input) {
   const content = `Claude Code tool summary:
 
 ${summaries.join("\n\n")}`;
-  if (looksSensitive(content)) return;
+  if (looksSensitive2(content)) return;
   enqueueCapture({
     capture_kind: "tool_summary",
     content,
@@ -1059,11 +1083,11 @@ async function spoolSessionSummary(input, captureKind) {
   const project = resolveProjectSlug(input.cwd, config);
   const raw = typeof input.compact_summary === "string" ? input.compact_summary : "";
   const content = buildSessionCaptureCandidate(raw, captureKind);
-  if (!content || looksSensitive(content)) return;
+  if (!content || looksSensitive2(content)) return;
   enqueueCapture({
     capture_kind: captureKind,
     content,
-    display_summary: truncateText(content, 180),
+    display_summary: truncateText2(content, 180),
     project,
     sessionId: input.session_id,
     metadata: captureMetadata(input, project)

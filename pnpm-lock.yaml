@@ -23,6 +23,9 @@ importers:
 
   clients/claude/runtime:
     dependencies:
+      '@membase/capture-core':
+        specifier: workspace:*
+        version: link:../../../packages/capture-core
       '@modelcontextprotocol/sdk':
         specifier: ^1.22.0
         version: 1.29.0(zod@4.4.3)
@@ -84,6 +87,9 @@ importers:
 
   clients/openclaw/runtime:
     dependencies:
+      '@membase/capture-core':
+        specifier: workspace:*
+        version: link:../../../packages/capture-core
       openclaw:
         specifier: '>=2026.1.0'
         version: 2026.6.11
@@ -91,6 +97,15 @@ importers:
       '@types/bun':
         specifier: ^1.2.14
         version: 1.3.14
+
+  packages/capture-core:
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.2.14
+        version: 1.3.14
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/connector-sdk:
     dependencies:

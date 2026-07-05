@@ -1,0 +1,59 @@
+{
+  "$comment": "Language-neutral golden vectors binding the TS capture-core and the Hermes Python sanitize port (ADR 0002). Both test suites consume this file. All secret-shaped values are fabricated fixtures for redaction tests.",
+  "redact_secret_assignment_full": {
+    "$comment": "Full keyword set (API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY). Capture-path policy (Claude runtime).",
+    "cases": [
+      { "in": "MEMBASE_API_KEY=example9f8e7d6c5b4a", "out": "MEMBASE_API_KEY=[REDACTED]" },
+      { "in": "run with TOKEN=dummy-abcdef123456 now", "out": "run with TOKEN=[REDACTED] now" },
+      { "in": "MY_PRIVATE_KEY=example-hex-0011223344", "out": "MY_PRIVATE_KEY=[REDACTED]" },
+      { "in": "no secrets here", "out": "no secrets here" }
+    ]
+  },
+  "redact_secret_assignment_basic": {
+    "$comment": "Basic keyword set (no PRIVATE_KEY). Recall-query policy (OpenClaw/Hermes runtimes).",
+    "cases": [
+      { "in": "DB_PASSWORD=example123456", "out": "DB_PASSWORD=[REDACTED]" },
+      { "in": "SOME_SECRET=dummy-value-1", "out": "SOME_SECRET=[REDACTED]" },
+      { "in": "plain text stays", "out": "plain text stays" }
+    ]
+  },
+  "redact_common_tokens": {
+    "cases": [
+      { "in": "key sk-testtesttesttesttest1234 leaked", "out": "key [REDACTED_TOKEN] leaked" },
+      { "in": "ghp_testtesttesttesttest12345 in url", "out": "[REDACTED_TOKEN] in url" },
+      { "in": "xoxb-test-test-test-test-12345678 slack", "out": "[REDACTED_TOKEN] slack" }
+    ]
+  },
+  "redact_bearer": {
+    "cases": [
+      { "in": "authorization: bearer example.jwt.value", "out": "authorization: bearer [REDACTED]" }
+    ]
+  },
+  "strip_context_blocks": {
+    "$comment": "Injected membase context, untrusted metadata blocks, and <final> tags are removed; surrounding text survives.",
+    "cases": [
+      { "in": "before <membase-context>injected</membase-context> after", "out": "before  after" },
+      { "in": "<final>answer</final>", "out": " answer " },
+      { "in": "keep this line", "out": "keep this line" }
+    ]
+  },
+  "casual_chat": {
+    "$comment": "Uses the shared CASUAL_PATTERNS with the OpenClaw/Hermes keyword list; input is lower-cased by the implementation.",
+    "keywords": ["remember", "recall", "forgot", "forget", "last time", "previously", "before", "history", "decide", "decision", "chose", "choice", "plan", "goal", "project", "preference", "setting", "config", "deploy", "release", "migration", "refactor", "architecture", "deadline", "schedule", "budget", "fix", "bug", "issue", "error"],
+    "cases": [
+      { "in": "hey there", "casual": true },
+      { "in": "Thanks!", "casual": true },
+      { "in": "ok cool", "casual": true },
+      { "in": "hey, remember my deploy preference", "casual": false },
+      { "in": "what is the plan?", "casual": false },
+      { "in": "we decided to use postgres", "casual": false }
+    ]
+  },
+  "recall_query_clamp": {
+    "$comment": "Code blocks dropped, whitespace collapsed, clamped to 240 chars.",
+    "cases": [
+      { "in": "explain   this\n\nplease", "out": "explain this please" },
+      { "in": "look ```js\nconst x = 1;\n``` done", "out": "look done" }
+    ]
+  }
+}
