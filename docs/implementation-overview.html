@@ -953,6 +953,125 @@ private memory engine (실제 기억 저장소)</code></pre>
           클라이언트는 직접 구현합니다 — 즉 계약은 하나, 충족 방식이 두
           가지입니다.
         </p>
+
+        <h3 style="margin-top: 20px;">9.5 클라이언트별 도구·커맨드 전수 맵</h3>
+        <p>
+          "도구"는 AI가 스스로 호출하는 기능, "커맨드"는 사람이 입력하는
+          명령입니다. 도구가 어디서 실행되는지가 핵심 차이입니다 —
+          런타임 클라이언트 3종은 도구가 <em>사용자 기기에서</em> 돌고,
+          Cursor·Codex는 도구가 <em>Membase 서버에서</em> 돌며 로컬엔 설정
+          한 조각만 있습니다.
+        </p>
+        <table>
+          <tr><th>클라이언트</th><th>도구 (AI 호출)</th><th>커맨드/스킬 (사람 입력)</th></tr>
+          <tr>
+            <td>Claude Code<br><span style="font-size:12px">(동봉 stdio 서버 — 로컬 실행)</span></td>
+            <td>11개: <code>add_memory</code> · <code>search_memory</code> ·
+              <code>add_wiki</code> · <code>search_wiki</code> ·
+              <code>update_wiki</code> · <code>delete_wiki</code> ·
+              <code>get_current_date</code> · <code>get_status</code> ·
+              <code>login</code> · <code>logout</code> ·
+              <code>set_project_config</code></td>
+            <td>커맨드 8개: <code>/membase:login</code> ·
+              <code>logout</code> · <code>remember</code> ·
+              <code>recall</code> · <code>wiki</code> · <code>status</code> ·
+              <code>project-config</code> · <code>index-project</code><br>
+              스킬 5개(remember·recall·wiki·memory-hygiene·project-context)
+              + 큐레이터 에이전트 1개</td>
+          </tr>
+          <tr>
+            <td>OpenClaw<br><span style="font-size:12px">(게이트웨이 플러그인 — 로컬 실행)</span></td>
+            <td>8개: <code>membase_store</code> · <code>membase_search</code> ·
+              <code>membase_forget</code> · <code>membase_profile</code> ·
+              <code>membase_add_wiki</code> · <code>membase_search_wiki</code> ·
+              <code>membase_update_wiki</code> · <code>membase_delete_wiki</code></td>
+            <td><code>openclaw membase login</code> 등 CLI 서브커맨드</td>
+          </tr>
+          <tr>
+            <td>Hermes<br><span style="font-size:12px">(Python provider — 로컬 실행)</span></td>
+            <td>8개 — OpenClaw와 동일한 이름 세트
+              (<code>membase_search</code>/<code>store</code>/
+              <code>forget</code>/<code>profile</code> + wiki 4종)</td>
+            <td><code>hermes membase login</code> · <code>logout</code> ·
+              <code>status</code> · <code>resync</code> +
+              <code>hermes-membase-install</code></td>
+          </tr>
+          <tr>
+            <td>Cursor · Codex<br><span style="font-size:12px">(원격 HTTP MCP — 서버 실행)</span></td>
+            <td>서버가 노출하는 7개: <code>add_memory</code> ·
+              <code>search_memory</code> · <code>add_wiki</code> ·
+              <code>search_wiki</code> · <code>update_wiki</code> ·
+              <code>delete_wiki</code> · <code>get_current_date</code>
+              (Tier 3 계약 게이트가 7/7 존재를 매일 검증)</td>
+            <td>없음 — 로컬엔 훅도 커맨드도 없고 MCP 설정뿐 (D3에서 훅
+              어댑터 추가 예정)</td>
+          </tr>
+        </table>
+        <p style="margin-top: 8px; font-size: 14px;">
+          이름 규칙의 이유: 런타임 클라이언트는 호스트 안에 다른 도구가
+          많아 <code>membase_</code> 접두사로 충돌을 피하고, 원격 서버
+          도구는 서버가 이름 공간의 주인이라 접두사가 없습니다.
+        </p>
+
+        <h3 style="margin-top: 20px;">9.6 시나리오로 보는 호출 경로</h3>
+        <div class="grid">
+          <div class="card">
+            <h3>시나리오 A — Telegram(OpenClaw)에서 "위키에서 X 찾아줘"</h3>
+            <p>도구가 <strong>내 기기(게이트웨이)</strong>에서 실행되는
+              로컬 경로입니다.</p>
+<pre><code>사용자 → @bot "위키에서 X 찾아줘"
+  ↓ Telegram provider가 메시지 수신
+게이트웨이 에이전트(LLM)가 도구 선택
+  ↓ membase_search_wiki 호출
+clients/openclaw/runtime/src/tools/search-wiki.ts
+  ↓ MembaseClient.searchWiki(...)
+capture-core MembaseTransport
+  · Bearer 토큰 첨부, 만료 시 single-flight 갱신 후 1회 재시도
+  ↓ HTTPS
+api.membase.so → 위키 검색 결과
+  ↓ 포맷 → 봇 응답
+
+(대화가 끝나면 별도로)
+agent_end 훅 → sanitizeCaptureText(풀 리댁션)
+  → 인메모리 버퍼 → flush → 이 대화 자체가 기억으로 저장</code></pre>
+          </div>
+          <div class="card">
+            <h3>시나리오 B — Cursor에서 "이 내용 위키로 저장해줘"</h3>
+            <p>도구가 <strong>Membase 서버</strong>에서 실행되는 원격
+              경로입니다. 이 레포의 기여분은 설정 파일 모양(descriptor)
+              뿐이라는 점이 핵심입니다.</p>
+<pre><code>사용자 → Cursor 채팅 "이 내용 위키로 저장해줘"
+  ↓ Cursor의 MCP 클라이언트 (이 레포 코드 아님)
+~/.cursor/mcp.json의 membase 항목
+  · descriptor가 생성한 { url: mcp.membase.so/mcp }
+  ↓ HTTPS + Cursor가 관리하는 OAuth 토큰
+mcp.membase.so의 add_wiki 도구가 서버에서 실행
+  ↓ 저장 완료 응답 → Cursor가 사용자에게 표시
+
+로컬에서 실행되는 이 레포 코드: 0줄
+(훅이 없으므로 자동 캡처도 없음 — D3에서 추가)</code></pre>
+          </div>
+        </div>
+        <div class="card" style="margin-top: 16px;">
+          <h3>시나리오 C — 크로스 클라이언트 (게이트 검증에서 실측)</h3>
+          <p>
+            "공유 메모리"가 실제로 어떻게 성립하는지 — 2026-07-05 투키
+            게이트 검증에서 그대로 실행한 흐름입니다.
+          </p>
+<pre><code>[저장]  Claude Code: add_memory("...코드워드 G2-CLAUDE-7f3a...")
+        → 동봉 stdio 서버(mcp-server.cjs) → api.membase.so
+        → 인덱싱 (~30초 소요, Tier 3가 이 지연도 측정)
+
+[검색]  네 갈래가 전부 같은 기억에 도달:
+  Cursor  → mcp.membase.so의 search_memory (원격 도구)
+  Codex   → mcp.membase.so의 search_memory (원격 도구)
+  Hermes  → provider의 membase_search → 로컬 클라이언트 → API
+  OpenClaw→ membase_search 도구 → 로컬 클라이언트 → API
+
+같은 계정 + 같은 서버 = 어느 문으로 들어가도 같은 기억.
+클라이언트가 다섯이어도 기억 저장소는 하나라는 것이
+이 레포가 제공하는 제품 명제의 전부입니다.</code></pre>
+        </div>
       </section>
 
       <footer>
