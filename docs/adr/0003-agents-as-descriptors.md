@@ -92,7 +92,10 @@ ships a runtime; its adapter can still become a descriptor while
 - E1: descriptor mechanism in connector-sdk + migrate cursor/codex
   (byte-identical goldens).
 - E2: add the seven remaining documented agents (descriptors + install docs +
-  e2e configs).
+  e2e configs). E2 also adds the install-doc renderer and checks that consume
+  the descriptor's install/configFile/extras/requirements/postInstall fields —
+  in E1 those fields are declarative documentation only (nothing generates
+  from them yet).
 - Independent of Group D (capture-core); either can land first. Both wait
   behind the north-star Gate 2 sign-off for publishing purposes but may merge
   to main before it.
