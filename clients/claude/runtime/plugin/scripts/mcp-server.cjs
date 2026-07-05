@@ -1058,10 +1058,10 @@ var require_util = __commonJS({
     var codegen_1 = require_codegen();
     var code_1 = require_code();
     function toHash(arr) {
-      const hash2 = {};
+      const hash3 = {};
       for (const item of arr)
-        hash2[item] = true;
-      return hash2;
+        hash3[item] = true;
+      return hash3;
     }
     exports2.toHash = toHash;
     function alwaysValidSchema(it, schema) {
@@ -30955,7 +30955,281 @@ var StdioServerTransport = class {
   }
 };
 
+// ../../../packages/capture-core/src/spool.ts
+var import_node_crypto = require("node:crypto");
+var import_node_fs = require("node:fs");
+var import_node_path = require("node:path");
+var LOCK_STALE_MS = 3e4;
+var LOCK_WAIT_MS = 2e3;
+var INFLIGHT_STALE_MS = 6e4;
+var SLEEP_BUFFER = new SharedArrayBuffer(4);
+var SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
+function sleepSync(ms) {
+  Atomics.wait(SLEEP_VIEW, 0, 0, ms);
+}
+function hash2(input) {
+  return (0, import_node_crypto.createHash)("sha256").update(input).digest("hex");
+}
+function createCaptureSpool(options) {
+  const minContentLength = options.minContentLength ?? 20;
+  function spoolDir() {
+    const dir = (0, import_node_path.join)(options.stateDir(), "spool");
+    (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
+    return dir;
+  }
+  function spoolPath() {
+    return (0, import_node_path.join)(spoolDir(), "pending.jsonl");
+  }
+  function sentPath() {
+    return (0, import_node_path.join)(spoolDir(), "sent.json");
+  }
+  function lockPath() {
+    return (0, import_node_path.join)(spoolDir(), ".lock");
+  }
+  function inflightPath() {
+    return (0, import_node_path.join)(spoolDir(), `inflight-${process.pid}-${Date.now()}.jsonl`);
+  }
+  function acquireLock(timeoutMs = LOCK_WAIT_MS) {
+    const path = lockPath();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const fd = (0, import_node_fs.openSync)(path, "wx", 384);
+        return () => {
+          try {
+            (0, import_node_fs.closeSync)(fd);
+          } catch {
+          }
+          try {
+            (0, import_node_fs.rmSync)(path, { force: true });
+          } catch {
+          }
+        };
+      } catch (error51) {
+        if (error51.code !== "EEXIST") throw error51;
+        try {
+          if (Date.now() - (0, import_node_fs.statSync)(path).mtimeMs > LOCK_STALE_MS) {
+            (0, import_node_fs.rmSync)(path, { force: true });
+            continue;
+          }
+        } catch {
+        }
+        sleepSync(25);
+      }
+    }
+    throw new Error("Timed out waiting for Membase capture spool lock.");
+  }
+  function withSpoolLock(callback, timeoutMs = LOCK_WAIT_MS) {
+    const release = acquireLock(timeoutMs);
+    try {
+      return callback();
+    } finally {
+      release();
+    }
+  }
+  function captureId(args) {
+    return hash2(
+      `${args.sessionId ?? "unknown"}:${args.captureKind}:${options.sanitize(
+        args.content
+      )}`
+    );
+  }
+  function readRecordsFromPath(path) {
+    if (!(0, import_node_fs.existsSync)(path)) return [];
+    const raw = (0, import_node_fs.readFileSync)(path, "utf-8").trim();
+    if (!raw) return [];
+    return raw.split(/\r?\n/).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    }).filter((record2) => Boolean(record2));
+  }
+  function readRecords() {
+    return readRecordsFromPath(spoolPath());
+  }
+  function writeRecordsToPath(path, records) {
+    const tmp = `${path}.tmp`;
+    (0, import_node_fs.writeFileSync)(
+      tmp,
+      records.map((record2) => JSON.stringify(record2)).join("\n") + (records.length ? "\n" : ""),
+      { encoding: "utf-8", mode: 384 }
+    );
+    (0, import_node_fs.renameSync)(tmp, path);
+  }
+  function writeRecords(records) {
+    writeRecordsToPath(spoolPath(), records);
+  }
+  function appendRecords(records) {
+    if (records.length === 0) return;
+    (0, import_node_fs.appendFileSync)(
+      spoolPath(),
+      `${records.map((record2) => JSON.stringify(record2)).join("\n")}
+`,
+      {
+        encoding: "utf-8",
+        mode: 384
+      }
+    );
+  }
+  function readSentIds() {
+    const path = sentPath();
+    if (!(0, import_node_fs.existsSync)(path)) return /* @__PURE__ */ new Set();
+    try {
+      const parsed = JSON.parse((0, import_node_fs.readFileSync)(path, "utf-8"));
+      if (!Array.isArray(parsed)) return /* @__PURE__ */ new Set();
+      return new Set(
+        parsed.filter((value) => typeof value === "string")
+      );
+    } catch {
+      return /* @__PURE__ */ new Set();
+    }
+  }
+  function writeSentIds(ids) {
+    const values = Array.from(ids).slice(-2e3);
+    const path = sentPath();
+    const tmp = `${path}.tmp`;
+    (0, import_node_fs.writeFileSync)(tmp, `${JSON.stringify(values, null, 2)}
+`, {
+      encoding: "utf-8",
+      mode: 384
+    });
+    (0, import_node_fs.renameSync)(tmp, path);
+  }
+  function inflightFiles() {
+    return (0, import_node_fs.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path.join)(spoolDir(), name));
+  }
+  function readInflightRecords() {
+    return inflightFiles().flatMap((path) => readRecordsFromPath(path));
+  }
+  function dedupeRecords(records, sentIds = readSentIds()) {
+    const seen = /* @__PURE__ */ new Set();
+    return records.filter((record2) => {
+      if (sentIds.has(record2.capture_id) || seen.has(record2.capture_id)) {
+        return false;
+      }
+      seen.add(record2.capture_id);
+      return true;
+    });
+  }
+  function appendPendingRecordsLocked(records) {
+    const sentIds = readSentIds();
+    const existingIds = new Set(
+      readRecords().map((record2) => record2.capture_id)
+    );
+    const next = records.filter((record2) => {
+      if (sentIds.has(record2.capture_id) || existingIds.has(record2.capture_id)) {
+        return false;
+      }
+      existingIds.add(record2.capture_id);
+      return true;
+    });
+    appendRecords(next);
+  }
+  function recoverStaleInflightLocked() {
+    const now = Date.now();
+    for (const path of inflightFiles()) {
+      try {
+        if (now - (0, import_node_fs.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
+        appendPendingRecordsLocked(readRecordsFromPath(path));
+        (0, import_node_fs.rmSync)(path, { force: true });
+      } catch {
+      }
+    }
+  }
+  function enqueueCapture(record2) {
+    const content = options.sanitize(record2.content);
+    if (!content || content.length < minContentLength) return null;
+    const next = {
+      capture_id: captureId({
+        sessionId: record2.sessionId,
+        captureKind: record2.capture_kind,
+        content
+      }),
+      capture_kind: record2.capture_kind,
+      content,
+      display_summary: record2.display_summary ?? truncateText(content, 180),
+      project: record2.project,
+      metadata: record2.metadata,
+      created_at: (/* @__PURE__ */ new Date()).toISOString(),
+      attempts: 0
+    };
+    try {
+      return withSpoolLock(() => {
+        recoverStaleInflightLocked();
+        const existing = [...readRecords(), ...readInflightRecords()];
+        if (existing.some((item) => item.capture_id === next.capture_id)) {
+          return null;
+        }
+        if (readSentIds().has(next.capture_id)) return null;
+        appendRecords([next]);
+        return next;
+      });
+    } catch {
+      return null;
+    }
+  }
+  function pendingSpoolCount2() {
+    return withSpoolLock(() => {
+      recoverStaleInflightLocked();
+      return readRecords().length;
+    });
+  }
+  async function flushSpool(send, limit = 10) {
+    const drained = withSpoolLock(() => {
+      recoverStaleInflightLocked();
+      const sentIds = readSentIds();
+      const records = dedupeRecords(readRecords(), sentIds);
+      const batch = records.slice(0, limit);
+      const pending = records.slice(limit);
+      writeRecords(pending);
+      const path = batch.length > 0 ? inflightPath() : void 0;
+      if (path) writeRecordsToPath(path, batch);
+      return { batch, path };
+    });
+    if (drained.batch.length === 0) {
+      return { flushed: 0, remaining: pendingSpoolCount2() };
+    }
+    const failed = [];
+    let flushed = 0;
+    for (const record2 of drained.batch) {
+      try {
+        await send(record2);
+        withSpoolLock(() => {
+          const sentIds = readSentIds();
+          sentIds.add(record2.capture_id);
+          writeSentIds(sentIds);
+        });
+        flushed += 1;
+      } catch (error51) {
+        failed.push({
+          ...record2,
+          attempts: (record2.attempts ?? 0) + 1,
+          last_error: error51 instanceof Error ? error51.message : String(error51)
+        });
+      }
+    }
+    const remaining = withSpoolLock(() => {
+      appendPendingRecordsLocked(failed);
+      if (drained.path) (0, import_node_fs.rmSync)(drained.path, { force: true });
+      return readRecords().length;
+    });
+    return { flushed, remaining };
+  }
+  return { captureId, enqueueCapture, flushSpool, pendingSpoolCount: pendingSpoolCount2 };
+}
+
 // ../../../packages/capture-core/src/index.ts
+var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
+var SIMPLE_TAG_RE = /<\/?final>/gi;
+function stripContextBlocks(text) {
+  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
+}
+function normalizeLines(text, dropLine) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
+}
 var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
   "API_KEY",
   "TOKEN",
@@ -30973,6 +31247,9 @@ var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
 var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+function redactSecrets(text) {
+  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(buildSecretAssignmentRe(), "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
+}
 function patternTest(pattern, text) {
   pattern.lastIndex = 0;
   return pattern.test(text);
@@ -31235,7 +31512,7 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
 }
 
 // src/auth/oauth.ts
-var import_node_crypto = require("node:crypto");
+var import_node_crypto2 = require("node:crypto");
 var import_node_http = require("node:http");
 var import_node_child_process = require("node:child_process");
 var CALLBACK_TIMEOUT_MS = 5 * 60 * 1e3;
@@ -31353,9 +31630,9 @@ function listenForCallback() {
 async function loginWithOAuth(apiUrl) {
   const callback = await listenForCallback();
   try {
-    const verifier = base64Url((0, import_node_crypto.randomBytes)(32));
-    const challenge = base64Url((0, import_node_crypto.createHash)("sha256").update(verifier).digest());
-    const state = base64Url((0, import_node_crypto.randomBytes)(16));
+    const verifier = base64Url((0, import_node_crypto2.randomBytes)(32));
+    const challenge = base64Url((0, import_node_crypto2.createHash)("sha256").update(verifier).digest());
+    const state = base64Url((0, import_node_crypto2.randomBytes)(16));
     const client = await registerClient(apiUrl, callback.redirectUri);
     const params = new URLSearchParams({
       response_type: "code",
@@ -31416,45 +31693,45 @@ ${authorizeUrl}`);
 }
 
 // src/config/index.ts
-var import_node_fs = require("node:fs");
+var import_node_fs2 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path = require("node:path");
+var import_node_path2 = require("node:path");
 function getDataDir() {
-  return process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase");
+  return process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path2.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase");
 }
 function ensureDataDir() {
   const dir = getDataDir();
-  (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
+  (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
   try {
-    (0, import_node_fs.chmodSync)(dir, 448);
+    (0, import_node_fs2.chmodSync)(dir, 448);
   } catch {
   }
   return dir;
 }
 function configPath() {
-  return (0, import_node_path.join)(ensureDataDir(), "config.json");
+  return (0, import_node_path2.join)(ensureDataDir(), "config.json");
 }
 function credentialsPath() {
-  return (0, import_node_path.join)(ensureDataDir(), "credentials.json");
+  return (0, import_node_path2.join)(ensureDataDir(), "credentials.json");
 }
 function readJsonObject(path) {
   try {
-    return JSON.parse((0, import_node_fs.readFileSync)(path, "utf-8"));
+    return JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
   } catch {
     return {};
   }
 }
 function writeJsonAtomic(path, value, mode = 384) {
-  (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(path), { recursive: true, mode: 448 });
+  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp`;
-  (0, import_node_fs.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
+  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
 `, {
     encoding: "utf-8",
     mode
   });
-  (0, import_node_fs.renameSync)(tmp, path);
+  (0, import_node_fs2.renameSync)(tmp, path);
   try {
-    (0, import_node_fs.chmodSync)(path, mode);
+    (0, import_node_fs2.chmodSync)(path, mode);
   } catch {
   }
 }
@@ -31527,7 +31804,7 @@ function saveConfig(next) {
 }
 function readTokens() {
   const path = credentialsPath();
-  if (!(0, import_node_fs.existsSync)(path)) return null;
+  if (!(0, import_node_fs2.existsSync)(path)) return null;
   const obj = readJsonObject(path);
   if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
     return null;
@@ -31546,154 +31823,29 @@ function writeTokens(tokens) {
 }
 function clearTokens() {
   try {
-    (0, import_node_fs.rmSync)(credentialsPath(), { force: true });
+    (0, import_node_fs2.rmSync)(credentialsPath(), { force: true });
   } catch {
   }
 }
 
-// src/spool/index.ts
-var import_node_fs2 = require("node:fs");
-var import_node_path2 = require("node:path");
-
 // src/sanitize/index.ts
+var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
+function sanitizeMembaseText(raw) {
+  const cleaned = redactSecrets(
+    stripContextBlocks(raw.replace(PRIVATE_BLOCK_RE, " "))
+  );
+  return normalizeLines(cleaned);
+}
 var looksSensitive2 = looksSensitive;
 var truncateText2 = truncateText;
 
 // src/spool/index.ts
-var LOCK_STALE_MS = 3e4;
-var LOCK_WAIT_MS = 2e3;
-var INFLIGHT_STALE_MS = 6e4;
-var SLEEP_BUFFER = new SharedArrayBuffer(4);
-var SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
-function spoolDir() {
-  const dir = (0, import_node_path2.join)(ensureDataDir(), "spool");
-  (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
-  return dir;
-}
-function spoolPath() {
-  return (0, import_node_path2.join)(spoolDir(), "pending.jsonl");
-}
-function sentPath() {
-  return (0, import_node_path2.join)(spoolDir(), "sent.json");
-}
-function lockPath() {
-  return (0, import_node_path2.join)(spoolDir(), ".lock");
-}
-function sleepSync(ms) {
-  Atomics.wait(SLEEP_VIEW, 0, 0, ms);
-}
-function acquireLock(timeoutMs = LOCK_WAIT_MS) {
-  const path = lockPath();
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const fd = (0, import_node_fs2.openSync)(path, "wx", 384);
-      (0, import_node_fs2.writeFileSync)(fd, `${process.pid}
-${Date.now()}
-`);
-      return () => {
-        try {
-          (0, import_node_fs2.closeSync)(fd);
-        } catch {
-        }
-        try {
-          (0, import_node_fs2.rmSync)(path, { force: true });
-        } catch {
-        }
-      };
-    } catch (error51) {
-      if (error51.code !== "EEXIST") throw error51;
-      try {
-        if (Date.now() - (0, import_node_fs2.statSync)(path).mtimeMs > LOCK_STALE_MS) {
-          (0, import_node_fs2.rmSync)(path, { force: true });
-          continue;
-        }
-      } catch {
-      }
-      sleepSync(25);
-    }
-  }
-  throw new Error("Timed out waiting for Membase capture spool lock.");
-}
-function withSpoolLock(callback, timeoutMs = LOCK_WAIT_MS) {
-  const release = acquireLock(timeoutMs);
-  try {
-    return callback();
-  } finally {
-    release();
-  }
-}
-function readRecordsFromPath(path) {
-  if (!(0, import_node_fs2.existsSync)(path)) return [];
-  const raw = (0, import_node_fs2.readFileSync)(path, "utf-8").trim();
-  if (!raw) return [];
-  return raw.split(/\r?\n/).map((line) => {
-    try {
-      return JSON.parse(line);
-    } catch {
-      return null;
-    }
-  }).filter((record2) => Boolean(record2));
-}
-function readRecords() {
-  return readRecordsFromPath(spoolPath());
-}
-function appendRecords(records) {
-  if (records.length === 0) return;
-  (0, import_node_fs2.appendFileSync)(
-    spoolPath(),
-    `${records.map((record2) => JSON.stringify(record2)).join("\n")}
-`,
-    {
-      encoding: "utf-8",
-      mode: 384
-    }
-  );
-}
-function readSentIds() {
-  const path = sentPath();
-  if (!(0, import_node_fs2.existsSync)(path)) return /* @__PURE__ */ new Set();
-  try {
-    const parsed = JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
-    if (!Array.isArray(parsed)) return /* @__PURE__ */ new Set();
-    return new Set(
-      parsed.filter((value) => typeof value === "string")
-    );
-  } catch {
-    return /* @__PURE__ */ new Set();
-  }
-}
-function inflightFiles() {
-  return (0, import_node_fs2.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path2.join)(spoolDir(), name));
-}
-function appendPendingRecordsLocked(records) {
-  const sentIds = readSentIds();
-  const existingIds = new Set(readRecords().map((record2) => record2.capture_id));
-  const next = records.filter((record2) => {
-    if (sentIds.has(record2.capture_id) || existingIds.has(record2.capture_id)) {
-      return false;
-    }
-    existingIds.add(record2.capture_id);
-    return true;
-  });
-  appendRecords(next);
-}
-function recoverStaleInflightLocked() {
-  const now = Date.now();
-  for (const path of inflightFiles()) {
-    try {
-      if (now - (0, import_node_fs2.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
-      appendPendingRecordsLocked(readRecordsFromPath(path));
-      (0, import_node_fs2.rmSync)(path, { force: true });
-    } catch {
-    }
-  }
-}
+var spool = createCaptureSpool({
+  stateDir: ensureDataDir,
+  sanitize: sanitizeMembaseText
+});
 function pendingSpoolCount() {
-  return withSpoolLock(() => {
-    recoverStaleInflightLocked();
-    return readRecords().length;
-  });
+  return spool.pendingSpoolCount();
 }
 
 // src/format/index.ts
