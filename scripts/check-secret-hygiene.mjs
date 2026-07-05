@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
 const scanRoots = [
   ".gitignore",
@@ -19,14 +22,10 @@ const scanRoots = [
   "package.json",
   "pnpm-workspace.yaml",
   "tsconfig.base.json",
-  "tsconfig.json"
+  "tsconfig.json",
 ];
 
-const ignoredSegments = new Set([
-  ".git",
-  "node_modules",
-  "dist"
-]);
+const ignoredSegments = new Set([".git", "node_modules", "dist"]);
 
 const textExtensions = new Set([
   ".cjs",
@@ -41,20 +40,21 @@ const textExtensions = new Set([
   ".toml",
   ".ts",
   ".yaml",
-  ".yml"
+  ".yml",
 ]);
 
 const secretPatterns = [
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
   /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,
-  /\b(?:MEMBASE_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|NPM_TOKEN|API_KEY|TOKEN|SECRET|PASSWORD)\s*=\s*(["']?)(?!\$\{|<|your-|example|placeholder|dummy|test|smoke|redacted|process\.env)[^\s"']{8,}\1/gi
+  /\b(?:MEMBASE_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|NPM_TOKEN|API_KEY|TOKEN|SECRET|PASSWORD)\s*=\s*(["']?)(?!\$\{|<|your-|example|placeholder|dummy|test|smoke|redacted|process\.env)[^\s"']{8,}\1/gi,
 ];
 
 // Redaction-feature test fixtures deliberately contain secret-shaped
 // key/value strings to prove the sanitizer redacts them; not secrets.
 const redactionFixtureFiles = new Set([
   "clients/claude/runtime/tests/sanitize.test.ts",
-  "packages/capture-core/spec/sanitize-vectors.json"
+  "clients/openclaw/runtime/src/utils.test.ts",
+  "packages/capture-core/spec/sanitize-vectors.json",
 ]);
 
 const violations = [];
@@ -70,7 +70,9 @@ for (const file of files) {
   for (const pattern of secretPatterns) {
     pattern.lastIndex = 0;
     for (const _match of content.matchAll(pattern)) {
-      violations.push(`${relative}: raw secret-looking token matched ${pattern.source}`);
+      violations.push(
+        `${relative}: raw secret-looking token matched ${pattern.source}`,
+      );
     }
   }
 
@@ -150,7 +152,7 @@ function validateJsonMcpEnv(relative, content) {
     for (const [key, value] of Object.entries(env)) {
       if (isSensitiveKey(key) && !isSafeSecretReference(value)) {
         violations.push(
-          `${relative}: mcpServers.${serverName}.env.${key} must be an env reference or redacted placeholder`
+          `${relative}: mcpServers.${serverName}.env.${key} must be an env reference or redacted placeholder`,
         );
       }
     }
@@ -162,9 +164,10 @@ function isSensitiveKey(key) {
 }
 
 function isSafeSecretReference(value) {
-  return typeof value === "string" && (
-    value === "[redacted]" ||
-    /^\$\{(?:env:)?[A-Z0-9_]+\}$/.test(value) ||
-    /^<[^>]+>$/.test(value)
+  return (
+    typeof value === "string" &&
+    (value === "[redacted]" ||
+      /^\$\{(?:env:)?[A-Z0-9_]+\}$/.test(value) ||
+      /^<[^>]+>$/.test(value))
   );
 }
