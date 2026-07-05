@@ -81,11 +81,7 @@ export function defineCursorRuntimeConfig(
 export function generateCursorPluginManifest(
   config: ConnectorRuntimeConfig,
 ): CursorPluginManifest {
-  const manifest = cursorAgent.generateManifest(config);
-  if (!manifest) {
-    throw new Error("cursor descriptor declares no manifest template");
-  }
-  return manifest;
+  return cursorAgent.generateRequiredManifest(config);
 }
 
 export function generateCursorMcpConfig(
