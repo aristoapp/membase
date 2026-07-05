@@ -93,6 +93,23 @@ OAuth token cache.
 The plugin completes its OAuth login on first use and caches tokens in the
 `tokenFile`. Do not commit `accessToken` or `refreshToken` values.
 
+**Hook permission (OpenClaw ≥ 2026.6.x):** non-bundled plugins must opt in to
+conversation-access hooks or the `agent_end` capture hook is silently blocked
+(gateway log: `typed hook "agent_end" blocked`) and auto-capture never fires.
+Add alongside `enabled`/`config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "openclaw-membase": {
+        "hooks": { "allowConversationAccess": true }
+      }
+    }
+  }
+}
+```
+
 ## MCP Config
 
 For setups that connect OpenClaw to the hosted Membase MCP server, use

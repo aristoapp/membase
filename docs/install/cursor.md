@@ -67,8 +67,10 @@ The current Cursor manifest intentionally omits logo/marketplace assets until
 the marketplace asset pass. If a relative `logo` or `icon` path is added later,
 `pnpm generated-artifacts` verifies the referenced file exists.
 `clients/cursor/native-artifacts.json` records the old Cursor rules, skills,
-logo, and changelog as review-only evidence. It does not copy those artifacts
-into the integrated repo.
+logo, and changelog inventory. Since consolidation Group C the rules and
+skills are ported into this repo at `clients/cursor/{rules,skills,assets}`;
+copy `rules/membase.mdc` (and optionally `skills/`) into a project's
+`.cursor/` directory to enable them.
 
 ## Local Verification
 
@@ -85,8 +87,8 @@ public connector surface. `pnpm cursor:transport-parity` verifies that Cursor's
 committed MCP examples keep the HTTP MCP endpoint and do not regress to the
 generic stdio placeholder. `pnpm smoke:execute` additionally runs the
 adapter-declared local commands without publishing or calling the Membase API.
-`pnpm cursor:native-artifacts` verifies the old Cursor artifact snapshot and
-keeps logo/rule/skill/changelog files deferred until review.
+`pnpm cursor:native-artifacts` verifies the ported Cursor artifact snapshot
+(rules/skills/assets under `clients/cursor/`).
 
 Host-level Cursor MCP connection checks remain pending until the live-smoke D6
 test credential, endpoint/profile, and cleanup decisions are accepted.
