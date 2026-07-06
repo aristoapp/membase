@@ -107,8 +107,35 @@ platform's official hook mechanism.
 | Claude Code | Done | `hooks.json` — tool/compact summaries → disk spool → flush (plugin login supplies hook auth) |
 | OpenClaw | Done | `api.on("agent_end")` capture inside the long-lived gateway process |
 | Hermes | Done | provider `on_session_end` slot |
-| Cursor | Open decision | Official hooks exist, but hook processes have no Membase auth (double login rejected). Compliant options: claude-mem's resident-worker pattern (precedent exists; rejected so far for ops burden) or closing the gap with Pillar 3 |
-| Codex | Open decision | Same constraint and options as Cursor |
+| Cursor | Decided (2026-07-07), to build | Two connection modes, below |
+| Codex | Decided (2026-07-07), to build | Two connection modes, below |
+
+Decision for Cursor/Codex — **two connection modes**, both official-features-only:
+
+- **HTTP mode (default; current install unchanged).** Hook processes cannot
+  authenticate (OAuth tokens live inside the app), so hooks only *collect*:
+  official events (Cursor `afterFileEdit`/`stop` via `~/.cursor/hooks.json`;
+  Codex `PostToolUse`/`Stop` via plugin-manifest hooks writing under the
+  official `PLUGIN_DATA` dir) append redacted summaries to a local spool.
+  Upload rides the already-authenticated in-app AI: the session-start hook
+  injects "N pending captures — flush them" and the AI calls `add_memory`;
+  handoff and dreaming also flush first. Cloud sync therefore lags by at most
+  one session.
+- **stdio bundle mode (opt-in upgrade).** Ship the bundled stdio MCP server
+  (the same approach Claude Code uses) via Cursor `mcp.json` / Codex
+  `config.toml` command entries — both officially supported. Its login stores
+  tokens on disk, so the same hooks flush the spool directly and inject
+  recall context in real time: full Claude Code parity. This answers the
+  "local stdio fallback" question D3 left open (the ledger row updates with
+  the implementation PR). Requires an install-path addition in the Membase
+  official docs (membase repo) when it ships.
+- Both modes share one spool contract in `capture-core`: jsonl line format,
+  secret redaction **before** the line is written, truncate after successful
+  upload — so "missing from cloud" is defined as "still in the spool".
+- **claude-mem-style resident worker: rejected.** The stdio bundle reaches
+  real-time capture without a daemon's process-lifecycle burden (PID files,
+  spawn locks, supervisor, ports), and a worker would still need its own
+  Membase login anyway.
 
 ### Pillar 2 — Handoff
 
@@ -125,7 +152,9 @@ cross-client continuation is shared by **asking the client to recall** the
 | Hermes | Not implemented | |
 
 Injection policy (decided 2026-07-07): always exactly the **latest one**
-handoff; older handoffs stay reachable via manual `search_memory`.
+handoff; older handoffs stay reachable via manual `search_memory`. Handoff
+store also flushes the capture spool first (Pillar 1 HTTP mode), so switching
+clients never leaves fresh captures behind.
 
 ### Pillar 3 — Dreaming
 
@@ -134,5 +163,8 @@ artifacts (handoff files, spool leftovers, session notes) and `add_memory`
 what Membase lacks. Not implemented on any client.
 
 Design direction: an AI-invoked skill/command, because the AI's MCP tools are
-already authenticated — no hook auth needed. On Cursor/Codex this doubles as
-the capture-parity mechanism for Pillar 1 without a resident worker.
+already authenticated — no hook auth needed. Concretely, dreaming is the
+named flush-and-sweep of the Pillar 1 spool (plus other local artifacts), so
+on Cursor/Codex HTTP mode it IS the upload half of capture. In stdio bundle
+mode hooks flush continuously and dreaming remains the catch-up/sweep for
+anything left behind.
