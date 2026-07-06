@@ -45,6 +45,10 @@ describe("update check", () => {
       shown_at: null as string | null,
     };
     const deps = {
+      // Pin the source: MEMORY_SOURCE bakes in ambient MEMBASE_CLIENT_SOURCE
+      // at module load, which would flip these assertions on machines that
+      // export it.
+      clientSource: "claude-code",
       currentVersion: "0.1.1",
       now: () => new Date("2026-05-27T10:00:00.000Z"),
       loadStateFn: async () => state,
@@ -55,10 +59,16 @@ describe("update check", () => {
 
     expect(await consumeUpdateNotice(deps)).toContain("0.1.1 -> 0.1.2");
     expect(await consumeUpdateNotice(deps)).toBeNull();
+
+    state.shown_at = null;
+    expect(
+      await consumeUpdateNotice({ ...deps, clientSource: "codex" }),
+    ).toBeNull();
   });
 
   it("appends the notice to text tool responses", async () => {
     const response = await toolResponse("Stored in Membase.", {
+      clientSource: "claude-code",
       currentVersion: "0.1.1",
       now: () => new Date("2026-05-27T10:00:00.000Z"),
       loadStateFn: async () => ({

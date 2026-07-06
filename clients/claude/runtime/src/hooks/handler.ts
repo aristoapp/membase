@@ -1,12 +1,6 @@
-import { join } from "node:path";
 import { createClient } from "../api/client.js";
 import type { MembaseClient } from "../api/client.js";
-import {
-  ensureDataDir,
-  loadConfig,
-  readTokens,
-  writeTokens,
-} from "../config/index.js";
+import { loadConfig, readTokens, writeTokens } from "../config/index.js";
 import {
   DEFAULT_RECALL_TIMEOUT_MS,
   PREFETCH_BROADER_MEMORY_LIMIT,
@@ -32,6 +26,7 @@ import {
   enqueueCapture,
   flushSpool,
   pendingSpoolCount,
+  pendingSpoolPath,
 } from "../spool/index.js";
 import type { HookInput } from "../types.js";
 import {
@@ -165,7 +160,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
       const lines = [
         MEMORY_SOURCE === "claude-code"
           ? "Membase is installed but not connected. Run /membase:login to enable memory."
-          : "Membase is not logged in on this machine. Ask the agent to call the membase `login` tool to enable memory.",
+          : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.",
       ];
       // HTTP-fallback mode (north-star pillar 1): hooks collect without
       // tokens, so the authenticated in-app AI is the uploader — announce
@@ -174,9 +169,13 @@ async function handleSessionStart(input: HookInput): Promise<void> {
       if (pending > 0) {
         lines.push(
           `Membase spool has ${pending} pending local capture(s) at ` +
-            `${join(ensureDataDir(), "spool", "pending.jsonl")}. Using the ` +
-            "authenticated membase add_memory tool, store each record's " +
-            "content (keep its project field), then clear that file.",
+            `${pendingSpoolPath()}. Rename \`pending.jsonl\` to ` +
+            "`flush-<timestamp>.jsonl` first (atomic — claims the batch; " +
+            "new captures keep going to a fresh pending.jsonl and a second " +
+            "flusher finds nothing). Upload each record's content via " +
+            "add_memory (keep its project). Records that look like secrets: " +
+            "do NOT upload, do NOT delete — report them to the user. Delete " +
+            "the renamed file only after all non-secret records are stored.",
         );
       }
       outputAdditionalContext(lines.join("\n"), "SessionStart");
