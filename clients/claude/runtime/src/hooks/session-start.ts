@@ -37,3 +37,29 @@ export function buildSessionStartContext(args: {
   lines.push("</membase-session>");
   return lines.filter(Boolean).join("\n");
 }
+
+/** Marker prefix distinguishing handoff memories from ordinary remembered context. */
+export const HANDOFF_TAG = "[HANDOFF]";
+
+/** Search query SessionStart uses to prefetch the most recent handoff for this project. */
+export function handoffRecallQuery(): string {
+  return `${HANDOFF_TAG} session handoff summary`;
+}
+
+/**
+ * Content stored by /membase:handoff. `project` scopes it (see
+ * resolveProjectSlug); the tag lets SessionStart's prefetch and a human
+ * `search_memory` both find it without a dedicated server-side field.
+ */
+export function buildHandoffMemory(args: {
+  summary: string;
+  projectSlug?: string;
+}): string {
+  const scope = args.projectSlug ? ` (${args.projectSlug})` : "";
+  return `${HANDOFF_TAG}${scope} ${args.summary}`.trim();
+}
+
+/** True when a recalled memory bundle's text looks like a stored handoff. */
+export function isHandoffMemory(text: string): boolean {
+  return text.trimStart().startsWith(HANDOFF_TAG);
+}
