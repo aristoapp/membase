@@ -85,3 +85,54 @@ Only then, in order (each its own reviewed change):
    (READMEs point here; repos archived, not deleted).
 4. Retire the standalone working copies under `~/Desktop/membase/` once launch
    gates pass.
+
+## North-star scope v2 — feature pillars (added 2026-07-07)
+
+The north star is wider than repo consolidation: the deprecation gate above is
+one axis, and these three product pillars are the other. The old repos are not
+truly replaced until every client has them.
+
+**Engineering principle (applies to all three):** use officially documented
+platform features (hooks, rules, custom prompts, provider slots). Do not
+invent workarounds; a workaround is acceptable only when a well-known project
+(e.g. claude-mem) already ships the same pattern.
+
+### Pillar 1 — Hook-based capture
+
+Just having a conversation uploads memory to Membase, passively, via each
+platform's official hook mechanism.
+
+| Client | Status | Mechanism |
+| --- | --- | --- |
+| Claude Code | Done | `hooks.json` — tool/compact summaries → disk spool → flush (plugin login supplies hook auth) |
+| OpenClaw | Done | `api.on("agent_end")` capture inside the long-lived gateway process |
+| Hermes | Done | provider `on_session_end` slot |
+| Cursor | Open decision | Official hooks exist, but hook processes have no Membase auth (double login rejected). Compliant options: claude-mem's resident-worker pattern (precedent exists; rejected so far for ops burden) or closing the gap with Pillar 3 |
+| Codex | Open decision | Same constraint and options as Cursor |
+
+### Pillar 2 — Handoff
+
+Definition: same-client continuation is shared through a **local file**;
+cross-client continuation is shared by **asking the client to recall** the
+`[HANDOFF]`-tagged memory.
+
+| Client | Status | Notes |
+| --- | --- | --- |
+| Cursor | Matches definition | skill writes `.cursor/rules/membase-handoff.mdc`; Rules auto-load injects it (PR #24) |
+| Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
+| Claude Code | Deviates | same-client continuation uses cloud search prefetch at SessionStart, not a local file. Normalizing to a local file would drop the search-quota dependency and the relevance-top-1 weakness — open decision |
+| OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
+| Hermes | Not implemented | |
+
+Injection policy (decided 2026-07-07): always exactly the **latest one**
+handoff; older handoffs stay reachable via manual `search_memory`.
+
+### Pillar 3 — Dreaming
+
+Definition: upload local work that is **missing from the cloud** — sweep local
+artifacts (handoff files, spool leftovers, session notes) and `add_memory`
+what Membase lacks. Not implemented on any client.
+
+Design direction: an AI-invoked skill/command, because the AI's MCP tools are
+already authenticated — no hook auth needed. On Cursor/Codex this doubles as
+the capture-parity mechanism for Pillar 1 without a resident worker.
