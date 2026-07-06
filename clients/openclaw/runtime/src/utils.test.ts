@@ -67,6 +67,11 @@ describe("handoff memory tagging", () => {
     expect(content).toBe(`${HANDOFF_TAG} No project context.`);
   });
 
+  test("omits the project scope when it is whitespace-only, instead of tagging a blank scope", () => {
+    const content = buildHandoffMemory({ summary: "state", project: "   " });
+    expect(content).toBe(`${HANDOFF_TAG} state`);
+  });
+
   test("recognizes handoff-tagged memories and rejects ordinary ones", () => {
     expect(isHandoffMemory(buildHandoffMemory({ summary: "state" }))).toBe(true);
     expect(isHandoffMemory("just a regular remembered fact")).toBe(false);

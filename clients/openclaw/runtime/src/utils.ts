@@ -145,7 +145,8 @@ export function handoffRecallQuery(): string {
 }
 
 function taggedHandoff(args: { summary: string; project?: string }): string {
-  const scope = args.project ? ` (${args.project})` : "";
+  const project = args.project?.trim();
+  const scope = project ? ` (${project})` : "";
   return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
 }
 
