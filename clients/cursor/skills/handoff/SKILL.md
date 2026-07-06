@@ -10,6 +10,10 @@ later session or another client (Claude Code, Codex, etc.).
 
 ## Steps
 
+0. **Flush pending captures first.** If `~/.membase/cursor/spool/pending.jsonl`
+   is non-empty, flush it per the dream skill's rename-first protocol before
+   storing the handoff — switching clients must not leave fresh captures
+   behind.
 1. **Summarize** the session state: what was done, key decisions and why,
    current state, what's next. Write it in the user's language. Only durable
    state — no secrets, API keys, passwords, or raw source dumps.

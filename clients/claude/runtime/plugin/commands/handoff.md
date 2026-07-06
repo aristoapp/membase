@@ -13,6 +13,10 @@ summary on that instead of the whole session.
    `[HANDOFF] <summary text>`). Pass the current project's slug as `project`
    if one is available from `membase://profile` or prior context.
 
+If the local capture spool has pending records (rare — hooks flush it
+automatically), flush them first per /membase:dream so the handoff
+lands on top of a complete cloud state.
+
 Only store durable state — no secrets, API keys, passwords, or raw source
 files. A future session (in this client or another) may recall this via
 `/membase:recall` or automatically at session start.
