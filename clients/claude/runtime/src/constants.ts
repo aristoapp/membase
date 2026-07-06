@@ -9,6 +9,12 @@ export const DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
 const CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
 export const MEMORY_SOURCE = CLIENT_SOURCE;
 export const USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+const CLIENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  cursor: "Cursor",
+};
+export const CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
 export const DEFAULT_RECALL_TIMEOUT_MS = 3_000;
 export const DEFAULT_MAX_RECALL_CHARS = 4_000;
 export const MAX_RECALL_CHARS = 16_000;

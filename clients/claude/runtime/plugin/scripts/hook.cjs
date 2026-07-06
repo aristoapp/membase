@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 
+// src/hooks/handler.ts
+var import_node_path5 = require("node:path");
+
 // ../../../packages/capture-core/src/spool.ts
 var import_node_crypto = require("node:crypto");
 var import_node_fs = require("node:fs");
@@ -216,7 +219,7 @@ function createCaptureSpool(options) {
       return null;
     }
   }
-  function pendingSpoolCount() {
+  function pendingSpoolCount2() {
     return withSpoolLock(() => {
       recoverStaleInflightLocked();
       return readRecords().length;
@@ -235,7 +238,7 @@ function createCaptureSpool(options) {
       return { batch, path };
     });
     if (drained.batch.length === 0) {
-      return { flushed: 0, remaining: pendingSpoolCount() };
+      return { flushed: 0, remaining: pendingSpoolCount2() };
     }
     const failed = [];
     let flushed = 0;
@@ -263,7 +266,7 @@ function createCaptureSpool(options) {
     });
     return { flushed, remaining };
   }
-  return { captureId, enqueueCapture: enqueueCapture2, flushSpool: flushSpool2, pendingSpoolCount };
+  return { captureId, enqueueCapture: enqueueCapture2, flushSpool: flushSpool2, pendingSpoolCount: pendingSpoolCount2 };
 }
 
 // ../../../packages/capture-core/src/token-store.ts
@@ -493,6 +496,12 @@ var DEFAULT_API_URL = "https://api.membase.so";
 var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
 var MEMORY_SOURCE = CLIENT_SOURCE;
 var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+var CLIENT_LABELS = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  cursor: "Cursor"
+};
+var CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
 var DEFAULT_RECALL_TIMEOUT_MS = 3e3;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
@@ -720,7 +729,9 @@ function loadConfig() {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
     ),
-    captureMode: normalizeCaptureMode(disk.captureMode),
+    captureMode: normalizeCaptureMode(
+      strFromOption("captureMode") ?? disk.captureMode
+    ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
       strFromOption("sessionStartContext") ?? disk.sessionStartContext
@@ -909,6 +920,9 @@ async function flushSpool(client, limit = 10) {
     limit
   );
 }
+function pendingSpoolCount() {
+  return spool.pendingSpoolCount();
+}
 
 // src/profile/index.ts
 function asProfileValue(value) {
@@ -945,7 +959,7 @@ function buildSessionStartContext(args) {
   if (args.mode === "off") return "";
   const lines = [
     "<membase-session>",
-    "Membase is connected for Claude Code.",
+    `Membase is connected for ${CLIENT_LABEL}.`,
     args.projectSlug ? `project_slug: ${args.projectSlug}` : "",
     args.profile ? `account: ${JSON.stringify(accountProfileFields(args.profile))}` : "",
     sessionStartRoutingGuide()
@@ -974,7 +988,16 @@ function objectValue(value) {
 }
 function summarizeToolCall(tool) {
   const name = String(tool.name ?? tool.tool_name ?? tool.type ?? "");
-  if (!["Edit", "Write", "MultiEdit", "Bash", "Task", "Agent"].includes(name)) {
+  const allowed = [
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "Bash",
+    "Task",
+    "Agent",
+    "apply_patch"
+  ];
+  if (!allowed.includes(name)) {
     return null;
   }
   const input = objectValue(tool.tool_input ?? tool.input);
@@ -986,10 +1009,20 @@ function summarizeToolCall(tool) {
       return null;
     }
   }
+  let patchFiles = [];
+  if (name === "apply_patch") {
+    const patch = typeof input.command === "string" ? input.command : "";
+    if (looksSensitive2(patch)) return null;
+    patchFiles = Array.from(
+      patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
+      (match) => match[1] ?? ""
+    ).filter(Boolean).slice(0, 5);
+  }
   return [
     `${name} tool used`,
     path ? `path: ${path}` : "",
-    command ? `command: ${command}` : ""
+    command ? `command: ${command}` : "",
+    patchFiles.length ? `files: ${patchFiles.join(", ")}` : ""
   ].filter(Boolean).join("\n");
 }
 function buildSessionCaptureCandidate(raw, captureKind) {
@@ -1083,10 +1116,16 @@ async function handleSessionStart(input) {
   const tokens = readTokens();
   if (!tokens) {
     if (config.sessionStartContext !== "off") {
-      outputAdditionalContext(
-        "Membase is installed but not connected. Run /membase:login to enable memory.",
-        "SessionStart"
-      );
+      const lines = [
+        MEMORY_SOURCE === "claude-code" ? "Membase is installed but not connected. Run /membase:login to enable memory." : "Membase is not logged in on this machine. Ask the agent to call the membase `login` tool to enable memory."
+      ];
+      const pending = pendingSpoolCount();
+      if (pending > 0) {
+        lines.push(
+          `Membase spool has ${pending} pending local capture(s) at ${(0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl")}. Using the authenticated membase add_memory tool, store each record's content (keep its project field), then clear that file.`
+        );
+      }
+      outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
     return;
   }
@@ -1191,18 +1230,22 @@ async function spoolToolBatch(input) {
   const calls = Array.isArray(input.tool_calls) ? input.tool_calls : [];
   const summaries = calls.map((call) => summarizeToolCall(call)).filter((summary) => Boolean(summary));
   if (summaries.length === 0) return;
-  const content = `Claude Code tool summary:
+  const content = `${CLIENT_LABEL} tool summary:
 
 ${summaries.join("\n\n")}`;
   if (looksSensitive2(content)) return;
   enqueueCapture({
     capture_kind: "tool_summary",
     content,
-    display_summary: `Claude Code used ${summaries.length} project tool(s).`,
+    display_summary: `${CLIENT_LABEL} used ${summaries.length} project tool(s).`,
     project,
     sessionId: input.session_id,
     metadata: captureMetadata(input, project)
   });
+}
+async function spoolSingleTool(input) {
+  if (typeof input.tool_name !== "string") return;
+  await spoolToolBatch({ ...input, tool_calls: [input] });
 }
 async function spoolSessionSummary(input, captureKind) {
   const config = loadConfig();
@@ -1229,6 +1272,7 @@ async function main() {
   if (event === "SessionStart") await handleSessionStart(input);
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await spoolToolBatch(input);
+  if (event === "PostToolUse") await spoolSingleTool(input);
   if (event === "Stop" || event === "SessionEnd") {
     const config = loadConfig();
     const tokens = readTokens();

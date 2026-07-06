@@ -1,3 +1,4 @@
+import { CLIENT_LABEL } from "../constants.js";
 import {
   accountProfileFields,
   profileResourceFields,
@@ -22,7 +23,7 @@ export function buildSessionStartContext(args: {
   if (args.mode === "off") return "";
   const lines = [
     "<membase-session>",
-    "Membase is connected for Claude Code.",
+    `Membase is connected for ${CLIENT_LABEL}.`,
     args.projectSlug ? `project_slug: ${args.projectSlug}` : "",
     args.profile
       ? `account: ${JSON.stringify(accountProfileFields(args.profile))}`
