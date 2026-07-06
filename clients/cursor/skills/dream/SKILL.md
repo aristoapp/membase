@@ -11,10 +11,15 @@ Dreaming = getting local work into the cloud, then tidying what's there.
 
 Read the local capture spool at `~/.membase/cursor/spool/pending.jsonl`
 (capture hooks append summaries there; in HTTP mode nothing else uploads
-them). For each JSON line, store its `content` via `add_memory` — keep its
-`project` field — then clear the file. Skip records whose content looks like
-a secret. If the session started with a "pending local capture(s)" notice,
-this is the flush it asked for.
+them). Rename `pending.jsonl` to `flush-<timestamp>.jsonl` first (atomic —
+claims the batch; new captures keep going to a fresh `pending.jsonl` and a
+second flusher finds nothing). Upload each record's `content` via
+`add_memory` — keep its `project` field. Records that look like secrets: do
+NOT upload, do NOT delete — report them to the user. Delete the renamed
+file only after all non-secret records are stored; if any records were
+skipped as secrets, keep the renamed file and tell the user where it is
+instead of deleting it. If the session started with a "pending local
+capture(s)" notice, this is the flush it asked for.
 
 ## 2. Sweep — consolidate (optional)
 

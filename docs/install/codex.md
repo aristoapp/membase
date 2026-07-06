@@ -70,8 +70,9 @@ CI/headless, a bearer token via `bearer_token_env_var`).
 
 ## Verify
 
-- `/mcp` in a Codex session lists `membase` with the memory tools
-  (remember / search / getContext / forget) exposed by the live MCP server.
+- `/mcp` in a Codex session lists `membase` with the tools exposed by the
+  live MCP server: `add_memory`, `search_memory`, `get_current_date`,
+  `add_wiki`, `search_wiki`, `update_wiki`, and `delete_wiki`.
 
 ## Session Handoff
 
@@ -112,16 +113,23 @@ Two modes, both official-features-only:
      server to `~/.codex/config.toml`:
      `[mcp_servers.membase]` with `command = "node"`,
      `args = ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"]`,
-     `env = { MEMBASE_CLIENT_SOURCE = "codex", MEMBASE_DATA_DIR = "~/.membase/codex" }`,
+     `env = { MEMBASE_CLIENT_SOURCE = "codex", MEMBASE_DATA_DIR = "/ABSOLUTE/HOME/.membase/codex" }`
+     (replace `/ABSOLUTE/HOME` with your home directory's absolute path —
+     `config.toml` env values get no `~` expansion),
      then ask the agent to call the membase `login` tool once. Tokens land
      on disk, so hooks flush captures and inject recall in real time —
      Claude Code parity.
    - **HTTP fallback (current install, no extra login).** Hooks only spool
      captures locally (`~/.membase/codex/spool/pending.jsonl`); the
      session-start hook announces the pending count and the in-app AI
-     uploads via `add_memory` — the `/dream` prompt
-     (`clients/codex/runtime/prompts/dream.md`, copy to
-     `~/.codex/prompts/`) is that flush. Sync lags by at most one session.
+     uploads via `add_memory` — the `/dream` prompt is that flush. Install
+     it alongside the handoff prompt:
+
+     ```bash
+     cp clients/codex/runtime/prompts/dream.md ~/.codex/prompts/dream.md
+     ```
+
+     Sync lags by at most one session.
 
 ## Secret Handling
 

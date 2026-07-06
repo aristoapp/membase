@@ -7,12 +7,19 @@ Dreaming = getting local work into the cloud, then tidying what's there.
 
 ## 1. Flush — upload what the cloud is missing
 
-Check the local capture spool at
-`~/.claude/plugins/membase/spool/pending.jsonl` (or `$MEMBASE_DATA_DIR/spool/pending.jsonl`
-if that env is set). Hooks normally flush it automatically, so it is usually
-empty — but if records are pending (e.g. stored while offline or over quota),
-store each record's `content` via `add_memory` (keep its `project` field),
-then clear the file. Never upload records whose content looks like a secret.
+Check the local capture spool at `<data dir>/spool/pending.jsonl`, where the
+data dir is `$MEMBASE_DATA_DIR` if set, else `$CLAUDE_PLUGIN_DATA` if set,
+else `~/.claude/plugins/membase` — the same order the hooks use, so both
+always look at the same spool. Hooks normally flush it automatically, so it
+is usually empty — but if records are pending (e.g. stored while offline or
+over quota): rename `pending.jsonl` to `flush-<timestamp>.jsonl` first
+(atomic — claims the batch; new captures keep going to a fresh
+`pending.jsonl` and a second flusher finds nothing). Upload each record's
+`content` via `add_memory` (keep its `project`). Records that look like
+secrets: do NOT upload, do NOT delete — report them to the user. Delete the
+renamed file only after all non-secret records are stored; if any records
+were skipped as secrets, keep the renamed file and tell the user where it
+is instead of deleting it.
 
 ## 2. Sweep — consolidate (optional)
 
