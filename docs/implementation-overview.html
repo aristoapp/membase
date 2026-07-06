@@ -414,30 +414,39 @@
           <div class="card">
             <h3>계층 구조</h3>
             <p>
-              공유 코드와 클라이언트별 코드를 엄격히 분리합니다. 위에서
-              아래로 "의존"하는 방향입니다 — 클라이언트 어댑터는 SDK에,
-              SDK는 core에 기대고, 그 반대는 없습니다.
+              공유 코드와 클라이언트별 코드를 엄격히 분리합니다. 각
+              클라이언트는 <code>connector-sdk</code>(공통 인터페이스)와
+              <code>core</code>(공통 로직) 둘 다를 직접 사용합니다 — SDK를
+              거쳐야만 core에 닿는 구조가 아니라, SDK는 "무엇을 구현해야
+              하는지"의 계약이고 core는 그 구현이 가져다 쓰는 재료입니다.
+              방향이 중요한 건 반대쪽입니다: core와 SDK는 특정 클라이언트를
+              몰라야 하고, 그 반대(클라이언트가 core/SDK를 아는 것)만
+              성립합니다.
             </p>
 <pre><code>clients/{claude,cursor,codex,hermes,openclaw}
    │  클라이언트마다 다른 부분 (설정 형식, 설치 경로)
-   ▼
-packages/connector-sdk
-   │  어댑터가 구현해야 할 공통 인터페이스(ClientAdapter)
-   ▼
-packages/core
-   │  인증·서버 주소·MCP 설정 생성·비밀값 가리기 (공통 로직)
-   ▼
-Membase Context API   ← 여기부터 서버, 비공개 영역
-   ▼
-private memory engine (실제 기억 저장소)</code></pre>
+   │  ↓ 둘 다 직접 참조
+   ├──▶ packages/connector-sdk (구현해야 할 계약: ClientAdapter)
+   └──▶ packages/core (공통 로직: 인증·서버 주소·설정 생성·비밀값 가리기)
+                  │
+                  ▼
+         Membase Context API   ← 여기부터 서버, 비공개 영역
+                  ▼
+         private memory engine (실제 기억 저장소)</code></pre>
           </div>
           <div class="card">
             <h3>공개/비공개 경계</h3>
             <p>
-              이 레포가 외부에 공개하는 기능(공개 계약)은 딱 4가지 +
-              진단입니다: <code>remember</code>(기억 저장) /
-              <code>search</code>(기억 검색) / <code>getContext</code>(작업
-              맥락 요청) / <code>deleteOrForget</code>(기억 삭제).
+              이 레포가 외부에 공개하는 기능(공개 계약)은 딱 4가지 개념 +
+              진단입니다: 기억 저장 / 기억 검색 / 작업 맥락 요청 / 기억
+              삭제. (실제 도구 이름은 클라이언트마다 다릅니다 —
+              <code>add_memory</code>/<code>search_memory</code> 등 실명은
+              8.5절 표 참고. 그리고 "기억 삭제"는 아직 로드맵입니다: 지금
+              살아 있는 서버에는 memory 전용 삭제 도구가 없어서 — 위키
+              삭제(<code>delete_wiki</code>)만 있음 — e2e 테스트조차 스테이징에
+              쌓인 테스트 기억을 못 지우고 있습니다. 4가지는 "이 레포가
+              지향하는 공개 계약의 개념"이지 "지금 전부 구현 완료된 기능
+              목록"이 아닙니다.)
               Membase 서버 내부가 기억을 <em>어떻게</em> 저장하고 랭킹하는지
               (저장 스키마, 그래프 구조, 임베딩, 랭킹 파이프라인)는 절대 이
               레포에 노출하지 않습니다. 이 경계는 사람이 리뷰로 지키는 게
@@ -640,11 +649,20 @@ private memory engine (실제 기억 저장소)</code></pre>
         <div class="card" style="margin-top: 16px;">
           <h3><code>check-secret-hygiene</code> — "진짜 비밀값이 커밋됐다"를 잡음</h3>
           <p>
-            API 키 같은 값이 실제 문자열로 파일에 박혀 있으면 실패합니다.
+            커밋된 파일 전체를 정적으로 훑어서, API 키 같은 값이 실제
+            문자열로 박혀 있으면 실패합니다.
             <code>${MEMBASE_API_KEY}</code>처럼 "이 환경변수를 읽어라"는
-            참조만 허용됩니다. 진단 출력(로그, 에러 메시지)도 검사 대상이라,
-            일부러 가짜 비밀값을 넣어서 redaction이 실제로 그 값을 가리는지
-            테스트합니다.
+            참조만 허용됩니다. 리댁션 테스트용으로 일부러 진짜 비밀값 모양
+            문자열을 넣어 둔 픽스처 파일(예: sanitize 테스트)은 이 검사가
+            거짓 양성으로 잡지 않도록 미리 알려 둔 예외 목록에서
+            제외됩니다.
+          </p>
+          <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
+            주의: 이 가드는 "커밋된 파일에 비밀값이 없는지" 정적으로 보는
+            것이지, "리댁션 로직이 실제로 비밀값을 잘 가리는지"를 실행해
+            검증하는 게 아닙니다. 리댁션 <em>동작</em>의 정확성은 별도로
+            capture-core의 golden vector 테스트(8.2절)가 담당합니다 —
+            이름은 비슷해 보여도 서로 다른 질문에 답하는 두 검사입니다.
           </p>
         </div>
         <div class="card" style="margin-top: 16px;">
@@ -838,7 +856,14 @@ private memory engine (실제 기억 저장소)</code></pre>
               보이지만, 안에서는 중복 코드가 하나로 합쳐진 상태입니다.
               원래 계획보다 앞당겨서, 대화 캡처 시 비밀값을 가리는
               정책도 OpenClaw까지 통일해 뒀습니다(보안을 이유로 먼저
-              처리). 남은 건 캡처 종류를 분류하는 로직 하나뿐입니다.
+              처리). 캡처를 종류별로 나누는 개념 자체는 이미 존재합니다
+              — 예를 들어 Claude 쪽엔 <code>tool_summary</code>·
+              <code>compact_summary</code>·<code>explicit</code>·
+              <code>project_index</code> 4종 분류가 지금도 쓰이고 있고,
+              공유 스풀도 각 항목에 <code>capture_kind</code> 값을 실어
+              나릅니다. 남은 건 "분류 로직을 처음부터 만드는 것"이 아니라,
+              지금 클라이언트마다 따로 있는 이 분류를 capture-core 하나로
+              모아 공유 타입으로 통일하는 일입니다.
             </p>
             <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
               다음 순서: 남은 조각 마무리 → Hermes(Python)를 같은 정답
@@ -874,7 +899,7 @@ private memory engine (실제 기억 저장소)</code></pre>
           계약뿐, 구현 지식은 넘기지 않는다.</strong>
         </p>
 
-        <h3>9.1 descriptor 계약 — <code>defineMcpHostAgent&lt;TManifest&gt;</code></h3>
+        <h3>8.1 descriptor 계약 — <code>defineMcpHostAgent&lt;TManifest&gt;</code></h3>
 
         <div class="card">
           <h3>설치 방법을 5가지 "보기"로 못 박기</h3>
@@ -1027,7 +1052,7 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           </p>
         </div>
 
-        <h3 style="margin-top: 28px;">9.2 capture-core 계약 — 공유 런타임 프리미티브</h3>
+        <h3 style="margin-top: 28px;">8.2 capture-core 계약 — 공유 런타임 프리미티브</h3>
 
         <div class="card">
           <h3>리댁션(비밀값 가리기) 정책을 경로별로 다르게</h3>
@@ -1166,7 +1191,7 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           </p>
         </div>
 
-        <h3 style="margin-top: 28px;">9.3 훅 등록 모델 — 클라이언트마다 "언제"가 다르다</h3>
+        <h3 style="margin-top: 28px;">8.3 훅 등록 모델 — 클라이언트마다 "언제"가 다르다</h3>
         <p>
           공통 로직(capture-core)은 같지만, 그 로직을 <em>언제</em>
           실행할지 결정하는 방식은 클라이언트마다 완전히 다릅니다 — 각
@@ -1220,18 +1245,19 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           허락 항목을 추가하고 설치 문서에도 남겼습니다.
         </p>
 
-        <h3 style="margin-top: 20px;">9.4 어댑터 계약 — <code>ClientAdapter</code></h3>
+        <h3 style="margin-top: 20px;">8.4 어댑터 계약 — <code>ClientAdapter</code></h3>
         <p>
-          모든 클라이언트가 구현하는 최소 계약은 4개 멤버뿐입니다:
+          모든 클라이언트가 구현하는 최소 계약은 5개 멤버입니다:
           <code>id</code> / <code>displayName</code> /
-          <code>generateManifest</code> / <code>generateMcpConfig</code>
-          (+ 스모크 테스트 선언). descriptor 기반 에이전트는 이 계약을
-          <code>defineMcpHostAgent</code>가 자동 생성하고, 런타임
-          클라이언트는 직접 구현합니다 — 즉 계약은 하나, 충족 방식이 두
-          가지입니다.
+          <code>generateManifest</code> / <code>generateMcpConfig</code> /
+          <code>smokeTests</code>(스모크 테스트 명령 선언 — 부가 항목이
+          아니라 인터페이스가 요구하는 필수 멤버입니다). descriptor 기반
+          에이전트는 이 계약을 <code>defineMcpHostAgent</code>가 자동
+          생성하고, 런타임 클라이언트는 직접 구현합니다 — 즉 계약은
+          하나, 충족 방식이 두 가지입니다.
         </p>
 
-        <h3 style="margin-top: 20px;">9.5 클라이언트별 도구·커맨드 전수 맵</h3>
+        <h3 style="margin-top: 20px;">8.5 클라이언트별 도구·커맨드 전수 맵</h3>
         <p>
           "도구"는 AI가 스스로 호출하는 기능, "커맨드"는 사람이 입력하는
           명령입니다. 도구가 어디서 실행되는지가 핵심 차이입니다 —
@@ -1290,7 +1316,7 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           도구는 서버가 이름 공간의 주인이라 접두사가 없습니다.
         </p>
 
-        <h3 style="margin-top: 20px;">9.6 시나리오로 보는 호출 경로</h3>
+        <h3 style="margin-top: 20px;">8.6 시나리오로 보는 호출 경로</h3>
         <div class="grid">
           <div class="card">
             <h3>시나리오 A — Telegram(OpenClaw)에서 "위키에서 X 찾아줘"</h3>
