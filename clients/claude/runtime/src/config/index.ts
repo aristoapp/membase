@@ -146,7 +146,9 @@ export function loadConfig(): PluginConfig {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false,
     ),
-    captureMode: normalizeCaptureMode(disk.captureMode),
+    captureMode: normalizeCaptureMode(
+      strFromOption("captureMode") ?? disk.captureMode,
+    ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
       strFromOption("sessionStartContext") ?? disk.sessionStartContext,

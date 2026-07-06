@@ -477,6 +477,12 @@ var DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
 var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
 var MEMORY_SOURCE = CLIENT_SOURCE;
 var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+var CLIENT_LABELS = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  cursor: "Cursor"
+};
+var CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
 var MIN_RECALL_CHARS = 500;
@@ -894,7 +900,9 @@ function loadConfig() {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
     ),
-    captureMode: normalizeCaptureMode(disk.captureMode),
+    captureMode: normalizeCaptureMode(
+      strFromOption("captureMode") ?? disk.captureMode
+    ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
       strFromOption("sessionStartContext") ?? disk.sessionStartContext

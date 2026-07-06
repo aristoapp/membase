@@ -51,3 +51,18 @@ describe("config", () => {
     });
   });
 });
+
+describe("captureMode plugin option", () => {
+  it("CLAUDE_PLUGIN_OPTION_captureMode=summary enables capture without a config file", () => {
+    withTempConfig(() => {
+      const prev = process.env.CLAUDE_PLUGIN_OPTION_captureMode;
+      process.env.CLAUDE_PLUGIN_OPTION_captureMode = "summary";
+      try {
+        expect(loadConfig().captureMode).toBe("summary");
+      } finally {
+        if (prev === undefined) delete process.env.CLAUDE_PLUGIN_OPTION_captureMode;
+        else process.env.CLAUDE_PLUGIN_OPTION_captureMode = prev;
+      }
+    });
+  });
+});
