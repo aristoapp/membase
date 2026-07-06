@@ -22,7 +22,11 @@ import {
 } from "../sanitize/index.js";
 import { enqueueCapture, flushSpool } from "../spool/index.js";
 import type { HookInput } from "../types.js";
-import { buildSessionStartContext } from "./session-start.js";
+import {
+  buildSessionStartContext,
+  handoffRecallQuery,
+  isHandoffMemory,
+} from "./session-start.js";
 import { buildSessionCaptureCandidate, summarizeToolCall } from "./summary.js";
 import type { EpisodeBundle } from "../types.js";
 
@@ -173,6 +177,34 @@ async function handleSessionStart(input: HookInput): Promise<void> {
   if (context) {
     outputAdditionalContext(context, "SessionStart");
   }
+  await prefetchHandoff(client, projectSlug);
+}
+
+/**
+ * Recall the most recent /membase:handoff summary for this project, if any,
+ * so a fresh session (or a different client, once other clients gain this
+ * skill) can pick up where the last one left off without a manual search.
+ */
+async function prefetchHandoff(
+  client: MembaseClient,
+  projectSlug?: string,
+): Promise<void> {
+  const bundles = await withTimeout(
+    client.searchMemory({
+      query: handoffRecallQuery(),
+      limit: 1,
+      project: projectSlug,
+    }),
+    SESSION_FETCH_TIMEOUT_MS,
+  ).catch(() => undefined);
+  const latest = bundles?.find((bundle) =>
+    isHandoffMemory(bundle.episode.name ?? ""),
+  );
+  if (!latest) return;
+  outputAdditionalContext(
+    `<membase-handoff>\n${latest.episode.name}\n</membase-handoff>`,
+    "SessionStart",
+  );
 }
 
 async function handleUserPromptSubmit(input: HookInput): Promise<void> {
