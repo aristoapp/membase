@@ -1,13 +1,7 @@
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { createTokenStore } from "@membase/capture-core";
+import { join, resolve } from "node:path";
+import { createTokenStore, writeJsonAtomic } from "@membase/capture-core";
 import {
   DEFAULT_API_URL,
   DEFAULT_MAX_RECALL_CHARS,
@@ -23,14 +17,15 @@ import type {
 } from "../types.js";
 
 export function getDataDir(): string {
-  return (
+  const dir =
     // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
     // point this at their own state dir — or a shared one for a single
     // machine-wide login — without Claude-specific env names.
     process.env.MEMBASE_DATA_DIR ||
     process.env.CLAUDE_PLUGIN_DATA ||
-    join(homedir(), ".claude", "plugins", "membase")
-  );
+    join(homedir(), ".claude", "plugins", "membase");
+  // MCP-client env entries are not shell-expanded, so `~/...` arrives literal.
+  return dir.startsWith("~/") ? join(homedir(), dir.slice(2)) : dir;
 }
 
 export function getPluginRoot(): string {
@@ -65,19 +60,6 @@ function readJsonObject(path: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function writeJsonAtomic(path: string, value: unknown, mode = 0o600): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, {
-    encoding: "utf-8",
-    mode,
-  });
-  renameSync(tmp, path);
-  try {
-    chmodSync(path, mode);
-  } catch {}
 }
 
 function pluginOption(name: string): string | undefined {
@@ -146,8 +128,10 @@ export function loadConfig(): PluginConfig {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false,
     ),
+    // Disk wins: hooks pass a captureMode option on every run, so env can
+    // only be the default — otherwise it would override an explicit opt-out.
     captureMode: normalizeCaptureMode(
-      strFromOption("captureMode") ?? disk.captureMode,
+      disk.captureMode ?? strFromOption("captureMode"),
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
