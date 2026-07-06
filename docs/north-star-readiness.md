@@ -85,3 +85,89 @@ Only then, in order (each its own reviewed change):
    (READMEs point here; repos archived, not deleted).
 4. Retire the standalone working copies under `~/Desktop/membase/` once launch
    gates pass.
+
+## North-star scope v2 — feature pillars (added 2026-07-07)
+
+The north star is wider than repo consolidation: the deprecation gate above is
+one axis, and these three product pillars are the other. The old repos are not
+truly replaced until every client has them.
+
+**Engineering principle (applies to all three):** use officially documented
+platform features (hooks, rules, custom prompts, provider slots). Do not
+invent workarounds; a workaround is acceptable only when a well-known project
+(e.g. claude-mem) already ships the same pattern.
+
+### Pillar 1 — Hook-based capture
+
+Just having a conversation uploads memory to Membase, passively, via each
+platform's official hook mechanism.
+
+| Client | Status | Mechanism |
+| --- | --- | --- |
+| Claude Code | Done | `hooks.json` — tool/compact summaries → disk spool → flush (plugin login supplies hook auth) |
+| OpenClaw | Done | `api.on("agent_end")` capture inside the long-lived gateway process |
+| Hermes | Done | provider `on_session_end` slot |
+| Cursor | Decided (2026-07-07), to build | Two connection modes, below |
+| Codex | Decided (2026-07-07), to build | Two connection modes, below |
+
+Decision for Cursor/Codex — **two connection modes**, both official-features-only.
+**Auto-capture is the default: the stdio bundle is the recommended install**,
+so out of the box every client behaves like Claude Code (decided 2026-07-07).
+
+- **stdio bundle mode (default install).** Ship the bundled stdio MCP server
+  (the same approach Claude Code uses) via Cursor `mcp.json` / Codex
+  `config.toml` command entries — both officially supported. Its login stores
+  tokens on disk, so hooks flush the capture spool directly and inject
+  recall context in real time: full Claude Code parity, auto-capture on by
+  default. This answers the "local stdio fallback" question D3 left open
+  (the ledger row updates with the implementation PR). Requires an
+  install-path update in the Membase official docs (membase repo) when it
+  ships.
+- **HTTP mode (fallback — dashboard one-click / no-Node environments).**
+  Hook processes cannot authenticate (OAuth tokens live inside the app), so
+  hooks only *collect*: official events (Cursor `afterFileEdit`/`stop` via
+  `~/.cursor/hooks.json`; Codex `PostToolUse`/`Stop` via plugin-manifest
+  hooks writing under the official `PLUGIN_DATA` dir) append redacted
+  summaries to a local spool. Upload rides the already-authenticated in-app
+  AI: the session-start hook injects "N pending captures — flush them" and
+  the AI calls `add_memory`; handoff and dreaming also flush first.
+  Auto-capture still works, with cloud sync lagging by at most one session.
+- Both modes share one spool contract in `capture-core`: jsonl line format,
+  secret redaction **before** the line is written, truncate after successful
+  upload — so "missing from cloud" is defined as "still in the spool".
+- **claude-mem-style resident worker: rejected.** The stdio bundle reaches
+  real-time capture without a daemon's process-lifecycle burden (PID files,
+  spawn locks, supervisor, ports), and a worker would still need its own
+  Membase login anyway.
+
+### Pillar 2 — Handoff
+
+Definition: same-client continuation is shared through a **local file**;
+cross-client continuation is shared by **asking the client to recall** the
+`[HANDOFF]`-tagged memory.
+
+| Client | Status | Notes |
+| --- | --- | --- |
+| Cursor | Matches definition | skill writes `.cursor/rules/membase-handoff.mdc`; Rules auto-load injects it (PR #24) |
+| Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
+| Claude Code | Deviates | same-client continuation uses cloud search prefetch at SessionStart, not a local file. Normalizing to a local file would drop the search-quota dependency and the relevance-top-1 weakness — open decision |
+| OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
+| Hermes | Not implemented | |
+
+Injection policy (decided 2026-07-07): always exactly the **latest one**
+handoff; older handoffs stay reachable via manual `search_memory`. Handoff
+store also flushes the capture spool first (Pillar 1 HTTP mode), so switching
+clients never leaves fresh captures behind.
+
+### Pillar 3 — Dreaming
+
+Definition: upload local work that is **missing from the cloud** — sweep local
+artifacts (handoff files, spool leftovers, session notes) and `add_memory`
+what Membase lacks. Not implemented on any client.
+
+Design direction: an AI-invoked skill/command, because the AI's MCP tools are
+already authenticated — no hook auth needed. Concretely, dreaming is the
+named flush-and-sweep of the Pillar 1 spool (plus other local artifacts). In
+the default stdio bundle mode hooks flush continuously and dreaming is the
+catch-up/sweep for anything left behind; in HTTP fallback mode it IS the
+upload half of capture.
