@@ -97,6 +97,31 @@ Flow: `/handoff` prints the summary, stores it in Membase tagged `[HANDOFF]`
 `additionalContext`. Override the file location with `MEMBASE_HANDOFF_FILE`.
 
 Test: `pnpm --filter @membase/client-codex test:runtime`.
+## Auto-Capture (Memory Hooks)
+
+Auto-capture (north-star pillar 1): conversations upload memory passively.
+Two modes, both official-features-only:
+
+1. Install the hook adapter: merge `clients/codex/runtime/hooks.json` into
+   `~/.codex/hooks.json`, replacing `REPO_ROOT` with this repository's
+   absolute path. The entries run the shared membase hook bundle on
+   `SessionStart`, `UserPromptSubmit`, `PostToolUse` (including
+   `apply_patch` file edits), and `Stop`.
+2. Pick a mode:
+   - **stdio bundle (recommended — real-time).** Add a command-based MCP
+     server to `~/.codex/config.toml`:
+     `[mcp_servers.membase]` with `command = "node"`,
+     `args = ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"]`,
+     `env = { MEMBASE_CLIENT_SOURCE = "codex", MEMBASE_DATA_DIR = "~/.membase/codex" }`,
+     then ask the agent to call the membase `login` tool once. Tokens land
+     on disk, so hooks flush captures and inject recall in real time —
+     Claude Code parity.
+   - **HTTP fallback (current install, no extra login).** Hooks only spool
+     captures locally (`~/.membase/codex/spool/pending.jsonl`); the
+     session-start hook announces the pending count and the in-app AI
+     uploads via `add_memory` — the `/dream` prompt
+     (`clients/codex/runtime/prompts/dream.md`, copy to
+     `~/.codex/prompts/`) is that flush. Sync lags by at most one session.
 
 ## Secret Handling
 

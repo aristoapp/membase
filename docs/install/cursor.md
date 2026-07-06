@@ -122,6 +122,31 @@ request, to:
 
 To pick up a handoff stored from another client (Claude Code, Codex), search
 manually: `search_memory` with query `[HANDOFF]` plus the `project` filter.
+## Auto-Capture (Memory Hooks)
+
+Auto-capture (north-star pillar 1): conversations upload memory passively.
+Two modes, both official-features-only:
+
+1. Install the hook adapter: merge `clients/cursor/runtime/hooks.json` into
+   `~/.cursor/hooks.json`, replacing `REPO_ROOT` with this repository's
+   absolute path. `cursor-hook.mjs` translates Cursor events
+   (`afterFileEdit`, `afterShellExecution`, `stop`, `sessionStart`,
+   `beforeSubmitPrompt`) into the shared membase hook bundle — it owns no
+   capture logic itself.
+2. Pick a mode:
+   - **stdio bundle (recommended — real-time).** Add a command-based MCP
+     server entry to `~/.cursor/mcp.json`:
+     `{"command": "node", "args": ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"], "env": {"MEMBASE_CLIENT_SOURCE": "cursor", "MEMBASE_DATA_DIR": "~/.membase/cursor"}}`
+     and ask the agent to call the membase `login` tool once. Tokens land on
+     disk, so hooks flush captures and inject recall in real time — Claude
+     Code parity.
+   - **HTTP fallback (current one-click install, no extra login).** Hooks
+     only spool captures locally
+     (`~/.membase/cursor/spool/pending.jsonl`); the session-start hook
+     announces the pending count and the in-app AI uploads via `add_memory`
+     — the `dream` skill is that flush. Sync lags by at most one session.
+
+Test: `pnpm cursor:runtime-test`.
 
 ## References
 
