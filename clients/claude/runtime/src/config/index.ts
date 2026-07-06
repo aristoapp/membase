@@ -24,6 +24,10 @@ import type {
 
 export function getDataDir(): string {
   return (
+    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
+    // point this at their own state dir — or a shared one for a single
+    // machine-wide login — without Claude-specific env names.
+    process.env.MEMBASE_DATA_DIR ||
     process.env.CLAUDE_PLUGIN_DATA ||
     join(homedir(), ".claude", "plugins", "membase")
   );
