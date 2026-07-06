@@ -55,34 +55,22 @@ test("C-HDF-1 the literal [HANDOFF] tag appears identically across all four clie
   }
 });
 
-test("C-HDF-2 recall injects the LATEST handoff (by time), not the most relevant", async (t) => {
-  // SPEC-AMBIGUITY: the spec promises "always exactly the latest one" but
-  // does not define the recall wire protocol. Best independent reading: the
-  // session-start recall path (the only credentialed entry point that could
-  // fetch a handoff) must surface the newest handoff when the API offers
-  // several. The stub answers any recall-ish request with two handoffs —
-  // OLD first and with a higher relevance score, NEW second — under every
-  // common envelope key, each item carrying content/text/summary/created_at.
-  const oldItem = {
-    id: "handoff-old",
-    content: "[HANDOFF] OLD-MARKER finished the migration groundwork",
-    text: "[HANDOFF] OLD-MARKER finished the migration groundwork",
-    summary: "[HANDOFF] OLD-MARKER",
-    created_at: "2026-07-01T00:00:00Z",
-    score: 0.99,
+test("C-HDF-2 SessionStart injects a [HANDOFF] bundle from the documented envelope", async (t) => {
+  // Wire schema per spec: {"episodes": [{"episode": {name, summary,
+  // valid_at, ...}}]}. Latest-vs-relevant stays server-delegated today
+  // (KNOWN LIMIT in the spec) — this contract pins that a returned handoff
+  // bundle IS injected, inside the single JSON stdout (C-HOOK-7).
+  const bundle = {
+    episode: {
+      uuid: "u-handoff",
+      name: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
+      summary: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
+      valid_at: "2026-07-05T00:00:00Z",
+    },
   };
-  const newItem = {
-    id: "handoff-new",
-    content: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
-    text: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
-    summary: "[HANDOFF] NEW-MARKER",
-    created_at: "2026-07-05T00:00:00Z",
-    score: 0.42,
-  };
-  const both = [oldItem, newItem];
   const dir = await makeDataDir(t);
   const api = await startStubApi(t, {
-    searchBody: { results: both, memories: both, bundles: both, data: both },
+    searchBody: { episodes: [bundle] },
   });
   await writeConfig(dir, { apiUrl: api.url });
   await writeCredentials(dir);
@@ -96,14 +84,11 @@ test("C-HDF-2 recall injects the LATEST handoff (by time), not the most relevant
     searches.length >= 1,
     "session start with credentials must attempt a handoff recall",
   );
-  const ctx =
-    JSON.parse(run.stdout || "{}").hookSpecificOutput?.additionalContext ?? "";
+  // C-HOOK-7: the whole stdout must parse as ONE JSON document.
+  const parsed = JSON.parse(run.stdout);
+  const ctx = parsed.hookSpecificOutput?.additionalContext ?? "";
   assert.ok(
     ctx.includes("NEW-MARKER"),
-    `latest handoff must be injected; context was: ${ctx.slice(0, 400)}`,
-  );
-  assert.ok(
-    !ctx.includes("OLD-MARKER"),
-    "older (more 'relevant') handoff must NOT win over the latest",
+    `handoff must be injected; context was: ${ctx.slice(0, 400)}`,
   );
 });

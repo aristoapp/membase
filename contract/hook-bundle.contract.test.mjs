@@ -245,3 +245,15 @@ for (const [entryName, script, args] of entryPoints) {
     );
   });
 }
+
+test("C-HOOK-7 stdout is a single JSON document (no-creds SessionStart)", async (t) => {
+  const dir = await makeDataDir(t);
+  const run = await runEntry(CLAUDE_HOOK, ["SessionStart"], {
+    input: JSON.stringify({ hook_event_name: "SessionStart" }),
+    env: { MEMBASE_DATA_DIR: dir },
+  });
+  assert.equal(run.code, 0);
+  if (run.stdout.trim()) {
+    JSON.parse(run.stdout); // throws if two objects are concatenated
+  }
+});

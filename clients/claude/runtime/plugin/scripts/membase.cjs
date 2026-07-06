@@ -247,7 +247,9 @@ function createCaptureSpool(options) {
     let flushed = 0;
     for (const record of drained.batch) {
       try {
-        await send(record);
+        if (await send(record) === false) {
+          throw new Error("uploader returned false");
+        }
         withSpoolLock(() => {
           const sentIds = readSentIds();
           sentIds.add(record.capture_id);

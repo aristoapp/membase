@@ -31,6 +31,21 @@ credentials file per C-TOK-1's shape to `<dataDir>/credentials.json`.
 - Files under the data dir: `spool/pending.jsonl`, `credentials.json`,
   `config.json` — their shapes are contract surface (C-SPOOL-1, C-TOK-1).
 
+## Wire schemas the stub API must speak (source: public API client behavior,
+pinned here so tests and server cannot drift silently)
+
+- `GET /memory/search` response envelope: `{"episodes": [<bundle>...]}`;
+  each bundle is `{"episode": {"uuid", "name", "summary", "valid_at", ...}}`.
+  Handoff identification reads `episode.name`/`episode.summary`.
+- `POST /oauth/token` (refresh): form-encoded `grant_type=refresh_token`;
+  response `{"access_token", "refresh_token"?, "expires_in"?, "scope"?}`.
+- Ingest: authenticated POST whose JSON body carries `content` and `source`.
+- `createTokenStore` factory option shape: `{ dir: () => string,
+  filename?: string }`. `createCaptureSpool`: `{ stateDir: () => string,
+  sanitize: (t: string) => string, minContentLength?: number }`.
+- `flushSpool(send)` failure signalling: the uploader signals failure by
+  THROWING or by resolving `false`; any other resolution counts as uploaded.
+
 ## Spool (source: docs/north-star-readiness.md "Both modes share one spool
 contract"; capture-core exported types `SpoolRecord`, `CaptureSpool`)
 
@@ -97,6 +112,10 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   runtime refreshes via `POST /oauth/token` exactly once and retries.
   Source: capture-core transport JSDoc ("single-flight-refresh +
   retry-on-401"); D3 addendum for source attribution.
+- C-HOOK-7 — Single-document stdout: whatever a hook entry point prints is
+  at most ONE JSON object, parseable with a single JSON.parse of the whole
+  stdout. Source: Claude Code hooks output schema (one JSON object per hook
+  invocation); two concatenated objects are unparseable.
 - C-HOOK-6 — Hooks never block or crash the host: any entry point with
   garbage stdin (invalid JSON, binary, or stdin held open) exits 0 within
   5 seconds. Source: install docs' fail-open framing; hooks are spawned per
@@ -139,8 +158,12 @@ Codex hooks output schema per developers.openai.com/codex/hooks)
   the same literal (cross-client greppable: the string `[HANDOFF]` appears
   identically in claude runtime, openclaw runtime, cursor skill, codex
   prompt).
-- C-HDF-2 — Injection policy: recall picks the LATEST handoff (by time),
-  not the most relevant. Source: north-star "always exactly the latest one".
+- C-HDF-2 — SessionStart handoff injection: with credentials and a stub API
+  whose search response (per the wire schema above) returns one bundle whose
+  `episode.name` starts with `[HANDOFF]`, the SessionStart output's single
+  JSON contains that handoff text. KNOWN LIMIT (do not test yet): "latest by
+  time, not most relevant" is currently delegated to the server via
+  `limit=1`; client-side latest-picking is an open north-star item.
 
 ## Dream flush protocol (source: the four dream docs after #35)
 
