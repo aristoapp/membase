@@ -10,7 +10,8 @@
       "membase_search_wiki",
       "membase_add_wiki",
       "membase_update_wiki",
-      "membase_delete_wiki"
+      "membase_delete_wiki",
+      "membase_handoff"
     ]
   },
   "skills": [

@@ -21,6 +21,7 @@ import { registerRecallHook } from "./hooks/recall";
 import { registerAddWikiTool } from "./tools/add-wiki";
 import { registerDeleteWikiTool } from "./tools/delete-wiki";
 import { registerForgetTool } from "./tools/forget";
+import { registerHandoffTool } from "./tools/handoff";
 import { registerProfileTool } from "./tools/profile";
 import { registerSearchTool } from "./tools/search";
 import { registerSearchWikiTool } from "./tools/search-wiki";
@@ -275,6 +276,7 @@ export default {
     registerStoreTool(api, client);
     registerProfileTool(api, client);
     registerForgetTool(api, client);
+    registerHandoffTool(api, client);
     registerSearchWikiTool(api, client);
     registerAddWikiTool(api, client);
     registerUpdateWikiTool(api, client);
