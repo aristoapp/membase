@@ -110,25 +110,28 @@ platform's official hook mechanism.
 | Cursor | Decided (2026-07-07), to build | Two connection modes, below |
 | Codex | Decided (2026-07-07), to build | Two connection modes, below |
 
-Decision for Cursor/Codex — **two connection modes**, both official-features-only:
+Decision for Cursor/Codex — **two connection modes**, both official-features-only.
+**Auto-capture is the default: the stdio bundle is the recommended install**,
+so out of the box every client behaves like Claude Code (decided 2026-07-07).
 
-- **HTTP mode (default; current install unchanged).** Hook processes cannot
-  authenticate (OAuth tokens live inside the app), so hooks only *collect*:
-  official events (Cursor `afterFileEdit`/`stop` via `~/.cursor/hooks.json`;
-  Codex `PostToolUse`/`Stop` via plugin-manifest hooks writing under the
-  official `PLUGIN_DATA` dir) append redacted summaries to a local spool.
-  Upload rides the already-authenticated in-app AI: the session-start hook
-  injects "N pending captures — flush them" and the AI calls `add_memory`;
-  handoff and dreaming also flush first. Cloud sync therefore lags by at most
-  one session.
-- **stdio bundle mode (opt-in upgrade).** Ship the bundled stdio MCP server
+- **stdio bundle mode (default install).** Ship the bundled stdio MCP server
   (the same approach Claude Code uses) via Cursor `mcp.json` / Codex
   `config.toml` command entries — both officially supported. Its login stores
-  tokens on disk, so the same hooks flush the spool directly and inject
-  recall context in real time: full Claude Code parity. This answers the
-  "local stdio fallback" question D3 left open (the ledger row updates with
-  the implementation PR). Requires an install-path addition in the Membase
-  official docs (membase repo) when it ships.
+  tokens on disk, so hooks flush the capture spool directly and inject
+  recall context in real time: full Claude Code parity, auto-capture on by
+  default. This answers the "local stdio fallback" question D3 left open
+  (the ledger row updates with the implementation PR). Requires an
+  install-path update in the Membase official docs (membase repo) when it
+  ships.
+- **HTTP mode (fallback — dashboard one-click / no-Node environments).**
+  Hook processes cannot authenticate (OAuth tokens live inside the app), so
+  hooks only *collect*: official events (Cursor `afterFileEdit`/`stop` via
+  `~/.cursor/hooks.json`; Codex `PostToolUse`/`Stop` via plugin-manifest
+  hooks writing under the official `PLUGIN_DATA` dir) append redacted
+  summaries to a local spool. Upload rides the already-authenticated in-app
+  AI: the session-start hook injects "N pending captures — flush them" and
+  the AI calls `add_memory`; handoff and dreaming also flush first.
+  Auto-capture still works, with cloud sync lagging by at most one session.
 - Both modes share one spool contract in `capture-core`: jsonl line format,
   secret redaction **before** the line is written, truncate after successful
   upload — so "missing from cloud" is defined as "still in the spool".
@@ -164,7 +167,7 @@ what Membase lacks. Not implemented on any client.
 
 Design direction: an AI-invoked skill/command, because the AI's MCP tools are
 already authenticated — no hook auth needed. Concretely, dreaming is the
-named flush-and-sweep of the Pillar 1 spool (plus other local artifacts), so
-on Cursor/Codex HTTP mode it IS the upload half of capture. In stdio bundle
-mode hooks flush continuously and dreaming remains the catch-up/sweep for
-anything left behind.
+named flush-and-sweep of the Pillar 1 spool (plus other local artifacts). In
+the default stdio bundle mode hooks flush continuously and dreaming is the
+catch-up/sweep for anything left behind; in HTTP fallback mode it IS the
+upload half of capture.
