@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildHandoffDisplaySummary,
   buildHandoffMemory,
   HANDOFF_TAG,
   handoffRecallQuery,
   isHandoffMemory,
+  pickLatestHandoff,
   sanitizeCaptureText,
   sanitizeMembaseText,
 } from "./utils";
@@ -72,5 +74,52 @@ describe("handoff memory tagging", () => {
 
   test("recall query carries the tag so it matches stored handoffs across clients", () => {
     expect(handoffRecallQuery()).toContain(HANDOFF_TAG);
+  });
+
+  test("display_summary starts with the tag so the derived episode name is recallable", () => {
+    // The backend uses display_summary as the episode name, which is the field
+    // recall's isHandoffMemory check reads — the tag must be at the very start.
+    const ds = buildHandoffDisplaySummary({
+      summary: "Shipped D1 slices, gate closed.",
+      project: "membase-plugin-mcp",
+    });
+    expect(ds.startsWith(HANDOFF_TAG)).toBe(true);
+    expect(isHandoffMemory(ds)).toBe(true);
+  });
+
+  test("display_summary clamps a very long summary but keeps the tag", () => {
+    const ds = buildHandoffDisplaySummary({ summary: "x".repeat(1000) });
+    expect(ds.startsWith(HANDOFF_TAG)).toBe(true);
+    expect(ds.length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("pickLatestHandoff", () => {
+  const bundle = (name: string, validAt: string | null, summary = "") => ({
+    episode: { name, summary, valid_at: validAt, created_at: validAt },
+  });
+
+  test("returns the newest handoff, not the first (relevance) one", () => {
+    const older = bundle(`${HANDOFF_TAG} older`, "2026-07-01T00:00:00Z");
+    const newer = bundle(`${HANDOFF_TAG} newer`, "2026-07-05T00:00:00Z");
+    // Relevance order puts the older one first; recency must still win.
+    expect(pickLatestHandoff([older, newer])?.episode.name).toContain("newer");
+  });
+
+  test("ignores non-handoff bundles that leaked into the results", () => {
+    const noise = bundle("Handoff: not really tagged", "2026-07-09T00:00:00Z");
+    const real = bundle(`${HANDOFF_TAG} real`, "2026-07-02T00:00:00Z");
+    expect(pickLatestHandoff([noise, real])?.episode.name).toContain("real");
+  });
+
+  test("matches the tag on episode.summary when the name lacks it", () => {
+    const b = bundle("Some title", "2026-07-03T00:00:00Z", `${HANDOFF_TAG} body`);
+    expect(pickLatestHandoff([b])).toBe(b);
+  });
+
+  test("returns undefined when no bundle is tagged", () => {
+    expect(pickLatestHandoff([bundle("nope", "2026-07-01T00:00:00Z")])).toBe(
+      undefined,
+    );
   });
 });

@@ -123,11 +123,22 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Handoff tagging (shared convention with clients/claude/runtime — see
- * session-start.ts there). A literal string prefix, not a server-side field,
- * so any client's plain search_memory call can find a handoff by tag alone.
+ * Handoff tagging. A literal string prefix (not a server-side field) so any
+ * client's plain search_memory call can find a handoff by tag alone.
+ *
+ * The tag MUST live on a field the search bundle exposes — the episode name /
+ * summary — not just the ingested content body: the bundle carries `name` and
+ * `summary` but not the raw body (see NodeResponse in types.ts). The backend
+ * derives the episode name from `display_summary` (graph_sync.py:298 →
+ * build_safe_episode_name(display_title or display_summary or content)), so
+ * `buildHandoffDisplaySummary` prefixes the tag there and `isHandoffMemory`
+ * matches against `episode.name`/`episode.summary`.
  */
 export const HANDOFF_TAG = "[HANDOFF]";
+
+// display_summary max_length on the backend (models/ingest.py) is 500; the tag
+// + scope is short, so clamp the user summary to leave headroom.
+const HANDOFF_SUMMARY_MAX = 400;
 
 export function handoffRecallQuery(): string {
   return `${HANDOFF_TAG} session handoff summary`;
@@ -141,8 +152,52 @@ export function buildHandoffMemory(args: {
   return `${HANDOFF_TAG}${scope} ${args.summary}`.trim();
 }
 
+/**
+ * The tagged display_summary. The backend uses this as the episode name, so it
+ * is what recall's `isHandoffMemory(episode.name)` check sees — keep the tag at
+ * the very start.
+ */
+export function buildHandoffDisplaySummary(args: {
+  summary: string;
+  project?: string;
+}): string {
+  const scope = args.project ? ` (${args.project})` : "";
+  const clipped = args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX);
+  return `${HANDOFF_TAG}${scope} ${clipped}`.trim();
+}
+
 export function isHandoffMemory(text: string): boolean {
   return text.trimStart().startsWith(HANDOFF_TAG);
+}
+
+/**
+ * Pick the newest handoff from a relevance-ranked bundle list. Search returns
+ * bundles ordered by relevance, not recency, so "most recent handoff" must sort
+ * by event/capture time explicitly. Non-handoff bundles (that leaked into the
+ * generic-query results) are filtered out first.
+ */
+export function pickLatestHandoff<
+  T extends {
+    episode: {
+      name?: string | null;
+      summary?: string | null;
+      valid_at?: string | null;
+      created_at?: string | null;
+    };
+  },
+>(bundles: T[]): T | undefined {
+  const handoffs = bundles.filter(
+    (b) =>
+      isHandoffMemory(b.episode.name ?? "") ||
+      isHandoffMemory(b.episode.summary ?? ""),
+  );
+  if (handoffs.length === 0) return undefined;
+  const time = (b: T): number => {
+    const raw = b.episode.valid_at ?? b.episode.created_at ?? "";
+    const t = Date.parse(raw);
+    return Number.isNaN(t) ? 0 : t;
+  };
+  return handoffs.reduce((latest, b) => (time(b) > time(latest) ? b : latest));
 }
 
 export function extractLastUserMessage(event: Record<string, unknown>): string {

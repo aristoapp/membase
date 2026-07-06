@@ -2,9 +2,17 @@ import type { MembaseClient } from "../client";
 import { formatBundle } from "../format";
 import type { OpenClawPluginApi } from "../types";
 import { toolResponse } from "../update-check";
-import { buildHandoffMemory, handoffRecallQuery, isHandoffMemory } from "../utils";
+import {
+  buildHandoffDisplaySummary,
+  buildHandoffMemory,
+  handoffRecallQuery,
+  pickLatestHandoff,
+} from "../utils";
 
-const RECALL_LIMIT = 3;
+// The recall query is generic ("session handoff summary"), so ordinary
+// memories can outrank the real handoff; fetch a wider window and filter/sort
+// client-side rather than trusting the top few relevance hits.
+const RECALL_LIMIT = 20;
 
 export function registerHandoffTool(
   api: OpenClawPluginApi,
@@ -60,25 +68,43 @@ export function registerHandoffTool(
             project: params.project,
           });
           const result = await client.ingest(content, {
-            displaySummary: `Handoff: ${params.summary.slice(0, 90)}`,
+            // The display_summary becomes the episode name, which is the field
+            // recall's tag check reads — keep the [HANDOFF] tag at its start.
+            displaySummary: buildHandoffDisplaySummary({
+              summary: params.summary,
+              project: params.project,
+            }),
             project: params.project,
           });
-          return await toolResponse(`Handoff stored in Membase (${result.status}).`);
+          // Echo the stored summary so the user sees the handoff directly, as
+          // the tool description promises.
+          return await toolResponse(
+            `Handoff stored in Membase (${result.status}).\n\n${params.summary.trim()}`,
+          );
         }
 
-        const bundles = await client.search(
-          handoffRecallQuery(),
-          RECALL_LIMIT,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          params.project,
-        );
-        const latest = bundles.find((b) => isHandoffMemory(b.episode.name ?? ""));
+        const recallSearch = (project?: string) =>
+          client.search(
+            handoffRecallQuery(),
+            RECALL_LIMIT,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            project,
+          );
+
+        let latest = pickLatestHandoff(await recallSearch(params.project));
+        // The `project` arg is model-supplied per call and may not match what
+        // `store` used (a handoff stored globally, recalled with a guessed
+        // project, or vice versa). Fall back to an unscoped search so a scope
+        // mismatch doesn't silently hide an existing handoff.
+        if (!latest && params.project) {
+          latest = pickLatestHandoff(await recallSearch(undefined));
+        }
         if (!latest) {
-          return await toolResponse("No stored handoff found for this project.");
+          return await toolResponse("No stored handoff found.");
         }
         return await toolResponse(formatBundle(latest, 0));
       } catch (err) {
