@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getDataDir } from "./config/index.js";
-import { PLUGIN_VERSION } from "./constants.js";
+import { MEMORY_SOURCE, PLUGIN_VERSION } from "./constants.js";
 
 const MARKETPLACE_URL =
   "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
@@ -31,7 +31,9 @@ interface RefreshDeps {
   now?: () => Date;
 }
 
-interface NoticeDeps extends RefreshDeps {}
+interface NoticeDeps extends RefreshDeps {
+  clientSource?: string;
+}
 
 export function updateCheckStatePath(): string {
   return join(getDataDir(), "update-check.json");
@@ -185,6 +187,9 @@ export function buildUpdateNotice(current: string, latest: string): string {
 export async function consumeUpdateNotice(
   deps: NoticeDeps = {},
 ): Promise<string | null> {
+  // The notice and the version check target the Claude plugin marketplace;
+  // non-Claude bundle users cannot act on either, so stay silent.
+  if ((deps.clientSource ?? MEMORY_SOURCE) !== "claude-code") return null;
   const load = deps.loadStateFn ?? loadState;
   const save = deps.saveStateFn ?? saveState;
   const currentVersion = deps.currentVersion ?? PLUGIN_VERSION;
@@ -228,5 +233,6 @@ export async function toolResponse(
 }
 
 export function startBackgroundUpdateCheck(): void {
+  if (MEMORY_SOURCE !== "claude-code") return;
   refreshLatestVersion().catch(() => undefined);
 }

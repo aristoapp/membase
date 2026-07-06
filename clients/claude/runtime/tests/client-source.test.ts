@@ -1,37 +1,57 @@
 // MEMBASE_CLIENT_SOURCE lets other stdio-bundled clients (Cursor/Codex,
 // north-star pillar 1) run the same bundle with correct source attribution.
-// constants.ts reads the env at module load, so the override is exercised in
-// a subprocess; the unset case is asserted in-process.
+// constants.ts reads the env at module load, so every case runs in a
+// subprocess with the env var explicitly set or deleted.
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { getDataDir } from "../src/config/index.js";
-import { MEMORY_SOURCE, USER_AGENT } from "../src/constants.js";
 
 const RUNTIME_DIR = join(import.meta.dir, "..");
 
-function constantsWithEnv(env: Record<string, string>) {
+function constantsWithEnv(env: Record<string, string | undefined>) {
+  const childEnv: Record<string, string | undefined> = {
+    ...process.env,
+    ...env,
+  };
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) delete childEnv[key];
+  }
   const result = spawnSync(
     "bun",
     [
       "-e",
-      'const c = await import("./src/constants.ts"); console.log(JSON.stringify({ source: c.MEMORY_SOURCE, ua: c.USER_AGENT }));',
+      'const c = await import("./src/constants.ts"); console.log(JSON.stringify({ source: c.MEMORY_SOURCE, ua: c.USER_AGENT, plugin: c.INGEST_PLUGIN_LABEL }));',
     ],
-    { cwd: RUNTIME_DIR, env: { ...process.env, ...env }, encoding: "utf-8" },
+    { cwd: RUNTIME_DIR, env: childEnv, encoding: "utf-8" },
   );
-  return JSON.parse(result.stdout.trim()) as { source: string; ua: string };
+  return JSON.parse(result.stdout.trim()) as {
+    source: string;
+    ua: string;
+    plugin: string;
+  };
 }
 
 describe("stdio bundle client parameterization", () => {
   it("defaults to Claude Code attribution when the env is unset", () => {
-    expect(MEMORY_SOURCE).toBe("claude-code");
-    expect(USER_AGENT).toStartWith("membase-claude-code/");
+    const unset = constantsWithEnv({ MEMBASE_CLIENT_SOURCE: undefined });
+    expect(unset.source).toBe("claude-code");
+    expect(unset.ua).toStartWith("membase-claude-code/");
+    expect(unset.plugin).toBe("claude-membase");
   });
 
   it("MEMBASE_CLIENT_SOURCE overrides source and user agent", () => {
     const codex = constantsWithEnv({ MEMBASE_CLIENT_SOURCE: "codex" });
     expect(codex.source).toBe("codex");
     expect(codex.ua).toStartWith("membase-codex/");
+    expect(codex.plugin).toBe("membase-bundle-codex");
+  });
+
+  it("falls back to claude-code when the source fails validation", () => {
+    // Values outside [a-z0-9-]{1,32} would poison the User-Agent header.
+    const bad = constantsWithEnv({ MEMBASE_CLIENT_SOURCE: "evil\nsource" });
+    expect(bad.source).toBe("claude-code");
+    expect(bad.ua).toStartWith("membase-claude-code/");
   });
 
   it("MEMBASE_DATA_DIR wins over the Claude-specific data dir env", () => {

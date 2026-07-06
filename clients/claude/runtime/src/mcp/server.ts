@@ -16,6 +16,7 @@ import {
 import { pendingSpoolCount } from "../spool/index.js";
 import {
   DEFAULT_MCP_URL,
+  INGEST_PLUGIN_LABEL,
   MEMORY_SOURCE,
   PLUGIN_VERSION,
 } from "../constants.js";
@@ -313,7 +314,7 @@ async function main(): Promise<void> {
         content: args.content,
         metadata: {
           ...(args.metadata ?? {}),
-          plugin: "claude-membase",
+          plugin: INGEST_PLUGIN_LABEL,
           plugin_version: PLUGIN_VERSION,
           capture_kind: "explicit",
           source: MEMORY_SOURCE,
