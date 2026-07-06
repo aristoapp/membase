@@ -266,6 +266,61 @@ function createCaptureSpool(options) {
   return { captureId, enqueueCapture: enqueueCapture2, flushSpool: flushSpool2, pendingSpoolCount };
 }
 
+// ../../../packages/capture-core/src/token-store.ts
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
+function writeJsonAtomic(path, value, mode = 384) {
+  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
+  const tmp = `${path}.tmp`;
+  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
+`, {
+    encoding: "utf-8",
+    mode
+  });
+  (0, import_node_fs2.renameSync)(tmp, path);
+  try {
+    (0, import_node_fs2.chmodSync)(path, mode);
+  } catch {
+  }
+}
+function createTokenStore(options) {
+  const filename = options.filename ?? "credentials.json";
+  function path() {
+    return (0, import_node_path2.join)(options.dir(), filename);
+  }
+  function read() {
+    const file = path();
+    if (!(0, import_node_fs2.existsSync)(file)) return null;
+    let obj;
+    try {
+      obj = JSON.parse((0, import_node_fs2.readFileSync)(file, "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
+      return null;
+    }
+    return {
+      clientId: obj.clientId,
+      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
+      accessToken: obj.accessToken,
+      refreshToken: obj.refreshToken,
+      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
+      scope: typeof obj.scope === "string" ? obj.scope : void 0
+    };
+  }
+  function write(tokens) {
+    writeJsonAtomic(path(), tokens);
+  }
+  function clear() {
+    try {
+      (0, import_node_fs2.rmSync)(path(), { force: true });
+    } catch {
+    }
+  }
+  return { path, read, write, clear };
+}
+
 // ../../../packages/capture-core/src/index.ts
 var CASUAL_PATTERNS = [
   /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
@@ -308,19 +363,20 @@ function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
     "gi"
   );
 }
+var SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
 var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
 var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
 function redactSecrets(text) {
-  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(buildSecretAssignmentRe(), "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
+  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
 }
 function patternTest(pattern, text) {
   pattern.lastIndex = 0;
   return pattern.test(text);
 }
 function looksSensitive(text) {
-  return patternTest(buildSecretAssignmentRe(), text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
+  return patternTest(SECRET_ASSIGNMENT_FULL_RE, text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
 }
 function clampRecallQuery(sanitized, max = 240) {
   return sanitized.replace(CODE_BLOCK_RE, " ").replace(/\s+/g, " ").trim().slice(0, max);
@@ -434,8 +490,9 @@ var MembaseTransport = class {
 var PLUGIN_NAME = "claude-membase";
 var PLUGIN_VERSION = "0.1.4";
 var DEFAULT_API_URL = "https://api.membase.so";
-var MEMORY_SOURCE = "claude-code";
-var USER_AGENT = `membase-claude-code/${PLUGIN_VERSION}`;
+var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
+var MEMORY_SOURCE = CLIENT_SOURCE;
+var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
 var DEFAULT_RECALL_TIMEOUT_MS = 3e3;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
@@ -585,46 +642,35 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
 }
 
 // src/config/index.ts
-var import_node_fs2 = require("node:fs");
+var import_node_fs3 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path2 = require("node:path");
+var import_node_path3 = require("node:path");
 function getDataDir() {
-  return process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path2.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase");
+  return (
+    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
+    // point this at their own state dir — or a shared one for a single
+    // machine-wide login — without Claude-specific env names.
+    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
+  );
 }
 function ensureDataDir() {
   const dir = getDataDir();
-  (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
+  (0, import_node_fs3.mkdirSync)(dir, { recursive: true, mode: 448 });
   try {
-    (0, import_node_fs2.chmodSync)(dir, 448);
+    (0, import_node_fs3.chmodSync)(dir, 448);
   } catch {
   }
   return dir;
 }
 function configPath() {
-  return (0, import_node_path2.join)(ensureDataDir(), "config.json");
+  return (0, import_node_path3.join)(ensureDataDir(), "config.json");
 }
-function credentialsPath() {
-  return (0, import_node_path2.join)(ensureDataDir(), "credentials.json");
-}
+var tokenStore = createTokenStore({ dir: ensureDataDir });
 function readJsonObject(path) {
   try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
+    return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
   } catch {
     return {};
-  }
-}
-function writeJsonAtomic(path, value, mode = 384) {
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
-  (0, import_node_fs2.renameSync)(tmp, path);
-  try {
-    (0, import_node_fs2.chmodSync)(path, mode);
-  } catch {
   }
 }
 function pluginOption(name) {
@@ -690,23 +736,10 @@ function loadConfig() {
   };
 }
 function readTokens() {
-  const path = credentialsPath();
-  if (!(0, import_node_fs2.existsSync)(path)) return null;
-  const obj = readJsonObject(path);
-  if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
-    return null;
-  }
-  return {
-    clientId: obj.clientId,
-    clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
-    accessToken: obj.accessToken,
-    refreshToken: obj.refreshToken,
-    expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
-    scope: typeof obj.scope === "string" ? obj.scope : void 0
-  };
+  return tokenStore.read();
 }
 function writeTokens(tokens) {
-  writeJsonAtomic(credentialsPath(), tokens);
+  tokenStore.write(tokens);
 }
 
 // src/sanitize/index.ts
@@ -817,22 +850,22 @@ ${disclaimer}
 }
 
 // src/project/index.ts
-var import_node_fs3 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
 function normalizeProjectSlug(raw) {
   return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 }
 function findGitRoot(cwd) {
   let current = cwd;
-  while (current && current !== (0, import_node_path3.parse)(current).root) {
-    if ((0, import_node_fs3.existsSync)((0, import_node_path3.join)(current, ".git"))) return current;
-    current = (0, import_node_path3.dirname)(current);
+  while (current && current !== (0, import_node_path4.parse)(current).root) {
+    if ((0, import_node_fs4.existsSync)((0, import_node_path4.join)(current, ".git"))) return current;
+    current = (0, import_node_path4.dirname)(current);
   }
   return null;
 }
 function remoteSlug(gitRoot) {
   try {
-    const gitConfig = (0, import_node_fs3.readFileSync)((0, import_node_path3.join)(gitRoot, ".git", "config"), "utf-8");
+    const gitConfig = (0, import_node_fs4.readFileSync)((0, import_node_path4.join)(gitRoot, ".git", "config"), "utf-8");
     const match = gitConfig.match(/url\s*=\s*(.+)\n/);
     if (!match?.[1]) return null;
     const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
@@ -848,8 +881,8 @@ function resolveProjectSlug(cwd, config) {
   if (!cwd) return void 0;
   const gitRoot = findGitRoot(cwd);
   if (gitRoot)
-    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path3.basename)(gitRoot));
-  return normalizeProjectSlug((0, import_node_path3.basename)(cwd));
+    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path4.basename)(gitRoot));
+  return normalizeProjectSlug((0, import_node_path4.basename)(cwd));
 }
 
 // src/spool/index.ts
@@ -924,6 +957,13 @@ function buildSessionStartContext(args) {
   }
   lines.push("</membase-session>");
   return lines.filter(Boolean).join("\n");
+}
+var HANDOFF_TAG = "[HANDOFF]";
+function handoffRecallQuery() {
+  return `${HANDOFF_TAG} session handoff summary`;
+}
+function isHandoffMemory(text) {
+  return text.trimStart().startsWith(HANDOFF_TAG);
 }
 
 // src/hooks/summary.ts
@@ -1071,6 +1111,27 @@ async function handleSessionStart(input) {
   if (context) {
     outputAdditionalContext(context, "SessionStart");
   }
+  await prefetchHandoff(client, projectSlug);
+}
+async function prefetchHandoff(client, projectSlug) {
+  const bundles = await withTimeout(
+    client.searchMemory({
+      query: handoffRecallQuery(),
+      limit: 1,
+      project: projectSlug
+    }),
+    SESSION_FETCH_TIMEOUT_MS
+  ).catch(() => void 0);
+  const latest = bundles?.find(
+    (bundle) => isHandoffMemory(bundle.episode.name ?? "")
+  );
+  if (!latest) return;
+  outputAdditionalContext(
+    `<membase-handoff>
+${latest.episode.name}
+</membase-handoff>`,
+    "SessionStart"
+  );
 }
 async function handleUserPromptSubmit(input) {
   const config = loadConfig();

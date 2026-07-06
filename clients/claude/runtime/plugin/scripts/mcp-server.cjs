@@ -6887,9 +6887,9 @@ var require_dist = __commonJS({
 });
 
 // src/mcp/server.ts
-var import_node_fs5 = require("node:fs");
+var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 
 // ../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/util.js
 var util;
@@ -31220,6 +31220,61 @@ function createCaptureSpool(options) {
   return { captureId, enqueueCapture, flushSpool, pendingSpoolCount: pendingSpoolCount2 };
 }
 
+// ../../../packages/capture-core/src/token-store.ts
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
+function writeJsonAtomic(path, value, mode = 384) {
+  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
+  const tmp = `${path}.tmp`;
+  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
+`, {
+    encoding: "utf-8",
+    mode
+  });
+  (0, import_node_fs2.renameSync)(tmp, path);
+  try {
+    (0, import_node_fs2.chmodSync)(path, mode);
+  } catch {
+  }
+}
+function createTokenStore(options) {
+  const filename = options.filename ?? "credentials.json";
+  function path() {
+    return (0, import_node_path2.join)(options.dir(), filename);
+  }
+  function read() {
+    const file2 = path();
+    if (!(0, import_node_fs2.existsSync)(file2)) return null;
+    let obj;
+    try {
+      obj = JSON.parse((0, import_node_fs2.readFileSync)(file2, "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
+      return null;
+    }
+    return {
+      clientId: obj.clientId,
+      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
+      accessToken: obj.accessToken,
+      refreshToken: obj.refreshToken,
+      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
+      scope: typeof obj.scope === "string" ? obj.scope : void 0
+    };
+  }
+  function write(tokens) {
+    writeJsonAtomic(path(), tokens);
+  }
+  function clear() {
+    try {
+      (0, import_node_fs2.rmSync)(path(), { force: true });
+    } catch {
+    }
+  }
+  return { path, read, write, clear };
+}
+
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
 var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
@@ -31243,19 +31298,20 @@ function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
     "gi"
   );
 }
+var SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
 var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
 var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
 var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
 function redactSecrets(text) {
-  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(buildSecretAssignmentRe(), "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
+  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
 }
 function patternTest(pattern, text) {
   pattern.lastIndex = 0;
   return pattern.test(text);
 }
 function looksSensitive(text) {
-  return patternTest(buildSecretAssignmentRe(), text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
+  return patternTest(SECRET_ASSIGNMENT_FULL_RE, text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
 }
 function truncateText(value, max = 500) {
   if (!value) return "";
@@ -31366,8 +31422,9 @@ var MembaseTransport = class {
 var PLUGIN_VERSION = "0.1.4";
 var DEFAULT_API_URL = "https://api.membase.so";
 var DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
-var MEMORY_SOURCE = "claude-code";
-var USER_AGENT = `membase-claude-code/${PLUGIN_VERSION}`;
+var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
+var MEMORY_SOURCE = CLIENT_SOURCE;
+var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
 var MIN_RECALL_CHARS = 500;
@@ -31693,45 +31750,48 @@ ${authorizeUrl}`);
 }
 
 // src/config/index.ts
-var import_node_fs2 = require("node:fs");
+var import_node_fs3 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path2 = require("node:path");
+var import_node_path3 = require("node:path");
 function getDataDir() {
-  return process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path2.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase");
+  return (
+    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
+    // point this at their own state dir — or a shared one for a single
+    // machine-wide login — without Claude-specific env names.
+    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
+  );
 }
 function ensureDataDir() {
   const dir = getDataDir();
-  (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
+  (0, import_node_fs3.mkdirSync)(dir, { recursive: true, mode: 448 });
   try {
-    (0, import_node_fs2.chmodSync)(dir, 448);
+    (0, import_node_fs3.chmodSync)(dir, 448);
   } catch {
   }
   return dir;
 }
 function configPath() {
-  return (0, import_node_path2.join)(ensureDataDir(), "config.json");
+  return (0, import_node_path3.join)(ensureDataDir(), "config.json");
 }
-function credentialsPath() {
-  return (0, import_node_path2.join)(ensureDataDir(), "credentials.json");
-}
+var tokenStore = createTokenStore({ dir: ensureDataDir });
 function readJsonObject(path) {
   try {
-    return JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
+    return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
   } catch {
     return {};
   }
 }
-function writeJsonAtomic(path, value, mode = 384) {
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
+function writeJsonAtomic2(path, value, mode = 384) {
+  (0, import_node_fs3.mkdirSync)((0, import_node_path3.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
+  (0, import_node_fs3.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
 `, {
     encoding: "utf-8",
     mode
   });
-  (0, import_node_fs2.renameSync)(tmp, path);
+  (0, import_node_fs3.renameSync)(tmp, path);
   try {
-    (0, import_node_fs2.chmodSync)(path, mode);
+    (0, import_node_fs3.chmodSync)(path, mode);
   } catch {
   }
 }
@@ -31799,33 +31859,17 @@ function loadConfig() {
 }
 function saveConfig(next) {
   const merged = { ...loadConfig(), ...next };
-  writeJsonAtomic(configPath(), merged);
+  writeJsonAtomic2(configPath(), merged);
   return merged;
 }
 function readTokens() {
-  const path = credentialsPath();
-  if (!(0, import_node_fs2.existsSync)(path)) return null;
-  const obj = readJsonObject(path);
-  if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
-    return null;
-  }
-  return {
-    clientId: obj.clientId,
-    clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
-    accessToken: obj.accessToken,
-    refreshToken: obj.refreshToken,
-    expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
-    scope: typeof obj.scope === "string" ? obj.scope : void 0
-  };
+  return tokenStore.read();
 }
 function writeTokens(tokens) {
-  writeJsonAtomic(credentialsPath(), tokens);
+  tokenStore.write(tokens);
 }
 function clearTokens() {
-  try {
-    (0, import_node_fs2.rmSync)(credentialsPath(), { force: true });
-  } catch {
-  }
+  tokenStore.clear();
 }
 
 // src/sanitize/index.ts
@@ -31902,22 +31946,22 @@ function profileResourceFields(profile) {
 }
 
 // src/project/index.ts
-var import_node_fs3 = require("node:fs");
-var import_node_path3 = require("node:path");
+var import_node_fs4 = require("node:fs");
+var import_node_path4 = require("node:path");
 function normalizeProjectSlug(raw) {
   return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 }
 function findGitRoot(cwd) {
   let current = cwd;
-  while (current && current !== (0, import_node_path3.parse)(current).root) {
-    if ((0, import_node_fs3.existsSync)((0, import_node_path3.join)(current, ".git"))) return current;
-    current = (0, import_node_path3.dirname)(current);
+  while (current && current !== (0, import_node_path4.parse)(current).root) {
+    if ((0, import_node_fs4.existsSync)((0, import_node_path4.join)(current, ".git"))) return current;
+    current = (0, import_node_path4.dirname)(current);
   }
   return null;
 }
 function remoteSlug(gitRoot) {
   try {
-    const gitConfig = (0, import_node_fs3.readFileSync)((0, import_node_path3.join)(gitRoot, ".git", "config"), "utf-8");
+    const gitConfig = (0, import_node_fs4.readFileSync)((0, import_node_path4.join)(gitRoot, ".git", "config"), "utf-8");
     const match = gitConfig.match(/url\s*=\s*(.+)\n/);
     if (!match?.[1]) return null;
     const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
@@ -31933,21 +31977,21 @@ function resolveProjectSlug(cwd, config2) {
   if (!cwd) return void 0;
   const gitRoot = findGitRoot(cwd);
   if (gitRoot)
-    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path3.basename)(gitRoot));
-  return normalizeProjectSlug((0, import_node_path3.basename)(cwd));
+    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path4.basename)(gitRoot));
+  return normalizeProjectSlug((0, import_node_path4.basename)(cwd));
 }
 
 // src/update-check.ts
-var import_node_fs4 = require("node:fs");
+var import_node_fs5 = require("node:fs");
 var import_promises = require("node:fs/promises");
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
 var MARKETPLACE_NAME = "membase-plugins";
 var PLUGIN_NAME = "membase";
 var FETCH_TIMEOUT_MS = 3e3;
 var CACHE_TTL_MS = 1e3 * 60 * 60 * 24;
 function updateCheckStatePath() {
-  return (0, import_node_path4.join)(getDataDir(), "update-check.json");
+  return (0, import_node_path5.join)(getDataDir(), "update-check.json");
 }
 function isNewerVersion(remote, local) {
   const parse4 = (value) => (value.split("-", 1)[0] || value).split(".").map((part) => {
@@ -31967,7 +32011,7 @@ function isNewerVersion(remote, local) {
 }
 async function loadState() {
   const path = updateCheckStatePath();
-  if (!(0, import_node_fs4.existsSync)(path)) return null;
+  if (!(0, import_node_fs5.existsSync)(path)) return null;
   try {
     const parsed = JSON.parse(
       await (0, import_promises.readFile)(path, "utf-8")
@@ -32125,14 +32169,14 @@ async function jsonSuccess(payload) {
 }
 function duplicateMcpConfigs() {
   const candidates = [
-    (0, import_node_path5.join)((0, import_node_os2.homedir)(), ".claude.json"),
-    (0, import_node_path5.join)(process.cwd(), ".mcp.json")
+    (0, import_node_path6.join)((0, import_node_os2.homedir)(), ".claude.json"),
+    (0, import_node_path6.join)(process.cwd(), ".mcp.json")
   ];
   const matches = [];
   for (const path of candidates) {
-    if (!(0, import_node_fs5.existsSync)(path)) continue;
+    if (!(0, import_node_fs6.existsSync)(path)) continue;
     try {
-      const raw = (0, import_node_fs5.readFileSync)(path, "utf-8");
+      const raw = (0, import_node_fs6.readFileSync)(path, "utf-8");
       const lower = raw.toLowerCase();
       const hasMembaseRemoteUrl = lower.includes(DEFAULT_MCP_URL);
       const hasLegacyMembaseRemote = lower.includes("membase") && lower.includes("mcp-remote");
