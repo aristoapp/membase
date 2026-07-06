@@ -13,8 +13,12 @@ keys, passwords, or raw source files.
    it via `search_memory`.
 3. Write the SAME summary to `.codex/membase-handoff.md` in the workspace
    root (or `~/.codex/membase-handoff.md` when not in a project), overwriting
-   any existing file — only the latest handoff lives there. The SessionStart
-   hook reads this file and injects it into the next Codex session.
+   any existing file — only the latest handoff lives there. Do this even if
+   step 2 failed (e.g. memory quota reached) — the local file alone keeps
+   same-client continuation working. If the workspace is a shared git repo,
+   suggest adding this file to `.gitignore`; it is per-machine session state.
+   The SessionStart hook reads this file and injects it into the next Codex
+   session.
 
 To pick up work handed off from another client (no local file here), search
 Membase instead: `search_memory` with query `[HANDOFF]` plus the `project`

@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -63,6 +64,10 @@ async function main() {
   if (output) process.stdout.write(output);
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+// URL.pathname percent-encodes spaces/non-ASCII, so compare decoded paths.
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
   main().catch(() => process.exit(0));
 }

@@ -20,8 +20,12 @@ later session or another client (Claude Code, Codex, etc.).
    is known. This is how other clients find it via `search_memory`.
 4. **Write** the same summary to `.cursor/rules/membase-handoff.mdc` in the
    workspace root (overwrite if it exists — only the latest handoff lives
-   there). Cursor Rules auto-loads this file into every new session, so the
-   next Cursor session resumes without any search. Use this format:
+   there). Do this even if step 3 failed (e.g. memory quota reached) — the
+   local file alone keeps same-client continuation working. If the workspace
+   is a shared git repo, suggest adding this file to `.gitignore`; it is
+   per-machine session state, not project content. Cursor Rules auto-loads
+   this file into every new session, so the next Cursor session resumes
+   without any search. Use this format:
 
 ```
 ---
