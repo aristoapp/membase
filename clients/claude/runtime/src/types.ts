@@ -1,3 +1,5 @@
+import type { StoredTokens } from "@membase/capture-core";
+
 export type CaptureMode = "off" | "summary";
 export type ProjectMode = "auto_git" | "off" | "manual";
 export type SessionStartContext = "off" | "minimal" | "profile";
@@ -14,14 +16,8 @@ export interface PluginConfig {
   debug: boolean;
 }
 
-export interface TokenState {
-  clientId: string;
-  clientSecret?: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt?: number;
-  scope?: string;
-}
+// Alias, not a copy: the credential format must not fork from capture-core's.
+export type TokenState = StoredTokens;
 
 export interface NodeResponse {
   uuid: string;

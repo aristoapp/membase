@@ -39,9 +39,15 @@ export interface TokenStore {
   clear(): void;
 }
 
-function writeJsonAtomic(path: string, value: unknown, mode = 0o600): void {
+export function writeJsonAtomic(
+  path: string,
+  value: unknown,
+  mode = 0o600,
+): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const tmp = `${path}.tmp`;
+  // Per-process tmp name: with a fixed `${path}.tmp`, two concurrent writers
+  // race (one renames the tmp away, the other's rename throws ENOENT).
+  const tmp = `${path}.tmp.${process.pid}`;
   writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, {
     encoding: "utf-8",
     mode,
@@ -68,6 +74,8 @@ export function createTokenStore(options: TokenStoreOptions): TokenStore {
     } catch {
       return null;
     }
+    // JSON `null` (or any non-object) parses fine but has no properties.
+    if (typeof obj !== "object" || obj === null) return null;
     if (
       typeof obj.clientId !== "string" ||
       typeof obj.accessToken !== "string" ||
