@@ -976,16 +976,15 @@
           시작될 때 그 요약을 자동으로(또는 수동으로) 다시 불러옵니다.
         </p>
         <p>
-          같이 논의했던 <strong>dreaming</strong>(저장된 기억을 정기적으로
-          훑어 중복/분산된 내용을 통합하는 기능)은 설계까지만 정하고
-          구현은 나중으로 미뤘습니다 — 지금은 handoff에 집중합니다.
+          짝 기능인 <strong>dreaming</strong>(저장된 기억을 정기적으로
+          훑어 중복/분산된 내용을 통합)은 미구현 상태입니다.
         </p>
 
-        <h3 style="margin-top: 20px;">클라이언트마다 완전히 다른 모양이 된 이유</h3>
+        <h3 style="margin-top: 20px;">클라이언트마다 완전히 다른 모양인 이유</h3>
         <p>
-          같은 기능인데도 클라이언트 세 곳(지금까지 구현된 것 기준)의
-          구현이 서로 다릅니다 — 8.3절에서 설명한 "훅 등록 모델 차이"가
-          그대로 handoff에도 적용됩니다.
+          같은 기능인데도 클라이언트 네 곳의 구현이 서로 다릅니다 —
+          8.3절에서 설명한 "훅 등록 모델 차이"가 그대로 handoff에도
+          적용됩니다. (Hermes는 미구현.)
         </p>
         <table>
           <tr><th>클라이언트</th><th>저장</th><th>조회</th><th>왜 이 모양인가</th></tr>
@@ -1033,31 +1032,15 @@
           </tr>
         </table>
 
-        <h3 style="margin-top: 20px;">"Cursor·Codex는 훅이 없다"던 판단이 틀렸던 이야기</h3>
-        <p>
-          <strong>처음 내렸던 결론(틀림).</strong> Cursor와 Codex 어댑터
-          코드(<code>clients/cursor</code>, <code>clients/codex</code>)를
-          보면 훅 파일도, <code>@membase/capture-core</code> 의존성도
-          없습니다. 이 코드 레벨 사실만 보고 "이 두 플랫폼 자체가 훅을
-          지원 안 한다"고 판단해서, handoff를 자동 주입 없이 수동
-          안내문으로만 만들려던 참이었습니다.
-        </p>
-        <p>
-          <strong>실제로는 달랐습니다.</strong> Cursor·Codex 공식 문서를
-          직접 확인해 보니, 둘 다 <code>sessionStart</code>/
-          <code>SessionStart</code> 이벤트가 있고 — 심지어 Claude Code와
-          거의 똑같이 <code>{ additional_context: "..." }</code> /
-          <code>{ additionalContext: "..." }</code>를 반환해서 세션 시작
-          시 컨텍스트를 자동 주입할 수 있습니다. 설정 파일 형식도
-          <code>hooks.json</code>으로 같고, 프로젝트/사용자 레벨 우선순위
-          구조도 유사합니다. 즉 "플랫폼이 훅을 지원 안 한다"가 아니라
-          "이 레포의 어댑터가 아직 그 훅을 안 썼을 뿐"이었습니다 — 코드가
-          없다는 사실과 플랫폼 능력을 혼동한 판단 오류였습니다.
-        </p>
         <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
+          참고: Cursor·Codex 둘 다 플랫폼 차원의
+          <code>sessionStart</code>/<code>SessionStart</code> 훅을
+          지원하며(Claude Code처럼 <code>additional_context</code> /
+          <code>additionalContext</code>로 컨텍스트 주입 가능), Codex의
+          handoff 조회가 이 훅을 씁니다. Cursor는 훅 대신 Rules 자동
+          로딩을 쓰는데, 그 이유가 바로 아래 인증 제약입니다. 훅 스키마
           근거: <a href="https://cursor.com/docs/hooks">cursor.com/docs/hooks</a>,
-          <a href="https://developers.openai.com/codex/hooks">developers.openai.com/codex/hooks</a>
-          (2026-07-05 확인).
+          <a href="https://developers.openai.com/codex/hooks">developers.openai.com/codex/hooks</a>.
         </p>
 
         <h3 style="margin-top: 20px;">이미 같은 문제를 풀어본 선례 — claude-mem</h3>
@@ -1098,17 +1081,17 @@
             — 아래에서 바로 설명합니다.</li>
         </ul>
 
-        <h3 style="margin-top: 20px;">막혔던 지점 — 훅 스크립트는 로그인 상태가 없다</h3>
+        <h3 style="margin-top: 20px;">핵심 제약 — 훅 스크립트는 로그인 상태가 없다</h3>
         <p>
           <code>sessionStart</code> 훅으로 Claude Code처럼 실시간으로
-          membase를 검색하려 했더니 근본적인 문제에 부딪혔습니다.
+          membase를 검색하는 설계는 근본적인 제약에 막힙니다.
           Cursor·Codex 앱은 자기 MCP 클라이언트가 <code>mcp.membase.so</code>에
           접속할 때 이미 OAuth 로그인을 마쳤지만, 그 로그인 토큰은
           <strong>앱 프로세스 내부에만</strong> 있습니다. 훅
           스크립트는 OS가 새로 띄우는 <em>별도의 독립 프로세스</em>라서
           — Claude Code의 <code>hook.cjs</code>가 그렇듯 — 앱이 가진
-          토큰에 접근할 방법이 없습니다. Cursor·Codex 어느 쪽 문서에도
-          "앱의 인증 세션을 훅에 넘겨주는 API"는 없었습니다.
+          토큰에 접근할 방법이 없습니다. Cursor·Codex 어느 쪽에도
+          "앱의 인증 세션을 훅에 넘겨주는 API"는 없습니다.
         </p>
         <p>
           해결책으로 "훅 전용 독자 OAuth 로그인 커맨드를 새로 만든다"를
