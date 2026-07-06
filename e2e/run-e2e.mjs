@@ -55,6 +55,10 @@ if (LIVE && TOKEN && auth.source !== "env access token") {
 // so the lifecycle runs against that endpoint (its token audience must match).
 const AUTH_SERVER = process.env.MEMBASE_AUTH_BASE ?? "https://api.membase.so";
 const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
+// The OpenClaw/Cursor/etc. runtime clients talk to the REST API directly
+// (/memory/ingest, /memory/search) rather than the MCP tool surface. The
+// handoff round-trip below exercises that path, so it needs the REST base.
+const REST_API_BASE = process.env.MEMBASE_API_BASE ?? AUTH_SERVER;
 
 const CLIENTS = [
   { id: "claude", config: "clients/claude/.mcp.json" },
@@ -131,6 +135,7 @@ for (const client of CLIENTS) {
         if (TIER3 && fast) {
           await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+          await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
           await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
@@ -329,6 +334,96 @@ async function evalContract(entry, url, tools) {
       entry.checks.push(warn("contract: wiki update/delete skipped", "add_wiki returned no doc_id to target"));
     }
   }
+}
+
+// ---------- Tier 3: handoff store→recall round-trip (REST ingest/search) ----------
+// Regression guard for the membase_handoff tool (clients/*/runtime). The tool
+// tags a handoff with a literal "[HANDOFF]" prefix and, on recall, filters
+// search results by that prefix on the episode NAME/SUMMARY (the bundle does
+// not carry the raw content body). The backend derives the episode name from
+// display_summary (graph_sync build_safe_episode_name), so the tag MUST be
+// placed on display_summary — not just the content — or recall silently finds
+// nothing. This test asserts that contract end-to-end against the live REST
+// path the runtime actually uses. Runs once per endpoint under --tier3.
+const HANDOFF_TAG = "[HANDOFF]";
+async function evalHandoff(entry) {
+  const restBase = REST_API_BASE.replace(/\/$/, "");
+  const stamp = `e2e-handoff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const summary = `Handoff round-trip sentinel ${stamp}. (safe to delete)`;
+  const authedFetch = (path, init) =>
+    fetch(`${restBase}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+  // Store the way the runtime does: tag lives on BOTH content and
+  // display_summary so the derived episode name carries it.
+  const ingestBody = {
+    content: `${HANDOFF_TAG} ${summary}`,
+    display_summary: `${HANDOFF_TAG} ${summary}`,
+    source: "openclaw",
+    channel: "api",
+  };
+  let stored = false;
+  try {
+    const res = await authedFetch("/memory/ingest", {
+      method: "POST",
+      body: JSON.stringify(ingestBody),
+    });
+    stored = res.status < 400;
+    if (!stored) {
+      entry.checks.push(check("handoff: ingest accepted", false, `HTTP ${res.status}`));
+      return;
+    }
+  } catch (err) {
+    entry.checks.push(check("handoff: ingest accepted", false, String(err?.message ?? err)));
+    return;
+  }
+  entry.checks.push(check("handoff: ingest accepted", true, "stored via /memory/ingest"));
+
+  // Recall: poll search until the handoff is indexed, then assert the tag
+  // survived into the field recall inspects (episode.name / summary). This is
+  // the exact check the runtime's isHandoffMemory does — if the tag only lived
+  // in content, name/summary would not start with [HANDOFF] and this fails.
+  const t0 = now();
+  let recalled = null;
+  while (now() - t0 < QUALITY_MAX_RECALL_MS) {
+    try {
+      const res = await authedFetch(
+        `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles`,
+      );
+      if (res.status < 400) {
+        const data = await res.json();
+        const episodes = data?.episodes ?? [];
+        recalled = episodes.find((b) => {
+          const name = b?.episode?.name ?? "";
+          const sum = b?.episode?.summary ?? "";
+          return (
+            (name.trimStart().startsWith(HANDOFF_TAG) ||
+              sum.trimStart().startsWith(HANDOFF_TAG)) &&
+            (name.includes(stamp) || sum.includes(stamp))
+          );
+        });
+        if (recalled) break;
+      }
+    } catch {
+      // transient; keep polling to the deadline
+    }
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+  }
+  const ttr = ((now() - t0) / 1000).toFixed(1);
+  entry.checks.push(check(
+    "handoff: recall finds the [HANDOFF]-tagged episode by name/summary",
+    Boolean(recalled),
+    recalled
+      ? `tag survived into episode.name/summary after ~${ttr}s`
+      : `no [HANDOFF] episode with sentinel found within ${QUALITY_MAX_RECALL_MS / 1000}s — tag likely not on name/summary`,
+  ));
 }
 
 // ---------- Tier 3: deep quality/latency eval (async-indexing waits) ----------
