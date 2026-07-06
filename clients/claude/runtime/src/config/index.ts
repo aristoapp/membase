@@ -1,14 +1,13 @@
 import {
   chmodSync,
-  existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createTokenStore } from "@membase/capture-core";
 import {
   DEFAULT_API_URL,
   DEFAULT_MAX_RECALL_CHARS,
@@ -47,8 +46,13 @@ function configPath(): string {
   return join(ensureDataDir(), "config.json");
 }
 
+// Token I/O is delegated to the shared capture-core store (same file path,
+// same on-disk format) so hook processes and any stdio-bundled client read
+// one source of truth — north-star pillar 1.
+const tokenStore = createTokenStore({ dir: ensureDataDir });
+
 export function credentialsPath(): string {
-  return join(ensureDataDir(), "credentials.json");
+  return tokenStore.path();
 }
 
 function readJsonObject(path: string): Record<string, unknown> {
@@ -164,35 +168,15 @@ export function saveConfig(next: Partial<PluginConfig>): PluginConfig {
 }
 
 export function readTokens(): TokenState | null {
-  const path = credentialsPath();
-  if (!existsSync(path)) return null;
-  const obj = readJsonObject(path);
-  if (
-    typeof obj.clientId !== "string" ||
-    typeof obj.accessToken !== "string" ||
-    typeof obj.refreshToken !== "string"
-  ) {
-    return null;
-  }
-  return {
-    clientId: obj.clientId,
-    clientSecret:
-      typeof obj.clientSecret === "string" ? obj.clientSecret : undefined,
-    accessToken: obj.accessToken,
-    refreshToken: obj.refreshToken,
-    expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : undefined,
-    scope: typeof obj.scope === "string" ? obj.scope : undefined,
-  };
+  return tokenStore.read();
 }
 
 export function writeTokens(tokens: TokenState): void {
-  writeJsonAtomic(credentialsPath(), tokens);
+  tokenStore.write(tokens);
 }
 
 export function clearTokens(): void {
-  try {
-    rmSync(credentialsPath(), { force: true });
-  } catch {}
+  tokenStore.clear();
 }
 
 export function logDebug(config: PluginConfig, message: string): void {
