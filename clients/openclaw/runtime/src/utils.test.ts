@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { sanitizeCaptureText, sanitizeMembaseText } from "./utils";
+import {
+  buildHandoffMemory,
+  HANDOFF_TAG,
+  handoffRecallQuery,
+  isHandoffMemory,
+  sanitizeCaptureText,
+  sanitizeMembaseText,
+} from "./utils";
 
 describe("sanitizeCaptureText", () => {
   test("redacts secret assignments on the capture path", () => {
@@ -38,5 +45,32 @@ describe("sanitizeCaptureText", () => {
   test("keeps ordinary text unchanged", () => {
     const raw = "we decided to use postgres for the queue";
     expect(sanitizeCaptureText(raw)).toBe(raw);
+  });
+});
+
+describe("handoff memory tagging", () => {
+  test("tags stored handoff content with the literal marker and project scope", () => {
+    const content = buildHandoffMemory({
+      summary: "Shipped D1 slices, gate closed.",
+      project: "membase-plugin-mcp",
+    });
+
+    expect(content.startsWith(HANDOFF_TAG)).toBe(true);
+    expect(content).toContain("membase-plugin-mcp");
+    expect(content).toContain("Shipped D1 slices, gate closed.");
+  });
+
+  test("omits the project scope when none is known", () => {
+    const content = buildHandoffMemory({ summary: "No project context." });
+    expect(content).toBe(`${HANDOFF_TAG} No project context.`);
+  });
+
+  test("recognizes handoff-tagged memories and rejects ordinary ones", () => {
+    expect(isHandoffMemory(buildHandoffMemory({ summary: "state" }))).toBe(true);
+    expect(isHandoffMemory("just a regular remembered fact")).toBe(false);
+  });
+
+  test("recall query carries the tag so it matches stored handoffs across clients", () => {
+    expect(handoffRecallQuery()).toContain(HANDOFF_TAG);
   });
 });

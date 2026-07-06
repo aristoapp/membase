@@ -122,6 +122,29 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+/**
+ * Handoff tagging (shared convention with clients/claude/runtime — see
+ * session-start.ts there). A literal string prefix, not a server-side field,
+ * so any client's plain search_memory call can find a handoff by tag alone.
+ */
+export const HANDOFF_TAG = "[HANDOFF]";
+
+export function handoffRecallQuery(): string {
+  return `${HANDOFF_TAG} session handoff summary`;
+}
+
+export function buildHandoffMemory(args: {
+  summary: string;
+  project?: string;
+}): string {
+  const scope = args.project ? ` (${args.project})` : "";
+  return `${HANDOFF_TAG}${scope} ${args.summary}`.trim();
+}
+
+export function isHandoffMemory(text: string): boolean {
+  return text.trimStart().startsWith(HANDOFF_TAG);
+}
+
 export function extractLastUserMessage(event: Record<string, unknown>): string {
   const messages = event.messages;
   if (Array.isArray(messages)) {
