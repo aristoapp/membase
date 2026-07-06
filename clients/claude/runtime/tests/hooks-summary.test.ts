@@ -29,3 +29,29 @@ describe("hooks summary", () => {
     ).toBeNull();
   });
 });
+
+describe("codex payload support", () => {
+  it("summarizes apply_patch with the touched files", () => {
+    const summary = summarizeToolCall({
+      tool_name: "apply_patch",
+      tool_input: {
+        command:
+          "*** Begin Patch\n*** Update File: src/a.ts\n@@\n-1\n+2\n*** Add File: src/b.ts\n+hi\n*** End Patch",
+      },
+    });
+    expect(summary).toContain("apply_patch tool used");
+    expect(summary).toContain("files: src/a.ts, src/b.ts");
+  });
+
+  it("drops apply_patch payloads that look sensitive", () => {
+    expect(
+      summarizeToolCall({
+        tool_name: "apply_patch",
+        tool_input: {
+          command:
+            "*** Update File: .env\n+OPENAI_API_KEY=dummy1234567890abc",
+        },
+      }),
+    ).toBeNull();
+  });
+});

@@ -31225,7 +31225,7 @@ var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 function writeJsonAtomic(path, value, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp`;
+  const tmp = `${path}.tmp.${process.pid}`;
   (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
 `, {
     encoding: "utf-8",
@@ -31251,6 +31251,7 @@ function createTokenStore(options) {
     } catch {
       return null;
     }
+    if (typeof obj !== "object" || obj === null) return null;
     if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
       return null;
     }
@@ -31419,12 +31420,21 @@ var MembaseTransport = class {
 };
 
 // src/constants.ts
+var PLUGIN_NAME = "claude-membase";
 var PLUGIN_VERSION = "0.1.4";
 var DEFAULT_API_URL = "https://api.membase.so";
 var DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
-var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
+var RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
+var CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOURCE) ? RAW_CLIENT_SOURCE : "claude-code";
 var MEMORY_SOURCE = CLIENT_SOURCE;
 var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+var INGEST_PLUGIN_LABEL = CLIENT_SOURCE === "claude-code" ? PLUGIN_NAME : `membase-bundle-${CLIENT_SOURCE}`;
+var CLIENT_LABELS = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+  cursor: "Cursor"
+};
+var CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
 var MIN_RECALL_CHARS = 500;
@@ -31698,7 +31708,7 @@ async function loginWithOAuth(apiUrl) {
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      mcp_source: "claude-code"
+      mcp_source: MEMORY_SOURCE
     });
     const authorizeUrl = `${apiUrl}/oauth/authorize?${params.toString()}`;
     openBrowser(authorizeUrl);
@@ -31754,12 +31764,13 @@ var import_node_fs3 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path3 = require("node:path");
 function getDataDir() {
-  return (
+  const dir = (
     // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
     // point this at their own state dir — or a shared one for a single
     // machine-wide login — without Claude-specific env names.
     process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
   );
+  return dir.startsWith("~/") ? (0, import_node_path3.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
 }
 function ensureDataDir() {
   const dir = getDataDir();
@@ -31779,20 +31790,6 @@ function readJsonObject(path) {
     return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
   } catch {
     return {};
-  }
-}
-function writeJsonAtomic2(path, value, mode = 384) {
-  (0, import_node_fs3.mkdirSync)((0, import_node_path3.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp`;
-  (0, import_node_fs3.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
-  (0, import_node_fs3.renameSync)(tmp, path);
-  try {
-    (0, import_node_fs3.chmodSync)(path, mode);
-  } catch {
   }
 }
 function pluginOption(name) {
@@ -31842,7 +31839,11 @@ function loadConfig() {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
     ),
-    captureMode: normalizeCaptureMode(disk.captureMode),
+    // Disk wins: hooks pass a captureMode option on every run, so env can
+    // only be the default — otherwise it would override an explicit opt-out.
+    captureMode: normalizeCaptureMode(
+      disk.captureMode ?? strFromOption("captureMode")
+    ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
       strFromOption("sessionStartContext") ?? disk.sessionStartContext
@@ -31859,7 +31860,7 @@ function loadConfig() {
 }
 function saveConfig(next) {
   const merged = { ...loadConfig(), ...next };
-  writeJsonAtomic2(configPath(), merged);
+  writeJsonAtomic(configPath(), merged);
   return merged;
 }
 function readTokens() {
@@ -31987,7 +31988,7 @@ var import_promises = require("node:fs/promises");
 var import_node_path5 = require("node:path");
 var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
 var MARKETPLACE_NAME = "membase-plugins";
-var PLUGIN_NAME = "membase";
+var PLUGIN_NAME2 = "membase";
 var FETCH_TIMEOUT_MS = 3e3;
 var CACHE_TTL_MS = 1e3 * 60 * 60 * 24;
 function updateCheckStatePath() {
@@ -32061,7 +32062,7 @@ async function fetchLatestVersion(fetchImpl = fetch) {
     });
     if (!response.ok) return null;
     const body = await response.json();
-    const plugin = Array.isArray(body.plugins) ? body.plugins.find((entry) => entry.name === PLUGIN_NAME) : void 0;
+    const plugin = Array.isArray(body.plugins) ? body.plugins.find((entry) => entry.name === PLUGIN_NAME2) : void 0;
     return typeof plugin?.version === "string" ? plugin.version : null;
   } catch {
     return null;
@@ -32095,11 +32096,12 @@ function buildUpdateNotice(current, latest) {
     "claude plugin --help",
     "Then update:",
     `claude plugin marketplace update ${MARKETPLACE_NAME}`,
-    `claude plugin update ${PLUGIN_NAME}@${MARKETPLACE_NAME}`,
+    `claude plugin update ${PLUGIN_NAME2}@${MARKETPLACE_NAME}`,
     "Restart Claude Code after updating."
   ].join("\n");
 }
 async function consumeUpdateNotice(deps = {}) {
+  if ((deps.clientSource ?? MEMORY_SOURCE) !== "claude-code") return null;
   const load = deps.loadStateFn ?? loadState;
   const save = deps.saveStateFn ?? saveState;
   const currentVersion = deps.currentVersion ?? PLUGIN_VERSION;
@@ -32135,6 +32137,7 @@ async function toolResponse(text, deps = {}) {
   return { content: [{ type: "text", text: withNotice }] };
 }
 function startBackgroundUpdateCheck() {
+  if (MEMORY_SOURCE !== "claude-code") return;
   refreshLatestVersion().catch(() => void 0);
 }
 
@@ -32385,7 +32388,7 @@ async function main() {
         content: args.content,
         metadata: {
           ...args.metadata ?? {},
-          plugin: "claude-membase",
+          plugin: INGEST_PLUGIN_LABEL,
           plugin_version: PLUGIN_VERSION,
           capture_kind: "explicit",
           source: MEMORY_SOURCE

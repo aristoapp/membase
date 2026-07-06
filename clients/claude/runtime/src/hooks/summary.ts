@@ -19,7 +19,18 @@ export function summarizeToolCall(
   tool: Record<string, unknown>,
 ): string | null {
   const name = String(tool.name ?? tool.tool_name ?? tool.type ?? "");
-  if (!["Edit", "Write", "MultiEdit", "Bash", "Task", "Agent"].includes(name)) {
+  // apply_patch is Codex's canonical file-edit tool (hook input reports it
+  // even for Edit/Write matcher aliases).
+  const allowed = [
+    "Edit",
+    "Write",
+    "MultiEdit",
+    "Bash",
+    "Task",
+    "Agent",
+    "apply_patch",
+  ];
+  if (!allowed.includes(name)) {
     return null;
   }
   const input = objectValue(tool.tool_input ?? tool.input);
@@ -39,10 +50,22 @@ export function summarizeToolCall(
       return null;
     }
   }
+  let patchFiles: string[] = [];
+  if (name === "apply_patch") {
+    const patch = typeof input.command === "string" ? input.command : "";
+    if (looksSensitive(patch)) return null;
+    patchFiles = Array.from(
+      patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
+      (match) => match[1] ?? "",
+    )
+      .filter(Boolean)
+      .slice(0, 5);
+  }
   return [
     `${name} tool used`,
     path ? `path: ${path}` : "",
     command ? `command: ${command}` : "",
+    patchFiles.length ? `files: ${patchFiles.join(", ")}` : "",
   ]
     .filter(Boolean)
     .join("\n");

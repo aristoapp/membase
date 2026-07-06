@@ -41,6 +41,8 @@ describe("token store", () => {
     expect(store.read()).toBeNull();
     writeFileSync(store.path(), JSON.stringify({ clientId: "only-id" }));
     expect(store.read()).toBeNull();
+    writeFileSync(store.path(), "null");
+    expect(store.read()).toBeNull();
   });
 
   test("clear removes credentials and is idempotent", () => {
@@ -54,7 +56,7 @@ describe("token store", () => {
   test("write is atomic — no leftover .tmp and content is valid json", () => {
     const { store } = makeStore();
     store.write(tokens);
-    expect(() => statSync(`${store.path()}.tmp`)).toThrow();
+    expect(() => statSync(`${store.path()}.tmp.${process.pid}`)).toThrow();
     expect(JSON.parse(readFileSync(store.path(), "utf-8"))).toMatchObject({
       clientId: "client-1",
     });

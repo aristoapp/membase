@@ -11,7 +11,11 @@ import {
   saveConfig,
   writeTokens,
 } from "./config/index.js";
-import { DEFAULT_MCP_URL, PLUGIN_VERSION } from "./constants.js";
+import {
+  DEFAULT_MCP_URL,
+  INGEST_PLUGIN_LABEL,
+  PLUGIN_VERSION,
+} from "./constants.js";
 import { formatBundle, formatWikiDocument } from "./format/index.js";
 import { resolveProjectSlug } from "./project/index.js";
 import {
@@ -171,7 +175,7 @@ async function storeMemory(
     display_summary: truncateText(content, 180),
     project,
     metadata: {
-      plugin: "claude-membase",
+      plugin: INGEST_PLUGIN_LABEL,
       plugin_version: PLUGIN_VERSION,
       capture_kind: captureKind,
       cwd: process.cwd(),
