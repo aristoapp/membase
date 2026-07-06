@@ -144,26 +144,32 @@ export function handoffRecallQuery(): string {
   return `${HANDOFF_TAG} session handoff summary`;
 }
 
+function taggedHandoff(args: { summary: string; project?: string }): string {
+  const scope = args.project ? ` (${args.project})` : "";
+  return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
+}
+
 export function buildHandoffMemory(args: {
   summary: string;
   project?: string;
 }): string {
-  const scope = args.project ? ` (${args.project})` : "";
-  return `${HANDOFF_TAG}${scope} ${args.summary}`.trim();
+  return taggedHandoff(args);
 }
 
 /**
  * The tagged display_summary. The backend uses this as the episode name, so it
  * is what recall's `isHandoffMemory(episode.name)` check sees — keep the tag at
- * the very start.
+ * the very start. Clamped separately from buildHandoffMemory since only this
+ * one has the backend's display_summary length limit.
  */
 export function buildHandoffDisplaySummary(args: {
   summary: string;
   project?: string;
 }): string {
-  const scope = args.project ? ` (${args.project})` : "";
-  const clipped = args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX);
-  return `${HANDOFF_TAG}${scope} ${clipped}`.trim();
+  return taggedHandoff({
+    ...args,
+    summary: args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX),
+  });
 }
 
 export function isHandoffMemory(text: string): boolean {
@@ -192,12 +198,22 @@ export function pickLatestHandoff<
       isHandoffMemory(b.episode.summary ?? ""),
   );
   if (handoffs.length === 0) return undefined;
-  const time = (b: T): number => {
+  // A missing/unparseable timestamp means "unknown", not "oldest" — treating
+  // it as epoch 0 would let a real but older timestamped handoff beat an
+  // actually-newer untimed one. Untimed bundles instead keep their relevance
+  // rank relative to each other via the tie-break below.
+  const time = (b: T): number | null => {
     const raw = b.episode.valid_at ?? b.episode.created_at ?? "";
     const t = Date.parse(raw);
-    return Number.isNaN(t) ? 0 : t;
+    return Number.isNaN(t) ? null : t;
   };
-  return handoffs.reduce((latest, b) => (time(b) > time(latest) ? b : latest));
+  return handoffs.reduce((latest, b) => {
+    const bTime = time(b);
+    const latestTime = time(latest);
+    if (bTime === null) return latest;
+    if (latestTime === null) return b;
+    return bTime > latestTime ? b : latest;
+  });
 }
 
 export function extractLastUserMessage(event: Record<string, unknown>): string {

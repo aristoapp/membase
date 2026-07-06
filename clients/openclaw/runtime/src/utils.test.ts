@@ -122,4 +122,11 @@ describe("pickLatestHandoff", () => {
       undefined,
     );
   });
+
+  test("prefers a timestamped handoff over an untimed one, regardless of order", () => {
+    const untimed = bundle(`${HANDOFF_TAG} untimed`, null);
+    const timed = bundle(`${HANDOFF_TAG} timed`, "2026-07-01T00:00:00Z");
+    expect(pickLatestHandoff([untimed, timed])?.episode.name).toContain("timed");
+    expect(pickLatestHandoff([timed, untimed])?.episode.name).toContain("timed");
+  });
 });

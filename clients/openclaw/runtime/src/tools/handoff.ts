@@ -95,13 +95,17 @@ export function registerHandoffTool(
             project,
           );
 
-        let latest = pickLatestHandoff(await recallSearch(params.project));
+        // Trim/blank out so a model-supplied "" is treated the same as an
+        // omitted project, rather than silently skipping the fallback below.
+        const project = params.project?.trim() || undefined;
+
+        let latest = pickLatestHandoff(await recallSearch(project));
         // The `project` arg is model-supplied per call and may not match what
         // `store` used (a handoff stored globally, recalled with a guessed
         // project, or vice versa). Fall back to an unscoped search so a scope
         // mismatch doesn't silently hide an existing handoff.
         let fromOtherScope = false;
-        if (!latest && params.project) {
+        if (!latest && project) {
           latest = pickLatestHandoff(await recallSearch(undefined));
           fromOtherScope = Boolean(latest);
         }
@@ -113,7 +117,7 @@ export function registerHandoffTool(
         // it instead of silently passing another project's state off as this
         // one's.
         const prefix = fromOtherScope
-          ? `No handoff for project "${params.project}"; showing the most recent handoff from another scope:\n\n`
+          ? `No handoff for project "${project}"; showing the most recent handoff from another scope:\n\n`
           : "";
         return await toolResponse(prefix + formatBundle(latest, 0));
       } catch (err) {
