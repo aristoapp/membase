@@ -63,7 +63,7 @@ export interface CaptureSpool {
     },
   ): SpoolRecord | null;
   flushSpool(
-    send: (record: SpoolRecord) => Promise<void>,
+    send: (record: SpoolRecord) => Promise<void | boolean>,
     limit?: number,
   ): Promise<{ flushed: number; remaining: number }>;
   pendingSpoolCount(): number;
@@ -320,7 +320,7 @@ export function createCaptureSpool(
   }
 
   async function flushSpool(
-    send: (record: SpoolRecord) => Promise<void>,
+    send: (record: SpoolRecord) => Promise<void | boolean>,
     limit = 10,
   ): Promise<{ flushed: number; remaining: number }> {
     const drained = withSpoolLock(() => {
@@ -342,7 +342,11 @@ export function createCaptureSpool(
     let flushed = 0;
     for (const record of drained.batch) {
       try {
-        await send(record);
+        // A resolved `false` counts as failure too — JS callers signalling
+        // by return value must not silently drop the record.
+        if ((await send(record)) === false) {
+          throw new Error("uploader returned false");
+        }
         withSpoolLock(() => {
           const sentIds = readSentIds();
           sentIds.add(record.capture_id);

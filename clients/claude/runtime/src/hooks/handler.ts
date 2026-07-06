@@ -42,14 +42,33 @@ const ASYNC_FLUSH_TIMEOUT_MS = 4_000;
 const ASYNC_FLUSH_LIMIT = 3;
 
 
+// Hooks must never hang the host session: hosts are expected to close stdin
+// after one JSON payload, but if one doesn't (or the stream errors), resolve
+// with whatever arrived after a short deadline instead of waiting for EOF.
+const STDIN_DEADLINE_MS = 2_000;
+const STDIN_MAX_BYTES = 1_048_576;
+
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        process.stdin.destroy();
+      } catch {}
+      resolve(data);
+    };
+    const timer = setTimeout(done, STDIN_DEADLINE_MS);
+    timer.unref?.();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
-      data += chunk;
+      if (data.length < STDIN_MAX_BYTES) data += chunk;
     });
-    process.stdin.on("end", () => resolve(data));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
   });
 }
 
@@ -200,10 +219,14 @@ async function handleSessionStart(input: HookInput): Promise<void> {
     projectSlug,
     profile,
   });
-  if (context) {
-    outputAdditionalContext(context, "SessionStart");
+  // Hook stdout must be a SINGLE JSON object — two concatenated
+  // hookSpecificOutput objects are unparseable as one document, so the
+  // session context and the handoff prefetch are combined into one output.
+  const handoff = await prefetchHandoff(client, projectSlug);
+  const combined = [context, handoff].filter(Boolean).join("\n\n");
+  if (combined) {
+    outputAdditionalContext(combined, "SessionStart");
   }
-  await prefetchHandoff(client, projectSlug);
 }
 
 /**
@@ -214,7 +237,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
 async function prefetchHandoff(
   client: MembaseClient,
   projectSlug?: string,
-): Promise<void> {
+): Promise<string> {
   const bundles = await withTimeout(
     client.searchMemory({
       query: handoffRecallQuery(),
@@ -226,11 +249,8 @@ async function prefetchHandoff(
   const latest = bundles?.find((bundle) =>
     isHandoffMemory(bundle.episode.name ?? ""),
   );
-  if (!latest) return;
-  outputAdditionalContext(
-    `<membase-handoff>\n${latest.episode.name}\n</membase-handoff>`,
-    "SessionStart",
-  );
+  if (!latest) return "";
+  return `<membase-handoff>\n${latest.episode.name}\n</membase-handoff>`;
 }
 
 async function handleUserPromptSubmit(input: HookInput): Promise<void> {
