@@ -16,8 +16,10 @@ claims the batch; new captures keep going to a fresh `pending.jsonl` and a
 second flusher finds nothing). Upload each record's `content` via
 `add_memory` — keep its `project` field. Records that look like secrets: do
 NOT upload, do NOT delete — report them to the user. Delete the renamed
-file only after all non-secret records are stored. If the session started
-with a "pending local capture(s)" notice, this is the flush it asked for.
+file only after all non-secret records are stored; if any records were
+skipped as secrets, keep the renamed file and tell the user where it is
+instead of deleting it. If the session started with a "pending local
+capture(s)" notice, this is the flush it asked for.
 
 ## 2. Sweep — consolidate (optional)
 

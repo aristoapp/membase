@@ -17,7 +17,9 @@ over quota): rename `pending.jsonl` to `flush-<timestamp>.jsonl` first
 `pending.jsonl` and a second flusher finds nothing). Upload each record's
 `content` via `add_memory` (keep its `project`). Records that look like
 secrets: do NOT upload, do NOT delete — report them to the user. Delete the
-renamed file only after all non-secret records are stored.
+renamed file only after all non-secret records are stored; if any records
+were skipped as secrets, keep the renamed file and tell the user where it
+is instead of deleting it.
 
 ## 2. Sweep — consolidate (optional)
 

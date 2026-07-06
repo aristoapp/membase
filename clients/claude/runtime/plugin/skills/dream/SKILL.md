@@ -15,8 +15,10 @@ Use `/membase:dream` as a maintenance pass, not as part of normal recall.
   flusher finds nothing). Upload each record's `content` via `add_memory`
   (keep its `project`). Records that look like secrets: do NOT upload, do
   NOT delete — report them to the user. Delete the renamed file only after
-  all non-secret records are stored. Hooks flush automatically in this
-  client, so this is a catch-up for offline/quota leftovers.
+  all non-secret records are stored; if any records were skipped as
+  secrets, keep the renamed file and tell the user where it is instead of
+  deleting it. Hooks flush automatically in this client, so this is a
+  catch-up for offline/quota leftovers.
 - Consolidate, don't just append — a `[DREAM]` memory should read as the
   current correct state, resolving conflicts by preferring later facts.
 - Tag every consolidated memory with the literal prefix `[DREAM]` so it's

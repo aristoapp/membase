@@ -130,8 +130,8 @@ Two modes, both official-features-only:
 1. Install the hook adapter: merge `clients/cursor/runtime/hooks.json` into
    `~/.cursor/hooks.json`, replacing `REPO_ROOT` with this repository's
    absolute path. `cursor-hook.mjs` translates Cursor events
-   (`afterFileEdit`, `afterShellExecution`, `stop`, `sessionStart`,
-   `beforeSubmitPrompt`) into the shared membase hook bundle — it owns no
+   (`sessionStart`, `afterFileEdit`, `afterShellExecution`, `stop`,
+   `sessionEnd`) into the shared membase hook bundle — it owns no
    capture logic itself.
 2. Pick a mode:
    - **stdio bundle (recommended — real-time).** Add a command-based MCP

@@ -12,9 +12,10 @@ Dreaming = getting local work into the cloud, then tidying what's there.
    finds nothing). Upload each record's `content` via the membase
    `add_memory` tool — keep its `project` field. Records that look like
    secrets: do NOT upload, do NOT delete — report them to the user. Delete
-   the renamed file only after all non-secret records are stored. If the
-   session started with a "pending local capture(s)" notice, this is the
-   flush it asked for.
+   the renamed file only after all non-secret records are stored; if any
+   records were skipped as secrets, keep the renamed file and tell the
+   user where it is instead of deleting it. If the session started with a
+   "pending local capture(s)" notice, this is the flush it asked for.
 2. **Sweep (optional).** Search memories broadly for the current project
    (high `limit`, page with `offset`). If duplicated or fragmented memories
    describe the same fact or decision, store ONE consolidated memory via
