@@ -106,6 +106,23 @@ test credential, endpoint/profile, and cleanup decisions are accepted.
 - No public artifact describes Membase storage, graph, embedding, ranking, or
   private memory-engine details.
 
+## Session Handoff
+
+File-based session handoff, no runtime code (design:
+`docs/implementation-overview.html` §7.5). The skill at
+`clients/cursor/skills/handoff/SKILL.md` instructs the agent, on a handoff
+request, to:
+
+1. print the session summary to the user,
+2. store it via `add_memory` tagged `[HANDOFF]` (cross-client pickup via
+   `search_memory`), and
+3. write the same summary to `.cursor/rules/membase-handoff.mdc` in the
+   workspace — Cursor Rules auto-loads that file into every new session, so
+   the next Cursor session resumes without any hook or search.
+
+To pick up a handoff stored from another client (Claude Code, Codex), search
+manually: `search_memory` with query `[HANDOFF]` plus the `project` filter.
+
 ## References
 
 - Cursor MCP docs: https://cursor.com/docs/mcp

@@ -965,6 +965,214 @@
       </section>
 
       <section>
+        <h2>7.5 새 기능 — 세션 핸드오프(handoff)</h2>
+        <p>
+          <strong>배경.</strong> 세션이 끊기거나(창을 닫거나, 컨텍스트가
+          압축되거나) 다른 클라이언트로 옮겨갈 때, "방금까지 뭐 하고
+          있었는지"가 사라지는 문제가 있었습니다. 이걸 풀기 위해
+          <code>[HANDOFF]</code>라는 태그 하나로 묶이는 기능을 만들었습니다
+          — 사람이 명시적으로 "핸드오프해줘"라고 하면 현재 세션 상태를
+          요약해서 화면에 보여주는 동시에 membase에 저장하고, 다음 세션이
+          시작될 때 그 요약을 자동으로(또는 수동으로) 다시 불러옵니다.
+        </p>
+        <p>
+          같이 논의했던 <strong>dreaming</strong>(저장된 기억을 정기적으로
+          훑어 중복/분산된 내용을 통합하는 기능)은 설계까지만 정하고
+          구현은 나중으로 미뤘습니다 — 지금은 handoff에 집중합니다.
+        </p>
+
+        <h3 style="margin-top: 20px;">클라이언트마다 완전히 다른 모양이 된 이유</h3>
+        <p>
+          같은 기능인데도 클라이언트 세 곳(지금까지 구현된 것 기준)의
+          구현이 서로 다릅니다 — 8.3절에서 설명한 "훅 등록 모델 차이"가
+          그대로 handoff에도 적용됩니다.
+        </p>
+        <table>
+          <tr><th>클라이언트</th><th>저장</th><th>조회</th><th>왜 이 모양인가</th></tr>
+          <tr>
+            <td>Claude Code</td>
+            <td><code>/membase:handoff</code> 슬래시 커맨드</td>
+            <td><code>SessionStart</code> 훅이 자동으로 최신 handoff를
+              검색해 세션에 주입</td>
+            <td>세션당 정확히 한 번 도는 훅이 있어서, "이어받기"라는
+              일회성 동작과 자연스럽게 맞음</td>
+          </tr>
+          <tr>
+            <td>OpenClaw</td>
+            <td><code>membase_handoff(mode="store")</code> — AI가 호출하는
+              도구</td>
+            <td><code>membase_handoff(mode="recall")</code> — 같은 도구를
+              AI가 명시적으로 재호출</td>
+            <td>OpenClaw의 <code>before_agent_start</code>는 <em>매
+              메시지마다</em> 도는 훅이라, 여기 자동 주입을 얹으면
+              "한 번 이어받기"가 아니라 "매턴 재조회"가 돼 버림 — 그래서
+              슬래시 커맨드도 없는 이 클라이언트에서는 도구로 만드는 게
+              맞는 선택</td>
+          </tr>
+          <tr>
+            <td>Cursor</td>
+            <td>스킬(handoff SKILL.md) — AI가 <code>add_memory</code>
+              <code>[HANDOFF]</code> 저장 + <code>.cursor/rules/
+              membase-handoff.mdc</code> 파일 작성</td>
+            <td>Cursor Rules 자동 로딩이 그 파일을 다음 세션에 주입 —
+              훅·실행 코드 없음</td>
+            <td>훅 스크립트는 앱의 OAuth 토큰에 접근할 수 없어(아래
+              인증 문제), 파일 기반이 이중 로그인 없이 되는 유일한
+              길</td>
+          </tr>
+          <tr>
+            <td>Codex</td>
+            <td>커스텀 프롬프트(<code>/handoff</code>) — AI가
+              <code>add_memory</code> <code>[HANDOFF]</code> 저장 +
+              <code>.codex/membase-handoff.md</code> 파일 작성</td>
+            <td><code>hooks.json</code> <code>SessionStart</code> 훅이
+              로컬 파일을 읽어 <code>additionalContext</code>로 주입</td>
+            <td>Rules 같은 자동 파일 로딩이 없어 최소 훅이 필요하지만,
+              파일만 읽으므로 인증 불필요 — 같은 이유로 이중 로그인
+              회피</td>
+          </tr>
+        </table>
+
+        <h3 style="margin-top: 20px;">"Cursor·Codex는 훅이 없다"던 판단이 틀렸던 이야기</h3>
+        <p>
+          <strong>처음 내렸던 결론(틀림).</strong> Cursor와 Codex 어댑터
+          코드(<code>clients/cursor</code>, <code>clients/codex</code>)를
+          보면 훅 파일도, <code>@membase/capture-core</code> 의존성도
+          없습니다. 이 코드 레벨 사실만 보고 "이 두 플랫폼 자체가 훅을
+          지원 안 한다"고 판단해서, handoff를 자동 주입 없이 수동
+          안내문으로만 만들려던 참이었습니다.
+        </p>
+        <p>
+          <strong>실제로는 달랐습니다.</strong> Cursor·Codex 공식 문서를
+          직접 확인해 보니, 둘 다 <code>sessionStart</code>/
+          <code>SessionStart</code> 이벤트가 있고 — 심지어 Claude Code와
+          거의 똑같이 <code>{ additional_context: "..." }</code> /
+          <code>{ additionalContext: "..." }</code>를 반환해서 세션 시작
+          시 컨텍스트를 자동 주입할 수 있습니다. 설정 파일 형식도
+          <code>hooks.json</code>으로 같고, 프로젝트/사용자 레벨 우선순위
+          구조도 유사합니다. 즉 "플랫폼이 훅을 지원 안 한다"가 아니라
+          "이 레포의 어댑터가 아직 그 훅을 안 썼을 뿐"이었습니다 — 코드가
+          없다는 사실과 플랫폼 능력을 혼동한 판단 오류였습니다.
+        </p>
+        <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
+          근거: <a href="https://cursor.com/docs/hooks">cursor.com/docs/hooks</a>,
+          <a href="https://developers.openai.com/codex/hooks">developers.openai.com/codex/hooks</a>
+          (2026-07-05 확인).
+        </p>
+
+        <h3 style="margin-top: 20px;">이미 같은 문제를 풀어본 선례 — claude-mem</h3>
+        <p>
+          비슷한 문제(세션 캡처/요약을 여러 AI 클라이언트에 붙이기)를
+          먼저 겪은 오픈소스 프로젝트 <code>claude-mem</code>을 참고했습니다.
+          두 가지가 이 레포의 판단을 뒷받침했습니다.
+        </p>
+        <ul>
+          <li><strong>Cursor 지원을 메인 플러그인과 분리된 독립 디렉터리로
+            둠</strong> (<code>cursor-hooks/</code>, 자체
+            설치·통합·단독설치 문서 세트 보유). 이 레포가 내린 "훅
+            실행 코드가 필요한 클라이언트(Codex)는 별도
+            <code>runtime/</code> 디렉터리에 담는다"는 결정과 같은
+            방향입니다 — 어댑터 설정 코드(descriptor)와 실행되는 훅
+            코드(runtime)를 같은 폴더에 억지로 합치지 않습니다.</li>
+          <li><strong>"훅 → 상주 워커 데몬에 위임" 방식은 검토 후
+            기각.</strong> claude-mem은 훅 5개가 전부 로컬 포트의 상주
+            Express 서버(PM2로 관리)에 요청을 던지는 방식을 씁니다 —
+            "훅 프로세스가 너무 짧아서 무거운 요약 작업을 못 한다"는
+            이유였습니다. 이 레포는 이 방식을 쓰지 않기로 했습니다:
+            워커 데몬은 슈퍼바이저(PM2)·포트 관리·별도 장애 지점이라는
+            운영 부담을 커넥터 플러그인에 지우는데, ADR 0002가 이미
+            "호스트마다 다른 실행 모델을 인정하고 강제 통일하지 않는다"는
+            원칙으로 이 문제를 다르게 풀어 뒀습니다(8.2절의 큐 3종
+            비통합 결정과 같은 논리). handoff 자체도 훅 하나가 짧게
+            검색 한 번 하고 끝나는 가벼운 작업이라, 워커가 필요한
+            무게감이 아닙니다.</li>
+          <li><strong>결정적으로: 훅이 membase를 실시간 검색하지
+            않고, "파일을 미리 써 두는" 방식을 씁니다.</strong>
+            claude-mem은 <code>SessionStart</code>에 실시간 검색을
+            하는 게 아니라, 세션이 끝나는 <code>Stop</code> 훅에서
+            다음 세션용 컨텍스트를 <code>.cursor/rules/claude-mem-
+            context.mdc</code> 파일에 미리 써 둡니다. Cursor의 기존
+            Rules 로딩 기능이 이 파일을 모든 채팅 세션에 자동으로
+            포함시킵니다. 이 설계를 그대로 채택한 결정적인 이유는
+            <strong>인증 문제를 근본적으로 피하기 때문</strong>입니다
+            — 아래에서 바로 설명합니다.</li>
+        </ul>
+
+        <h3 style="margin-top: 20px;">막혔던 지점 — 훅 스크립트는 로그인 상태가 없다</h3>
+        <p>
+          <code>sessionStart</code> 훅으로 Claude Code처럼 실시간으로
+          membase를 검색하려 했더니 근본적인 문제에 부딪혔습니다.
+          Cursor·Codex 앱은 자기 MCP 클라이언트가 <code>mcp.membase.so</code>에
+          접속할 때 이미 OAuth 로그인을 마쳤지만, 그 로그인 토큰은
+          <strong>앱 프로세스 내부에만</strong> 있습니다. 훅
+          스크립트는 OS가 새로 띄우는 <em>별도의 독립 프로세스</em>라서
+          — Claude Code의 <code>hook.cjs</code>가 그렇듯 — 앱이 가진
+          토큰에 접근할 방법이 없습니다. Cursor·Codex 어느 쪽 문서에도
+          "앱의 인증 세션을 훅에 넘겨주는 API"는 없었습니다.
+        </p>
+        <p>
+          해결책으로 "훅 전용 독자 OAuth 로그인 커맨드를 새로 만든다"를
+          검토했지만 기각했습니다 — 그러면 사용자가 Cursor 앱 안에서
+          membase 로그인을 한 번 하고, <em>또</em> 터미널에서 훅
+          스크립트용 로그인을 한 번 더 해야 하는 이중 로그인 경험이
+          생깁니다.
+        </p>
+        <p>
+          claude-mem의 파일 기반 설계가 이 문제를 근본적으로
+          피하는 이유가 여기 있습니다 — 훅이 membase에 직접 접속하지
+          않으니 <strong>훅 자체의 인증이 아예 필요 없어집니다.</strong>
+        </p>
+
+        <h3 style="margin-top: 20px;">그래서 내린 결정 — 파일 기반 handoff (Cursor는 스킬만, Codex만 최소 <code>runtime/</code>)</h3>
+        <p>
+          흐름은 claude-mem을 따르되, 클라이언트마다 필요한 최소한만
+          만듭니다. <strong>저장</strong>은 두 클라이언트가 같습니다:
+          사용자가 handoff를 요청하면 AI가 이미 인증된 membase MCP
+          도구(<code>add_memory</code>)로 <code>[HANDOFF]</code> 태그를
+          붙여 저장하고 — 다른 클라이언트가 수동
+          <code>search_memory</code>로 이어받는 경로 — 같은 요약을
+          로컬 파일에도 씁니다. AI가 이미 인증된 도구를 쓰는
+          시점이라 별도 인증이 필요 없습니다. 갈라지는 건
+          <strong>조회</strong> 쪽입니다:
+        </p>
+        <ul>
+          <li><strong>Cursor — runtime 불필요, 스킬 문서 하나로
+            끝.</strong> 저장 시 요약을 <code>.cursor/rules/
+            membase-handoff.mdc</code>에 쓰면, 다음 세션은 Cursor의
+            기존 Rules 자동 로딩이 그 파일을 포함시킵니다. 훅도,
+            스크립트도, 실행 코드도 없습니다 —
+            <code>clients/cursor/skills/handoff/SKILL.md</code>가
+            전부입니다.</li>
+          <li><strong>Codex — 최소 <code>runtime/</code> 신설.</strong>
+            Codex에는 Cursor Rules 같은 파일 자동 로딩이 없어서,
+            <code>hooks.json</code>의 <code>SessionStart</code> 훅이
+            로컬 handoff 파일(<code>.codex/membase-handoff.md</code>,
+            없으면 <code>~/.codex/membase-handoff.md</code>)을 읽어
+            <code>additionalContext</code>로 출력하는 의존성 없는
+            스크립트 하나가 필요합니다. 파일만 읽으므로 이 훅도
+            인증이 필요 없습니다. 저장측 지시는 Codex 커스텀
+            프롬프트(<code>/handoff</code>)로 담습니다.</li>
+          <li><strong>크로스 클라이언트 이어받기는 수동 검색으로
+            확정.</strong> Claude에서 하던 일을 Cursor에서 이어받는
+            경우는 로컬 파일이 없으니 <code>search_memory</code>로
+            <code>[HANDOFF]</code>를 찾으면 됩니다. 이를 자동화하려면
+            훅이 membase에 실시간 접속해야 하고 → 이중 로그인
+            문제로 돌아가므로, 그 비용을 지불하지 않기로
+            결정했습니다.</li>
+        </ul>
+        <p>
+          Claude Code 전체(캡처 스풀, 요약, 여러 훅 이벤트)를 통째로
+          복사하지 않고 <strong>handoff에 필요한 최소 범위</strong>만
+          넣습니다. 이 결정은 ADR 0001의 "runtime/ 폴더가 있으면 코드
+          클라이언트, 없으면 descriptor 전용"이라는 구분을 유지합니다 —
+          Codex가 Claude Code에 이어 descriptor(설정 생성)와
+          runtime(실행 코드)이 한 클라이언트 안에 공존하는 두 번째
+          사례가 되고, Cursor는 descriptor + 정적 스킬 문서로 남아
+          runtime 없는 쪽에 그대로 머뭅니다.
+        </p>
+      </section>
+
+      <section>
         <h2>8. 인터페이스 설계 결정 — 경계마다 무엇을 계약했나</h2>
         <p>
           지금까지의 구현에서 확정된 인터페이스 수준의 결정들입니다.
@@ -1302,8 +1510,10 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           </tr>
           <tr>
             <td>Cursor / Codex</td>
-            <td>현재 없음 — 순수 MCP 설정 전용</td>
-            <td>D3에서 추가 예정: Cursor는 <code>hooks.json</code>
+            <td>handoff만 파일 기반으로 연결(7.5절) — Cursor는 훅 없이
+              Rules 자동 로딩, Codex는 <code>hooks.json</code>
+              <code>SessionStart</code>(스폰형, 로컬 파일만 읽음)</td>
+            <td>캡처는 D3에서 추가 예정: Cursor는 <code>hooks.json</code>
               (Claude와 같은 스폰형이라 디스크 스풀 재사용), Codex는
               plugin hook/<code>notify</code>. 둘 다 capture-core 위에
               이벤트 이름·페이로드 변환만 하는 어댑터</td>

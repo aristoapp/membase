@@ -1,0 +1,17 @@
+{
+  "$comment": "Template for ~/.codex/hooks.json — replace REPO_ROOT with the absolute path to this repository (or merge the SessionStart entry into an existing hooks.json). See docs/install/codex.md.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node REPO_ROOT/clients/codex/runtime/session-start.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
