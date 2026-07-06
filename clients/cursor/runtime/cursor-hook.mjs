@@ -21,9 +21,11 @@ const HOOK_BUNDLE = join(
 );
 
 /** Cursor event name → shared-runtime event name. */
+// No beforeSubmitPrompt: Cursor has no context-injection output for it, so a
+// mapped UserPromptSubmit recall fetch would be pure latency with the result
+// thrown away.
 export const EVENT_MAP = {
   sessionStart: "SessionStart",
-  beforeSubmitPrompt: "UserPromptSubmit",
   afterFileEdit: "PostToolUse",
   afterShellExecution: "PostToolUse",
   stop: "Stop",
@@ -39,9 +41,6 @@ export function mapCursorInput(event, input) {
       input.cwd ||
       process.cwd(),
   };
-  if (event === "beforeSubmitPrompt") {
-    mapped.prompt = typeof input.prompt === "string" ? input.prompt : "";
-  }
   if (event === "afterFileEdit") {
     mapped.tool_name = "Edit";
     mapped.tool_input = { file_path: input.file_path };
@@ -82,16 +81,38 @@ async function main() {
   }
   const bundle = process.env.MEMBASE_HOOK_BUNDLE || HOOK_BUNDLE;
   const child = spawn(process.execPath, [bundle, target], {
-    stdio: ["pipe", "inherit", "ignore"],
+    // stdout is piped so we can translate hook.cjs's Claude-shaped output into
+    // Cursor's schema; stderr is inherited so failures stay observable.
+    stdio: ["pipe", "pipe", "inherit"],
+    // Precedence is deliberate: captureMode BEFORE the spread is a default the
+    // ambient env may override; MEMBASE_CLIENT_SOURCE AFTER the spread so the
+    // adapter's identity always wins over ambient env.
     env: {
-      MEMBASE_CLIENT_SOURCE: "cursor",
       CLAUDE_PLUGIN_OPTION_captureMode: "summary",
       ...process.env,
+      MEMBASE_CLIENT_SOURCE: "cursor",
     },
+  });
+  child.on("error", () => process.exit(0)); // fail-open on bad bundle path
+  let out = "";
+  child.stdout.setEncoding("utf-8");
+  child.stdout.on("data", (chunk) => {
+    out += chunk;
   });
   child.stdin.write(JSON.stringify(mapCursorInput(event, input)));
   child.stdin.end();
   await new Promise((resolvePromise) => child.on("close", resolvePromise));
+  // Cursor only accepts context on sessionStart, as {"additional_context":...}.
+  // hook.cjs emits the Claude shape; translate it. All other events: silence.
+  if (event !== "sessionStart") return;
+  try {
+    const context = JSON.parse(out)?.hookSpecificOutput?.additionalContext;
+    if (typeof context === "string" && context) {
+      process.stdout.write(JSON.stringify({ additional_context: context }));
+    }
+  } catch {
+    // malformed/empty child output — print nothing
+  }
 }
 
 const isMain = (() => {
