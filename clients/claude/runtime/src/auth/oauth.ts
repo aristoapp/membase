@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { USER_AGENT } from "../constants.js";
+import { MEMORY_SOURCE, USER_AGENT } from "../constants.js";
 import type { TokenState } from "../types.js";
 
 export interface OAuthResult extends TokenState {}
@@ -161,7 +161,7 @@ export async function loginWithOAuth(apiUrl: string): Promise<OAuthResult> {
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
-      mcp_source: "claude-code",
+      mcp_source: MEMORY_SOURCE,
     });
     const authorizeUrl = `${apiUrl}/oauth/authorize?${params.toString()}`;
     openBrowser(authorizeUrl);

@@ -3,6 +3,7 @@
 // layout are unchanged (same spool/ dir, pending.jsonl, sent.json, .lock,
 // inflight files). Claude-specific pieces stay here: the state dir, the
 // sanitize function, the CaptureRecord kind union, and the ingest mapping.
+import { join } from "node:path";
 import { createCaptureSpool, type SpoolRecord } from "@membase/capture-core";
 import type { MembaseClient } from "../api/client.js";
 import { ensureDataDir } from "../config/index.js";
@@ -54,4 +55,10 @@ export async function flushSpool(
 
 export function pendingSpoolCount(): number {
   return spool.pendingSpoolCount();
+}
+
+// Mirrors the capture-core spool layout for the same stateDir; keeps callers
+// from re-encoding the spool path themselves.
+export function pendingSpoolPath(): string {
+  return join(ensureDataDir(), "spool", "pending.jsonl");
 }

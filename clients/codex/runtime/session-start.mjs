@@ -7,16 +7,28 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 
 function readStdin() {
   return new Promise((resolve) => {
     let data = "";
+    const done = () => {
+      // Stop reading so an open stdin can't keep the event loop alive.
+      process.stdin.destroy();
+      resolve(data);
+    };
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
       data += chunk;
+      // ponytail: the hook payload is a tiny JSON blob; a runaway stdin
+      // (e.g. /dev/zero) would otherwise crash on string-length overflow.
+      if (data.length > 1024 * 1024) done();
     });
-    process.stdin.on("end", () => resolve(data));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+    // Fallback: if Codex spawns us without closing stdin, don't hang until
+    // the hook timeout — use whatever arrived so far.
+    setTimeout(done, 2000).unref();
   });
 }
 
@@ -64,10 +76,16 @@ async function main() {
   if (output) process.stdout.write(output);
 }
 
-// URL.pathname percent-encodes spaces/non-ASCII, so compare decoded paths.
-const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// Node realpaths the main module, so import.meta.url is the resolved path.
+// Realpath argv[1] too, or symlinked invocations would silently no-op.
+let isMain = false;
+try {
+  isMain =
+    !!process.argv[1] &&
+    pathToFileURL(fs.realpathSync(process.argv[1])).href === import.meta.url;
+} catch {
+  // argv[1] missing or unreadable -> not the main module
+}
 if (isMain) {
   main().catch(() => process.exit(0));
 }

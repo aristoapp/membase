@@ -7,6 +7,8 @@ import {
   PREFETCH_MEMORY_LIMIT,
   PREFETCH_PROJECT_MEMORY_LIMIT,
   PREFETCH_WIKI_LIMIT,
+  CLIENT_LABEL,
+  MEMORY_SOURCE,
   PLUGIN_NAME,
   PLUGIN_VERSION,
 } from "../constants.js";
@@ -20,7 +22,12 @@ import {
   sanitizeRecallQuery,
   truncateText,
 } from "../sanitize/index.js";
-import { enqueueCapture, flushSpool } from "../spool/index.js";
+import {
+  enqueueCapture,
+  flushSpool,
+  pendingSpoolCount,
+  pendingSpoolPath,
+} from "../spool/index.js";
 import type { HookInput } from "../types.js";
 import {
   buildSessionStartContext,
@@ -33,6 +40,7 @@ import type { EpisodeBundle } from "../types.js";
 const SESSION_FETCH_TIMEOUT_MS = 1_800;
 const ASYNC_FLUSH_TIMEOUT_MS = 4_000;
 const ASYNC_FLUSH_LIMIT = 3;
+
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -149,10 +157,28 @@ async function handleSessionStart(input: HookInput): Promise<void> {
   const tokens = readTokens();
   if (!tokens) {
     if (config.sessionStartContext !== "off") {
-      outputAdditionalContext(
-        "Membase is installed but not connected. Run /membase:login to enable memory.",
-        "SessionStart",
-      );
+      const lines = [
+        MEMORY_SOURCE === "claude-code"
+          ? "Membase is installed but not connected. Run /membase:login to enable memory."
+          : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.",
+      ];
+      // HTTP-fallback mode (north-star pillar 1): hooks collect without
+      // tokens, so the authenticated in-app AI is the uploader — announce
+      // the backlog so it can flush.
+      const pending = pendingSpoolCount();
+      if (pending > 0) {
+        lines.push(
+          `Membase spool has ${pending} pending local capture(s) at ` +
+            `${pendingSpoolPath()}. Rename \`pending.jsonl\` to ` +
+            "`flush-<timestamp>.jsonl` first (atomic — claims the batch; " +
+            "new captures keep going to a fresh pending.jsonl and a second " +
+            "flusher finds nothing). Upload each record's content via " +
+            "add_memory (keep its project). Records that look like secrets: " +
+            "do NOT upload, do NOT delete — report them to the user. Delete " +
+            "the renamed file only after all non-secret records are stored.",
+        );
+      }
+      outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
     return;
   }
@@ -276,16 +302,25 @@ async function spoolToolBatch(input: HookInput): Promise<void> {
     .map((call) => summarizeToolCall(call))
     .filter((summary): summary is string => Boolean(summary));
   if (summaries.length === 0) return;
-  const content = `Claude Code tool summary:\n\n${summaries.join("\n\n")}`;
+  const content = `${CLIENT_LABEL} tool summary:\n\n${summaries.join("\n\n")}`;
   if (looksSensitive(content)) return;
   enqueueCapture({
     capture_kind: "tool_summary",
     content,
-    display_summary: `Claude Code used ${summaries.length} project tool(s).`,
+    display_summary: `${CLIENT_LABEL} used ${summaries.length} project tool(s).`,
     project,
     sessionId: input.session_id,
     metadata: captureMetadata(input, project),
   });
+}
+
+/**
+ * Codex-style per-call event (PostToolUse delivers ONE tool call at the top
+ * level instead of a tool_calls array): reuse the batch summary/spool path.
+ */
+async function spoolSingleTool(input: HookInput): Promise<void> {
+  if (typeof input.tool_name !== "string") return;
+  await spoolToolBatch({ ...input, tool_calls: [input] });
 }
 
 async function spoolSessionSummary(
@@ -319,6 +354,7 @@ async function main(): Promise<void> {
   if (event === "SessionStart") await handleSessionStart(input);
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await spoolToolBatch(input);
+  if (event === "PostToolUse") await spoolSingleTool(input);
   if (event === "Stop" || event === "SessionEnd") {
     const config = loadConfig();
     const tokens = readTokens();

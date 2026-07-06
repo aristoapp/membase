@@ -1,5 +1,5 @@
 {
-  "$comment": "Template for ~/.codex/hooks.json — replace REPO_ROOT with the absolute path to this repository (or merge the SessionStart entry into an existing hooks.json). See docs/install/codex.md.",
+  "$comment": "Template for ~/.codex/hooks.json — replace REPO_ROOT with this repository's absolute path (or merge entries into an existing hooks.json). session-start.mjs injects the local file-based handoff (needs no auth). hook.cjs is the shared membase runtime: with a disk login (stdio bundle mode) it captures + flushes + injects recall in real time; without one (HTTP mode) it still spools captures locally and announces the pending count at session start. See docs/install/codex.md.",
   "hooks": {
     "SessionStart": [
       {
@@ -9,6 +9,45 @@
             "type": "command",
             "command": "node REPO_ROOT/clients/codex/runtime/session-start.mjs",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "MEMBASE_CLIENT_SOURCE=codex MEMBASE_DATA_DIR=$HOME/.membase/codex CLAUDE_PLUGIN_OPTION_captureMode=summary node REPO_ROOT/clients/claude/runtime/plugin/scripts/hook.cjs SessionStart",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEMBASE_CLIENT_SOURCE=codex MEMBASE_DATA_DIR=$HOME/.membase/codex CLAUDE_PLUGIN_OPTION_captureMode=summary node REPO_ROOT/clients/claude/runtime/plugin/scripts/hook.cjs UserPromptSubmit",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Bash|Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEMBASE_CLIENT_SOURCE=codex MEMBASE_DATA_DIR=$HOME/.membase/codex CLAUDE_PLUGIN_OPTION_captureMode=summary node REPO_ROOT/clients/claude/runtime/plugin/scripts/hook.cjs PostToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "MEMBASE_CLIENT_SOURCE=codex MEMBASE_DATA_DIR=$HOME/.membase/codex CLAUDE_PLUGIN_OPTION_captureMode=summary node REPO_ROOT/clients/claude/runtime/plugin/scripts/hook.cjs Stop",
+            "timeout": 15
           }
         ]
       }
