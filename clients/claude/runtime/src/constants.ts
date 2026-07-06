@@ -2,8 +2,13 @@ export const PLUGIN_NAME = "claude-membase";
 export const PLUGIN_VERSION = "0.1.4";
 export const DEFAULT_API_URL = "https://api.membase.so";
 export const DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
-export const MEMORY_SOURCE = "claude-code";
-export const USER_AGENT = `membase-claude-code/${PLUGIN_VERSION}`;
+// The bundled stdio server/hook binaries are shared by other stdio-bundled
+// clients (north-star pillar 1): MEMBASE_CLIENT_SOURCE overrides memory
+// source attribution and the user agent without a separate build. Unset =
+// Claude Code behavior, byte-identical requests.
+const CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
+export const MEMORY_SOURCE = CLIENT_SOURCE;
+export const USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
 export const DEFAULT_RECALL_TIMEOUT_MS = 3_000;
 export const DEFAULT_MAX_RECALL_CHARS = 4_000;
 export const MAX_RECALL_CHARS = 16_000;
