@@ -37,8 +37,8 @@ assertIncludes(
 );
 assertIncludes(
   d6Line,
-  "pending",
-  "D6 must remain pending on accepted live test credentials and cleanup."
+  "DONE",
+  "D6 must be marked DONE once live smoke has passed for all clients (north-star Gate 2)."
 );
 assertIncludes(liveRunbook, "D2", "Live smoke runbook must name D2 as a precondition.");
 assertIncludes(liveRunbook, "D3", "Live smoke runbook must name D3 as a precondition.");

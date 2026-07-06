@@ -56,9 +56,9 @@ const requiredDecisionRows = [
     id: "D6",
     cells: [
       "Live client-to-MCP smoke gate",
-      "live smoke remains pending",
-      "test-only credentials",
-      "cleanup behavior"
+      "DONE",
+      "all five clients",
+      "north-star Gate 2"
     ]
   }
 ];
