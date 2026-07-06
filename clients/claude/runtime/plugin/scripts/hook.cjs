@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 "use strict";
 
-// src/hooks/handler.ts
-var import_node_path5 = require("node:path");
-
 // ../../../packages/capture-core/src/spool.ts
 var import_node_crypto = require("node:crypto");
 var import_node_fs = require("node:fs");
@@ -274,7 +271,7 @@ var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 function writeJsonAtomic(path, value, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp`;
+  const tmp = `${path}.tmp.${process.pid}`;
   (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
 `, {
     encoding: "utf-8",
@@ -300,6 +297,7 @@ function createTokenStore(options) {
     } catch {
       return null;
     }
+    if (typeof obj !== "object" || obj === null) return null;
     if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
       return null;
     }
@@ -493,9 +491,11 @@ var MembaseTransport = class {
 var PLUGIN_NAME = "claude-membase";
 var PLUGIN_VERSION = "0.1.4";
 var DEFAULT_API_URL = "https://api.membase.so";
-var CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE || "claude-code";
+var RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
+var CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOURCE) ? RAW_CLIENT_SOURCE : "claude-code";
 var MEMORY_SOURCE = CLIENT_SOURCE;
 var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+var INGEST_PLUGIN_LABEL = CLIENT_SOURCE === "claude-code" ? PLUGIN_NAME : `membase-bundle-${CLIENT_SOURCE}`;
 var CLIENT_LABELS = {
   "claude-code": "Claude Code",
   codex: "Codex",
@@ -655,12 +655,13 @@ var import_node_fs3 = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path3 = require("node:path");
 function getDataDir() {
-  return (
+  const dir = (
     // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
     // point this at their own state dir — or a shared one for a single
     // machine-wide login — without Claude-specific env names.
     process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
   );
+  return dir.startsWith("~/") ? (0, import_node_path3.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
 }
 function ensureDataDir() {
   const dir = getDataDir();
@@ -729,8 +730,10 @@ function loadConfig() {
       "autoWikiRecall",
       typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
     ),
+    // Disk wins: hooks pass a captureMode option on every run, so env can
+    // only be the default — otherwise it would override an explicit opt-out.
     captureMode: normalizeCaptureMode(
-      strFromOption("captureMode") ?? disk.captureMode
+      disk.captureMode ?? strFromOption("captureMode")
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
@@ -897,6 +900,7 @@ function resolveProjectSlug(cwd, config) {
 }
 
 // src/spool/index.ts
+var import_node_path5 = require("node:path");
 var spool = createCaptureSpool({
   stateDir: ensureDataDir,
   sanitize: sanitizeMembaseText
@@ -922,6 +926,9 @@ async function flushSpool(client, limit = 10) {
 }
 function pendingSpoolCount() {
   return spool.pendingSpoolCount();
+}
+function pendingSpoolPath() {
+  return (0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl");
 }
 
 // src/profile/index.ts
@@ -1117,12 +1124,12 @@ async function handleSessionStart(input) {
   if (!tokens) {
     if (config.sessionStartContext !== "off") {
       const lines = [
-        MEMORY_SOURCE === "claude-code" ? "Membase is installed but not connected. Run /membase:login to enable memory." : "Membase is not logged in on this machine. Ask the agent to call the membase `login` tool to enable memory."
+        MEMORY_SOURCE === "claude-code" ? "Membase is installed but not connected. Run /membase:login to enable memory." : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory."
       ];
       const pending = pendingSpoolCount();
       if (pending > 0) {
         lines.push(
-          `Membase spool has ${pending} pending local capture(s) at ${(0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl")}. Using the authenticated membase add_memory tool, store each record's content (keep its project field), then clear that file.`
+          `Membase spool has ${pending} pending local capture(s) at ${pendingSpoolPath()}. Rename \`pending.jsonl\` to \`flush-<timestamp>.jsonl\` first (atomic \u2014 claims the batch; new captures keep going to a fresh pending.jsonl and a second flusher finds nothing). Upload each record's content via add_memory (keep its project). Records that look like secrets: do NOT upload, do NOT delete \u2014 report them to the user. Delete the renamed file only after all non-secret records are stored.`
         );
       }
       outputAdditionalContext(lines.join("\n"), "SessionStart");
