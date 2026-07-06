@@ -100,13 +100,22 @@ export function registerHandoffTool(
         // `store` used (a handoff stored globally, recalled with a guessed
         // project, or vice versa). Fall back to an unscoped search so a scope
         // mismatch doesn't silently hide an existing handoff.
+        let fromOtherScope = false;
         if (!latest && params.project) {
           latest = pickLatestHandoff(await recallSearch(undefined));
+          fromOtherScope = Boolean(latest);
         }
         if (!latest) {
           return await toolResponse("No stored handoff found.");
         }
-        return await toolResponse(formatBundle(latest, 0));
+        // The fallback only fires when the requested project had no handoff, so
+        // anything it returns is from a different (or unscoped) project — flag
+        // it instead of silently passing another project's state off as this
+        // one's.
+        const prefix = fromOtherScope
+          ? `No handoff for project "${params.project}"; showing the most recent handoff from another scope:\n\n`
+          : "";
+        return await toolResponse(prefix + formatBundle(latest, 0));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return await toolResponse(`Handoff failed: ${message}`);
