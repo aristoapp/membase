@@ -130,13 +130,15 @@ Two modes, both official-features-only:
 1. Install the hook adapter: merge `clients/cursor/runtime/hooks.json` into
    `~/.cursor/hooks.json`, replacing `REPO_ROOT` with this repository's
    absolute path. `cursor-hook.mjs` translates Cursor events
-   (`afterFileEdit`, `afterShellExecution`, `stop`, `sessionStart`,
-   `beforeSubmitPrompt`) into the shared membase hook bundle — it owns no
+   (`sessionStart`, `afterFileEdit`, `afterShellExecution`, `stop`,
+   `sessionEnd`) into the shared membase hook bundle — it owns no
    capture logic itself.
 2. Pick a mode:
    - **stdio bundle (recommended — real-time).** Add a command-based MCP
      server entry to `~/.cursor/mcp.json`:
-     `{"command": "node", "args": ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"], "env": {"MEMBASE_CLIENT_SOURCE": "cursor", "MEMBASE_DATA_DIR": "~/.membase/cursor"}}`
+     `{"command": "node", "args": ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"], "env": {"MEMBASE_CLIENT_SOURCE": "cursor", "MEMBASE_DATA_DIR": "/ABSOLUTE/HOME/.membase/cursor"}}`
+     (replace `/ABSOLUTE/HOME` with your home directory's absolute path —
+     `mcp.json` env values get no `~` expansion)
      and ask the agent to call the membase `login` tool once. Tokens land on
      disk, so hooks flush captures and inject recall in real time — Claude
      Code parity.
