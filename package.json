@@ -44,7 +44,8 @@
     "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw --pretty false",
     "version-parity": "node scripts/check-version-parity.mjs",
     "capture-core:typecheck": "pnpm --filter @membase/capture-core typecheck",
-    "capture-core:test": "cd packages/capture-core && bun test"
+    "capture-core:test": "cd packages/capture-core && bun test",
+    "contract:test": "node --test \"contract/*.contract.test.mjs\""
   },
   "devDependencies": {
     "typescript": "^6.0.3"
