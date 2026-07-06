@@ -47,6 +47,10 @@ jobs:
 
       - run: pnpm claude:runtime-test
 
+      - run: pnpm codex:runtime-test
+
+      - run: pnpm cursor:runtime-test
+
       - run: pnpm capture-core:test
 
       - run: pnpm smoke:execute
