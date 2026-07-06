@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -72,4 +72,50 @@ test("end to end: no handoff file -> no output", () => {
     encoding: "utf8",
   });
   assert.equal(stdout, "");
+});
+
+test("end to end: invoking via a symlink still runs main", () => {
+  const file = tmpFile("[HANDOFF] symlink run");
+  const link = path.join(path.dirname(file), "session-start-link.mjs");
+  fs.symlinkSync(SCRIPT, link);
+  const stdout = execFileSync(process.execPath, [link], {
+    input: "{}",
+    env: { ...process.env, MEMBASE_HANDOFF_FILE: file },
+    encoding: "utf8",
+  });
+  const parsed = JSON.parse(stdout);
+  assert.match(
+    parsed.hookSpecificOutput.additionalContext,
+    /\[HANDOFF\] symlink run/,
+  );
+});
+
+test("end to end: stdin left open -> exits via fallback timer", async () => {
+  const file = tmpFile("[HANDOFF] open stdin");
+  const child = spawn(process.execPath, [SCRIPT], {
+    env: { ...process.env, MEMBASE_HANDOFF_FILE: file },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let stdout = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  // Never end stdin — the ~2s fallback timer must resolve readStdin.
+  const exited = await new Promise((resolve) => {
+    const deadline = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(false);
+    }, 4000);
+    // "close" (not "exit") so stdout is fully drained before we parse it.
+    child.on("close", () => {
+      clearTimeout(deadline);
+      resolve(true);
+    });
+  });
+  assert.equal(exited, true, "process hung waiting for stdin");
+  const parsed = JSON.parse(stdout);
+  assert.match(
+    parsed.hookSpecificOutput.additionalContext,
+    /\[HANDOFF\] open stdin/,
+  );
 });
