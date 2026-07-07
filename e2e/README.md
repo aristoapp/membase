@@ -54,6 +54,16 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   of wall clock) and stable across repeated calls, and runs a full wiki CRUD
   round-trip (add → search → update → delete → confirm gone) that cleans up
   after itself.
+- **MCP resources**: `resources/list` exposes `membase://profile` and
+  `membase://recent`, and `resources/read` returns the expected shape for
+  each — `membase://profile` as `application/json` with a `timezone` field,
+  `membase://recent` as `text/markdown` starting with `# Membase Recent
+  Memories`. Also confirms reading an unregistered URI errors rather than
+  returning empty content. This is real client-facing surface (the membase
+  MCP usage instructions tell every client when to read these) that the
+  harness previously couldn't reach at all — `mcp-client.mjs` only spoke
+  `tools/list`/`tools/call` until `resources/list`/`resources/read` were
+  added alongside this check.
 - **filter params**: `search_memory`'s `project`, `sources`, and
   `date_from`/`date_to` filters, and `add_wiki`/`search_wiki`'s `project`
   scoping — two project-tagged memories are written and a `project`-scoped
