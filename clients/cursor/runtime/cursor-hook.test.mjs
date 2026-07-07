@@ -49,7 +49,7 @@ test("afterShellExecution maps command from either payload shape", () => {
   );
 });
 
-test("end to end: afterFileEdit lands in the spool via the shared bundle", () => {
+test("end to end: afterFileEdit lands in the session scratch via the shared bundle", () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-capture-"));
   execFileSync(process.execPath, [SCRIPT, "afterFileEdit"], {
     input: JSON.stringify({
@@ -60,12 +60,18 @@ test("end to end: afterFileEdit lands in the spool via the shared bundle", () =>
     env: { ...process.env, MEMBASE_DATA_DIR: dataDir },
     encoding: "utf8",
   });
-  const pending = fs.readFileSync(
-    path.join(dataDir, "spool", "pending.jsonl"),
+  // Dreaming v2: a per-tool observation lands in the per-session scratch
+  // (keyed by conversation_id → session_id), never the upload spool.
+  assert.equal(
+    fs.existsSync(path.join(dataDir, "spool", "pending.jsonl")),
+    false,
+    "afterFileEdit must not write to the upload spool",
+  );
+  const scratch = fs.readFileSync(
+    path.join(dataDir, "scratch", "c1.jsonl"),
     "utf8",
   );
-  assert.match(pending, /Cursor tool summary/);
-  assert.match(pending, /src\/feature\.ts/);
+  assert.match(scratch, /src\/feature\.ts/);
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
