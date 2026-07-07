@@ -102,12 +102,21 @@ jobs:
 
   e2e-tier3-staging:
     # Deep quality/latency + filter/negative-case eval against STAGING.
-    # Minutes-long, so it does NOT run on every push/PR — manual only (the
-    # "press the button" tier, requested via this repo's Actions tab). Nightly
-    # deep coverage already lives in e2e-staging.yml's schedule; this job lets
-    # a run be requested here too, without remembering/typing the --tier3 flag.
-    name: e2e tier 3 (staging, deep — manual only)
-    if: github.event_name == 'workflow_dispatch'
+    # Minutes-long, so it does NOT run on every push/PR. It runs when either:
+    #   - triggered manually (workflow_dispatch), OR
+    #   - the PR is from a trusted author (OWNER/MEMBER/COLLABORATOR) on a
+    #     SAME-REPO branch (not a fork). Fork PRs never get secrets from a
+    #     pull_request event, so the staging service token would be empty
+    #     there anyway; those fall through to a skip and can be run via the
+    #     button. External contributors' PRs (CONTRIBUTOR/NONE) also skip.
+    # Nightly deep coverage still lives in e2e-staging.yml's schedule.
+    name: e2e tier 3 (staging, deep — trusted PR + manual)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+                github.event.pull_request.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
