@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   HANDOFF_REPLACE_LIMIT,
   HANDOFF_STALE_MS,
@@ -7,6 +9,8 @@ import {
   isHandoffFresh,
   sweepReplacedHandoffs,
   buildHandoffDisplaySummary,
+  buildHandoffMemory,
+  handoffRecallQuery,
   isHandoffMemory,
   pickLatestHandoff,
   selectReplaceableHandoffs,
@@ -71,6 +75,70 @@ describe("handoff helpers", () => {
     });
     expect(out.startsWith("[HANDOFF] (proj)")).toBe(true);
     expect(out.length).toBeLessThanOrEqual(500);
+  });
+});
+
+// Golden vectors shared with the Hermes Python port (ADR 0002) — see
+// clients/hermes/python/tests/test_handoff_vectors.py for the other consumer.
+interface EpisodeFields {
+  name?: string;
+  summary?: string;
+  valid_at?: string;
+  created_at?: string;
+}
+const handoffVectors = JSON.parse(
+  readFileSync(join(import.meta.dir, "../spec/handoff-vectors.json"), "utf8"),
+);
+
+function vectorBundles(eps: EpisodeFields[]) {
+  return eps.map((ep, i) => ({ episode: { uuid: `u-${i}`, ...ep } }));
+}
+
+describe("handoff golden vectors", () => {
+  test("recall_query", () => {
+    expect(handoffRecallQuery()).toBe(handoffVectors.recall_query.out);
+  });
+
+  test("handoff_memory", () => {
+    for (const c of handoffVectors.handoff_memory.cases) {
+      expect(buildHandoffMemory({ summary: c.summary, project: c.project })).toBe(c.out);
+    }
+  });
+
+  test("handoff_display_summary", () => {
+    for (const c of handoffVectors.handoff_display_summary.cases) {
+      expect(
+        buildHandoffDisplaySummary({ summary: c.summary, project: c.project }),
+      ).toBe(c.out);
+    }
+  });
+
+  test("is_handoff_memory", () => {
+    for (const c of handoffVectors.is_handoff_memory.cases) {
+      expect(isHandoffMemory(c.in)).toBe(c.is_handoff);
+    }
+  });
+
+  test("pick_latest_handoff", () => {
+    for (const c of handoffVectors.pick_latest_handoff.cases) {
+      const bundles = vectorBundles(c.bundles);
+      const picked = pickLatestHandoff(bundles);
+      if (c.picked_index === null) {
+        expect(picked).toBeUndefined();
+      } else {
+        expect(picked).toBe(bundles[c.picked_index]);
+      }
+    }
+  });
+
+  test("select_replaceable_handoffs", () => {
+    for (const c of handoffVectors.select_replaceable_handoffs.cases) {
+      const bundles = vectorBundles(c.bundles);
+      const selected = selectReplaceableHandoffs(bundles, {
+        projectScoped: c.project_scoped,
+      });
+      expect(selected.map((b) => bundles.indexOf(b))).toEqual(c.selected_indexes);
+    }
   });
 });
 

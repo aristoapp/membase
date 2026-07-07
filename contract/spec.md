@@ -157,7 +157,7 @@ served by the shared hook bundle with MEMBASE_CLIENT_SOURCE=codex)
   the text level: the tag builders/filters exposed by any client agree on
   the same literal (cross-client greppable: the string `[HANDOFF]` appears
   identically in claude runtime, openclaw runtime, cursor skill, codex
-  prompt).
+  prompt, hermes provider).
 - C-HDF-2 — SessionStart handoff injection picks the LATEST handoff by
   time, not the most relevant: with credentials and a stub API returning
   (per the wire schema above) an OLDER `[HANDOFF]` bundle first (higher

@@ -1,0 +1,265 @@
+{
+  "$comment": "Language-neutral golden vectors binding capture-core/src/handoff.ts and the Hermes Python port clients/hermes/python/src/membase_hermes/handoff.py (ADR 0002). Both test suites consume this file so tag/clamp/picker/sweep-selection drift fails CI. Bundle cases carry bare episode fields; each language wraps them in its bundle shape and asserts by index (picked_index / selected_indexes refer to input order).",
+  "recall_query": {
+    "out": "[HANDOFF] session handoff summary"
+  },
+  "handoff_memory": {
+    "$comment": "buildHandoffMemory / build_handoff_memory — tag + optional (project) scope, trimmed.",
+    "cases": [
+      {
+        "summary": "wrap up state",
+        "out": "[HANDOFF] wrap up state"
+      },
+      {
+        "summary": "  padded  ",
+        "out": "[HANDOFF] padded"
+      },
+      {
+        "summary": "scoped state",
+        "project": "proj-a",
+        "out": "[HANDOFF] (proj-a) scoped state"
+      },
+      {
+        "summary": "scoped state",
+        "project": "  proj-a  ",
+        "out": "[HANDOFF] (proj-a) scoped state"
+      },
+      {
+        "summary": "state",
+        "project": "   ",
+        "out": "[HANDOFF] state"
+      }
+    ]
+  },
+  "handoff_display_summary": {
+    "$comment": "buildHandoffDisplaySummary / build_handoff_display_summary — summary clamped to 400 chars BEFORE tagging (backend display_summary limit is 500).",
+    "cases": [
+      {
+        "summary": "short",
+        "project": "proj-a",
+        "out": "[HANDOFF] (proj-a) short"
+      },
+      {
+        "summary": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "project": "proj-a",
+        "out": "[HANDOFF] (proj-a) xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      {
+        "summary": "  yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy  ",
+        "out": "[HANDOFF] yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+      }
+    ]
+  },
+  "is_handoff_memory": {
+    "$comment": "isHandoffMemory / is_handoff_memory — literal prefix after leading-whitespace trim, case-sensitive.",
+    "cases": [
+      {
+        "in": "[HANDOFF] state",
+        "is_handoff": true
+      },
+      {
+        "in": "   [HANDOFF] leading spaces",
+        "is_handoff": true
+      },
+      {
+        "in": "\t[HANDOFF] tab",
+        "is_handoff": true
+      },
+      {
+        "in": "[HANDOFF] (proj-a) scoped",
+        "is_handoff": true
+      },
+      {
+        "in": "HANDOFF no brackets",
+        "is_handoff": false
+      },
+      {
+        "in": "[handoff] lower",
+        "is_handoff": false
+      },
+      {
+        "in": "we chose postgres",
+        "is_handoff": false
+      },
+      {
+        "in": "",
+        "is_handoff": false
+      }
+    ]
+  },
+  "pick_latest_handoff": {
+    "$comment": "Latest by valid_at→created_at; untimed bundles keep relevance rank; non-handoffs filtered; null when none.",
+    "cases": [
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] old",
+            "valid_at": "2026-07-01T00:00:00Z"
+          },
+          {
+            "name": "ordinary memory",
+            "valid_at": "2026-07-06T00:00:00Z"
+          },
+          {
+            "name": "[HANDOFF] new",
+            "valid_at": "2026-07-05T00:00:00Z"
+          }
+        ],
+        "picked_index": 2
+      },
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] untimed first"
+          },
+          {
+            "name": "[HANDOFF] untimed second"
+          }
+        ],
+        "picked_index": 0
+      },
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] a",
+            "created_at": "2026-07-01T00:00:00Z"
+          },
+          {
+            "name": "[HANDOFF] b",
+            "created_at": "2026-07-03T00:00:00Z"
+          }
+        ],
+        "picked_index": 1
+      },
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] untimed"
+          },
+          {
+            "name": "[HANDOFF] timed",
+            "valid_at": "2026-07-01T00:00:00Z"
+          }
+        ],
+        "picked_index": 1
+      },
+      {
+        "bundles": [
+          {
+            "name": "derived title",
+            "summary": "[HANDOFF] via summary"
+          }
+        ],
+        "picked_index": 0
+      },
+      {
+        "bundles": [
+          {
+            "name": "we chose postgres"
+          }
+        ],
+        "picked_index": null
+      }
+    ]
+  },
+  "select_replaceable_handoffs": {
+    "$comment": "Deletion selection: episode NAME only (summary-tag lookalikes excluded); unscoped stores skip '(project)'-marked names; capped at 10.",
+    "cases": [
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] (proj-a) scoped"
+          },
+          {
+            "name": "[HANDOFF] unscoped"
+          },
+          {
+            "name": "we chose postgres"
+          },
+          {
+            "name": "derived title",
+            "summary": "[HANDOFF] echo"
+          }
+        ],
+        "project_scoped": false,
+        "selected_indexes": [
+          1
+        ]
+      },
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] (proj-a) scoped"
+          },
+          {
+            "name": "[HANDOFF] unscoped"
+          },
+          {
+            "name": "we chose postgres"
+          }
+        ],
+        "project_scoped": true,
+        "selected_indexes": [
+          0,
+          1
+        ]
+      },
+      {
+        "bundles": [
+          {
+            "name": "[HANDOFF] state 0"
+          },
+          {
+            "name": "[HANDOFF] state 1"
+          },
+          {
+            "name": "[HANDOFF] state 2"
+          },
+          {
+            "name": "[HANDOFF] state 3"
+          },
+          {
+            "name": "[HANDOFF] state 4"
+          },
+          {
+            "name": "[HANDOFF] state 5"
+          },
+          {
+            "name": "[HANDOFF] state 6"
+          },
+          {
+            "name": "[HANDOFF] state 7"
+          },
+          {
+            "name": "[HANDOFF] state 8"
+          },
+          {
+            "name": "[HANDOFF] state 9"
+          },
+          {
+            "name": "[HANDOFF] state 10"
+          },
+          {
+            "name": "[HANDOFF] state 11"
+          },
+          {
+            "name": "[HANDOFF] state 12"
+          }
+        ],
+        "project_scoped": true,
+        "selected_indexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      }
+    ]
+  }
+}

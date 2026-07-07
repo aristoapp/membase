@@ -152,7 +152,7 @@ cross-client continuation is shared by **asking the client to recall** the
 | Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
 | Claude Code | Matches definition | `store_handoff` writes a per-project local file under the plugin data dir; SessionStart injects file-first with cloud search as the cross-client fallback |
 | OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
-| Hermes | Not implemented | |
+| Hermes | Deviates | `membase_handoff` tool is cloud-only in both directions (same semantics as OpenClaw); no session-start injection — recall is explicit via the tool |
 
 Injection framing (2026-07-06): every injection carries its age
 (`stored_at`/`age_days`); handoffs older than 7 days are announced in one
