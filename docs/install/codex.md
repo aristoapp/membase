@@ -86,18 +86,18 @@ only reads a local file, so it needs no auth of its own.
 cp clients/codex/runtime/prompts/handoff.md ~/.codex/prompts/handoff.md
 ```
 
-2. Install the recall-side hook: merge `clients/codex/runtime/hooks.json` into
+2. Install the hooks: merge `clients/codex/runtime/hooks.json` into
    `~/.codex/hooks.json`, replacing `REPO_ROOT` with this repository's
-   absolute path. The hook runs `runtime/session-start.mjs` (dependency-free
-   Node) on session start/resume.
+   absolute path. The shared hook bundle injects the local handoff file at
+   session start/resume (file-first; cloud fallback only with a disk
+   login), with age framing — handoffs older than 7 days are announced
+   instead of injected.
 
 Flow: `/handoff` prints the summary, stores it in Membase tagged `[HANDOFF]`
 (cross-client pickup via `search_memory`), and writes
 `.codex/membase-handoff.md` (project) or `~/.codex/membase-handoff.md`
 (global). The next Codex session's hook reads that file and injects it as
 `additionalContext`. Override the file location with `MEMBASE_HANDOFF_FILE`.
-
-Test: `pnpm --filter @membase/client-codex test:runtime`.
 ## Auto-Capture (Memory Hooks)
 
 Auto-capture (north-star pillar 1): conversations upload memory passively.

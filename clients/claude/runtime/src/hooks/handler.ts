@@ -29,6 +29,8 @@ import {
   pendingSpoolPath,
 } from "../spool/index.js";
 import type { HookInput } from "../types.js";
+import { buildHandoffInjection } from "@membase/capture-core";
+import { readLocalHandoff } from "../handoff/file.js";
 import {
   HANDOFF_RECALL_LIMIT,
   buildSessionStartContext,
@@ -208,6 +210,11 @@ async function handleSessionStart(input: HookInput): Promise<void> {
             "the renamed file only after all non-secret records are stored.",
         );
       }
+      const localHandoff = resolveLocalHandoffInjection(
+        input,
+        resolveProjectSlug(input.cwd, config),
+      );
+      if (localHandoff) lines.push(localHandoff);
       outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
     return;
@@ -233,7 +240,13 @@ async function handleSessionStart(input: HookInput): Promise<void> {
   // Hook stdout must be a SINGLE JSON object — two concatenated
   // hookSpecificOutput objects are unparseable as one document, so the
   // session context and the handoff prefetch are combined into one output.
-  const handoff = await prefetchHandoff(client, projectSlug);
+  // Cursor's Rules auto-load owns handoff injection there; everywhere else:
+  // local file first, cloud only as the cross-client fallback.
+  const handoff =
+    MEMORY_SOURCE === "cursor"
+      ? ""
+      : resolveLocalHandoffInjection(input, projectSlug) ||
+        (await prefetchHandoff(client, projectSlug));
   const combined = [context, handoff].filter(Boolean).join("\n\n");
   if (combined) {
     outputAdditionalContext(combined, "SessionStart");
@@ -265,8 +278,35 @@ async function prefetchHandoff(
   // summary carries the full tagged display_summary (<=500 chars); name is
   // clipped to ~96 by the backend and can even be untagged when only the
   // summary matched — inject the richer field.
-  const text = latest.episode.summary ?? latest.episode.name;
-  return `<membase-handoff>\n${text}\n</membase-handoff>`;
+  const text = latest.episode.summary ?? latest.episode.name ?? "";
+  const storedRaw = latest.episode.valid_at ?? latest.episode.created_at;
+  const storedAtMs = storedRaw ? Date.parse(storedRaw) : Number.NaN;
+  return buildHandoffInjection({
+    text,
+    storedAtMs: Number.isNaN(storedAtMs) ? Date.now() : storedAtMs,
+  });
+}
+
+/**
+ * File-first handoff injection (pillar 2: same-client continuation is
+ * local). Cursor is excluded — its Rules auto-load already injects the
+ * rolling .mdc file, and doubling it here would inject twice.
+ */
+function resolveLocalHandoffInjection(
+  input: HookInput,
+  projectSlug?: string,
+): string {
+  if (MEMORY_SOURCE === "cursor") return "";
+  const local = readLocalHandoff({
+    clientSource: MEMORY_SOURCE,
+    cwd: input.cwd,
+    projectSlug,
+  });
+  if (!local) return "";
+  return buildHandoffInjection({
+    text: local.text,
+    storedAtMs: local.storedAtMs,
+  });
 }
 
 async function handleUserPromptSubmit(input: HookInput): Promise<void> {

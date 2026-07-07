@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   HANDOFF_REPLACE_LIMIT,
+  HANDOFF_STALE_MS,
+  buildHandoffInjection,
   sweepReplacedHandoffs,
   buildHandoffDisplaySummary,
   isHandoffMemory,
@@ -67,5 +69,32 @@ describe("handoff helpers", () => {
     });
     expect(out.startsWith("[HANDOFF] (proj)")).toBe(true);
     expect(out.length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("handoff injection framing", () => {
+  const text = "[HANDOFF] resume step 3";
+
+  test("fresh handoff injects full body with stored_at and age", () => {
+    const now = Date.parse("2026-07-06T00:00:00Z");
+    const out = buildHandoffInjection({
+      text,
+      storedAtMs: now - 2 * 86_400_000,
+      nowMs: now,
+    });
+    expect(out).toContain(text);
+    expect(out).toContain('age_days="2"');
+    expect(out).toContain("stored_at=");
+  });
+
+  test("stale handoff becomes a one-line notice", () => {
+    const now = Date.parse("2026-07-06T00:00:00Z");
+    const out = buildHandoffInjection({
+      text,
+      storedAtMs: now - HANDOFF_STALE_MS - 1,
+      nowMs: now,
+    });
+    expect(out).not.toContain(text);
+    expect(out).toContain("was not injected (stale)");
   });
 });

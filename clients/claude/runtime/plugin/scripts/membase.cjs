@@ -330,6 +330,9 @@ function createTokenStore(options) {
   return { path, read, write, clear };
 }
 
+// ../../../packages/capture-core/src/handoff.ts
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
 var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;

@@ -168,3 +168,38 @@ export async function sweepReplacedHandoffs<
   );
   return results.filter((r) => r.status === "fulfilled").length;
 }
+
+/** Handoffs older than this are announced, not injected in full. */
+export const HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * One injection format for every client and both sources (local file /
+ * cloud): a fresh handoff is injected in full with its age so the model can
+ * judge relevance; a stale one becomes a one-line notice — an old baton is
+ * more likely noise than context, but stays reachable on request.
+ */
+export function buildHandoffInjection(args: {
+  text: string;
+  storedAtMs: number;
+  nowMs?: number;
+}): string {
+  const now = args.nowMs ?? Date.now();
+  const ageMs = Math.max(0, now - args.storedAtMs);
+  const ageDays = Math.floor(ageMs / 86_400_000);
+  if (ageMs > HANDOFF_STALE_MS) {
+    return (
+      `A Membase handoff from ${ageDays} day(s) ago exists for this ` +
+      "project but was not injected (stale). If the user wants to continue " +
+      "that work, recall it (search_memory for \"[HANDOFF]\" or the local " +
+      "handoff file)."
+    );
+  }
+  const storedAt = new Date(args.storedAtMs).toISOString();
+  return (
+    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n` +
+    `${args.text}\n` +
+    "</membase-handoff>\n" +
+    "Use this only if the user is continuing the work it describes; it may " +
+    "already be finished."
+  );
+}

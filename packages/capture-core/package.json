@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --pretty false",
-    "test": "bun test"
+    "test": "bun test",
+    "build": "tsc -p tsconfig.json --noEmit false --outDir dist --rootDir src --declaration false --sourceMap false --rewriteRelativeImportExtensions --pretty false"
   },
   "devDependencies": {
     "@types/bun": "^1.2.14",

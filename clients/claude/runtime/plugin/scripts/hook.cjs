@@ -351,6 +351,20 @@ function pickLatestHandoff(bundles) {
     return bTime > latestTime ? b : latest;
   });
 }
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+function buildHandoffInjection(args) {
+  const now = args.nowMs ?? Date.now();
+  const ageMs = Math.max(0, now - args.storedAtMs);
+  const ageDays = Math.floor(ageMs / 864e5);
+  if (ageMs > HANDOFF_STALE_MS) {
+    return `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]" or the local handoff file).`;
+  }
+  const storedAt = new Date(args.storedAtMs).toISOString();
+  return `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">
+${args.text}
+</membase-handoff>
+Use this only if the user is continuing the work it describes; it may already be finished.`;
+}
 
 // ../../../packages/capture-core/src/index.ts
 var CASUAL_PATTERNS = [
@@ -966,6 +980,38 @@ function pendingSpoolPath() {
   return (0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl");
 }
 
+// src/handoff/file.ts
+var import_node_fs5 = require("node:fs");
+var import_node_os2 = require("node:os");
+var import_node_path6 = require("node:path");
+function handoffFilePath(projectSlug) {
+  const dir = (0, import_node_path6.join)(ensureDataDir(), "handoff");
+  return (0, import_node_path6.join)(dir, `${projectSlug || "unscoped"}.md`);
+}
+function readAt(path) {
+  try {
+    const text = (0, import_node_fs5.readFileSync)(path, "utf-8").trim();
+    if (!text) return null;
+    return { text, storedAtMs: (0, import_node_fs5.statSync)(path).mtimeMs };
+  } catch {
+    return null;
+  }
+}
+function readLocalHandoff(args) {
+  if (args.clientSource === "codex") {
+    const candidates = process.env.MEMBASE_HANDOFF_FILE ? [process.env.MEMBASE_HANDOFF_FILE] : [
+      (0, import_node_path6.join)(args.cwd ?? process.cwd(), ".codex", "membase-handoff.md"),
+      (0, import_node_path6.join)((0, import_node_os2.homedir)(), ".codex", "membase-handoff.md")
+    ];
+    for (const candidate of candidates) {
+      const found = readAt(candidate);
+      if (found) return found;
+    }
+    return null;
+  }
+  return readAt(handoffFilePath(args.projectSlug));
+}
+
 // src/profile/index.ts
 function asProfileValue(value) {
   return typeof value === "string" && value.trim() ? value : null;
@@ -1182,6 +1228,11 @@ async function handleSessionStart(input) {
           `Membase spool has ${pending} pending local capture(s) at ${pendingSpoolPath()}. Rename \`pending.jsonl\` to \`flush-<timestamp>.jsonl\` first (atomic \u2014 claims the batch; new captures keep going to a fresh pending.jsonl and a second flusher finds nothing). Upload each record's content via add_memory (keep its project). Records that look like secrets: do NOT upload, do NOT delete \u2014 report them to the user. Delete the renamed file only after all non-secret records are stored.`
         );
       }
+      const localHandoff = resolveLocalHandoffInjection(
+        input,
+        resolveProjectSlug(input.cwd, config)
+      );
+      if (localHandoff) lines.push(localHandoff);
       outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
     return;
@@ -1204,7 +1255,7 @@ async function handleSessionStart(input) {
     projectSlug,
     profile
   });
-  const handoff = await prefetchHandoff(client, projectSlug);
+  const handoff = MEMORY_SOURCE === "cursor" ? "" : resolveLocalHandoffInjection(input, projectSlug) || await prefetchHandoff(client, projectSlug);
   const combined = [context, handoff].filter(Boolean).join("\n\n");
   if (combined) {
     outputAdditionalContext(combined, "SessionStart");
@@ -1221,10 +1272,26 @@ async function prefetchHandoff(client, projectSlug) {
   ).catch(() => void 0);
   const latest = bundles ? pickLatestHandoff(bundles) : void 0;
   if (!latest) return "";
-  const text = latest.episode.summary ?? latest.episode.name;
-  return `<membase-handoff>
-${text}
-</membase-handoff>`;
+  const text = latest.episode.summary ?? latest.episode.name ?? "";
+  const storedRaw = latest.episode.valid_at ?? latest.episode.created_at;
+  const storedAtMs = storedRaw ? Date.parse(storedRaw) : Number.NaN;
+  return buildHandoffInjection({
+    text,
+    storedAtMs: Number.isNaN(storedAtMs) ? Date.now() : storedAtMs
+  });
+}
+function resolveLocalHandoffInjection(input, projectSlug) {
+  if (MEMORY_SOURCE === "cursor") return "";
+  const local = readLocalHandoff({
+    clientSource: MEMORY_SOURCE,
+    cwd: input.cwd,
+    projectSlug
+  });
+  if (!local) return "";
+  return buildHandoffInjection({
+    text: local.text,
+    storedAtMs: local.storedAtMs
+  });
 }
 async function handleUserPromptSubmit(input) {
   const config = loadConfig();

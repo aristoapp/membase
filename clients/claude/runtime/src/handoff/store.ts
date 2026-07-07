@@ -5,6 +5,7 @@ import {
   sweepReplacedHandoffs,
 } from "@membase/capture-core";
 import type { MembaseClient } from "../api/client.js";
+import { writeHandoffFile } from "./file.js";
 
 const REPLACE_SEARCH_WINDOW = 20;
 
@@ -41,6 +42,12 @@ export async function replaceHandoff(
     metadata: args.metadata,
     project,
   });
+  try {
+    // Same-client continuation is file-first (no quota, no network).
+    writeHandoffFile(args.summary, project);
+  } catch {
+    // best-effort — cloud copy still covers recall
+  }
   const replaced = await sweepReplacedHandoffs(
     previous,
     (uuid) => client.deleteEpisode(uuid),
