@@ -81,12 +81,14 @@ def format_bundle(
     top_score: float | None = None,
     *,
     include_uuid: bool = False,
+    full: bool = False,
 ) -> str:
+    """full=True skips the list-view name/summary clamps — for single-item
+    renders (handoff recall) that must round-trip the stored text intact."""
     ep = _episode(bundle)
-    name = _truncate(
-        _text(ep.get("name") or ep.get("summary") or ep.get("content")) or "(untitled)",
-        MAX_MEMORY_TITLE_CHARS,
-    )
+    name = _text(ep.get("name") or ep.get("summary") or ep.get("content")) or "(untitled)"
+    if not full:
+        name = _truncate(name, MAX_MEMORY_TITLE_CHARS)
     event_date = format_date(ep.get("valid_at"))
     captured_date = format_date(ep.get("created_at"))
     raw_score = safe_score(bundle.get("relevance_score"))
@@ -108,7 +110,7 @@ def format_bundle(
     lines = [f"{index + 1}. {relevance_tag}{date_tag}{name}"]
     summary = _text(ep.get("summary"))
     if summary and summary != _text(ep.get("name")):
-        lines.append(f"   {_truncate(summary, MAX_MEMORY_SUMMARY_CHARS)}")
+        lines.append(f"   {summary if full else _truncate(summary, MAX_MEMORY_SUMMARY_CHARS)}")
 
     edges = bundle.get("edges")
     facts = []

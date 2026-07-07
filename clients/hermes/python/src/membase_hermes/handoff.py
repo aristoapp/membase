@@ -7,8 +7,9 @@ Every client agrees on one literal tag, one display-summary rule, and one
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from typing import Any, Callable
+
+from .format import _episode, _parse_datetime
 
 # A literal string prefix (not a server-side field) so any client's plain
 # search call can find a handoff by tag alone. The backend derives the episode
@@ -55,15 +56,6 @@ def is_handoff_memory(text: str) -> bool:
     return text.lstrip().startswith(HANDOFF_TAG)
 
 
-def _episode(bundle: Any) -> dict[str, Any]:
-    if isinstance(bundle, dict):
-        episode = bundle.get("episode")
-        if isinstance(episode, dict):
-            return episode
-        return bundle
-    return {}
-
-
 def _episode_time(bundle: dict[str, Any]) -> float | None:
     """Event/capture time, or None when missing/unparseable ("unknown", not
     "oldest" — an epoch-0 default would let an older timestamped handoff beat
@@ -74,10 +66,8 @@ def _episode_time(bundle: dict[str, Any]) -> float | None:
         raw = episode.get("created_at")
     if not isinstance(raw, str) or not raw:
         return None
-    try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
-    except ValueError:
-        return None
+    parsed = _parse_datetime(raw)
+    return parsed.timestamp() if parsed else None
 
 
 def pick_latest_handoff(bundles: list[dict[str, Any]]) -> dict[str, Any] | None:

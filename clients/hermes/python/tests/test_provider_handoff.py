@@ -6,8 +6,22 @@ from __future__ import annotations
 
 import unittest
 from typing import Any
+from unittest import mock
 
 from membase_hermes.provider import TOOL_MEMBASE_HANDOFF, MembaseMemoryProvider
+
+
+class HandoffTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        # _success_text consults the update-check state (a live PyPI fetch plus
+        # a $HOME state file when unprimed); neutralize it so assertions are
+        # hermetic and order-independent.
+        patcher = mock.patch(
+            "membase_hermes.provider.consume_update_notice",
+            return_value=None,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
 
 def bundle(uuid: str, name: str, **episode: Any) -> dict[str, Any]:
@@ -62,7 +76,7 @@ def make_provider(client: HandoffClient) -> MembaseMemoryProvider:
     return provider
 
 
-class HandoffStoreTests(unittest.TestCase):
+class HandoffStoreTests(HandoffTestCase):
     def test_store_searches_before_ingest_and_deletes_only_name_tagged(self) -> None:
         client = HandoffClient()
         # Summary-only tag lookalike must NOT be deleted (sweep is name-only).
@@ -96,6 +110,34 @@ class HandoffStoreTests(unittest.TestCase):
         result = provider.handle_tool_call(TOOL_MEMBASE_HANDOFF, {"mode": "store"})
 
         self.assertEqual(result, "Store failed: summary is required for mode='store'.")
+        self.assertEqual(client.calls, [])
+
+    def test_store_rejects_non_string_summary(self) -> None:
+        # A repr blob must never be stored — the sweep would delete the
+        # previous real handoff and leave garbage in its slot.
+        client = HandoffClient()
+        provider = make_provider(client)
+
+        result = provider.handle_tool_call(
+            TOOL_MEMBASE_HANDOFF,
+            {"mode": "store", "summary": {"done": "x", "next": "y"}},
+        )
+
+        self.assertEqual(result, "Store failed: summary must be a string.")
+        self.assertEqual(client.calls, [])
+
+    def test_unknown_mode_is_rejected_not_recalled(self) -> None:
+        # The Hermes host does not enforce the schema enum; a store-intent
+        # call with mode="Store" must error, not silently run recall.
+        client = HandoffClient()
+        provider = make_provider(client)
+
+        result = provider.handle_tool_call(
+            TOOL_MEMBASE_HANDOFF,
+            {"mode": "Store", "summary": "state"},
+        )
+
+        self.assertEqual(result, "mode must be 'store' or 'recall'.")
         self.assertEqual(client.calls, [])
 
     def test_unscoped_store_does_not_delete_project_scoped_handoffs(self) -> None:
@@ -148,7 +190,7 @@ class HandoffStoreTests(unittest.TestCase):
         self.assertEqual(len(client.ingested), 1)
 
 
-class HandoffRecallTests(unittest.TestCase):
+class HandoffRecallTests(HandoffTestCase):
     def test_recall_picks_latest_by_time_over_relevance_order(self) -> None:
         client = HandoffClient(
             bundles=[
@@ -198,6 +240,18 @@ class HandoffRecallTests(unittest.TestCase):
         self.assertIn("[HANDOFF] global state", result)
         self.assertEqual(client.search_calls[0]["project"], "p")
         self.assertIsNone(client.search_calls[1]["project"])
+
+    def test_recall_renders_long_handoff_untruncated(self) -> None:
+        # Stores allow ~473 chars; the list-view 240-char name clamp must not
+        # cut the tail of the single recalled handoff (OpenClaw parity).
+        long_name = "[HANDOFF] " + ("x" * 300) + " NEXT-STEP-MARKER"
+        client = HandoffClient(bundles=[bundle("u-long", long_name)])
+        provider = make_provider(client)
+
+        result = provider.handle_tool_call(TOOL_MEMBASE_HANDOFF, {"mode": "recall"})
+
+        self.assertIn("NEXT-STEP-MARKER", result)
+        self.assertNotIn("[truncated]", result)
 
     def test_recall_without_any_handoff(self) -> None:
         client = HandoffClient(bundles=[bundle("u-noise", "we chose postgres")])

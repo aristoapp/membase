@@ -110,6 +110,14 @@ def _string_arg(value: Any) -> str | None:
     return text or None
 
 
+def _project_arg(args: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Normalized (project, error) pair shared by every project-accepting tool."""
+    project = _string_arg(args.get("project"))
+    if project and len(project) > PROJECT_MAX_LENGTH:
+        return None, f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+    return project, None
+
+
 def _bool_arg(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -864,9 +872,18 @@ class MembaseMemoryProvider(HermesMemoryProvider):
 
     def _handle_handoff(self, client: MembaseClient, args: dict[str, Any]) -> str:
         """membase_handoff, mirroring clients/openclaw/runtime/src/tools/handoff.ts."""
-        project = _string_arg(args.get("project"))
-        if project and len(project) > PROJECT_MAX_LENGTH:
-            return f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+        project, project_error = _project_arg(args)
+        if project_error:
+            return project_error
+
+        # The Hermes host passes tool args through without JSON-schema
+        # validation (OpenClaw's gateway validates before execute), so the
+        # mode enum and summary type must be enforced here — otherwise a
+        # store-intent call silently degrades to recall or, worse, stores a
+        # repr blob and sweeps the previous real handoff.
+        mode = _string_arg(args.get("mode"))
+        if mode not in ("store", "recall"):
+            return "mode must be 'store' or 'recall'."
 
         # The recall query is generic ("session handoff summary"), so ordinary
         # memories can outrank the real handoff; fetch a wider window and
@@ -878,8 +895,11 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 project=scope,
             )
 
-        if str(args.get("mode", "")).strip() == "store":
-            summary = str(args.get("summary") or "").strip()
+        if mode == "store":
+            raw_summary = args.get("summary")
+            if raw_summary is not None and not isinstance(raw_summary, str):
+                return "Store failed: summary must be a string."
+            summary = (raw_summary or "").strip()
             if not summary:
                 return "Store failed: summary is required for mode='store'."
             # Cloud policy: exactly ONE handoff per project — capture old
@@ -926,7 +946,10 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             if from_other_scope
             else ""
         )
-        return self._success_text(prefix + format_bundle(latest, 0))
+        # full=True: a single handoff must round-trip intact (stores allow up
+        # to ~473 chars; the list-view clamps would cut the "what's next" tail
+        # that OpenClaw's untruncated formatBundle keeps).
+        return self._success_text(prefix + format_bundle(latest, 0, full=True))
 
     def handle_tool_call(self, tool_name: str, args: dict[str, Any], **kwargs: Any) -> str:
         auth_error = self._auth_guard()
@@ -936,9 +959,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         client = self._require_client()
         try:
             if tool_name == TOOL_MEMBASE_SEARCH:
-                project = _string_arg(args.get("project"))
-                if project and len(project) > PROJECT_MAX_LENGTH:
-                    return f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+                project, project_error = _project_arg(args)
+                if project_error:
+                    return project_error
                 bundles = client.search_bundles(
                     query=str(args.get("query", "")),
                     limit=_limit_arg(
@@ -964,9 +987,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 display_summary = _string_arg(args.get("display_summary"))
                 if not display_summary:
                     return "display_summary is required"
-                project = _string_arg(args.get("project"))
-                if project and len(project) > PROJECT_MAX_LENGTH:
-                    return f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+                project, project_error = _project_arg(args)
+                if project_error:
+                    return project_error
                 result = client.ingest(
                     content,
                     display_summary=display_summary,
