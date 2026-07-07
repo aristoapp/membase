@@ -982,9 +982,11 @@
 
         <h3 style="margin-top: 20px;">클라이언트마다 완전히 다른 모양인 이유</h3>
         <p>
-          같은 기능인데도 클라이언트 네 곳의 구현이 서로 다릅니다 —
+          같은 기능인데도 클라이언트마다 구현이 서로 다릅니다 —
           8.3절에서 설명한 "훅 등록 모델 차이"가 그대로 handoff에도
-          적용됩니다. (Hermes는 미구현.)
+          적용됩니다. (Hermes는 OpenClaw와 동일한 <code>membase_handoff</code>
+          도구를 Python provider에 등록 — 세션 시작 주입이 없어 조회도
+          도구 호출로만 이뤄집니다.)
         </p>
         <table>
           <tr><th>클라이언트</th><th>저장</th><th>조회</th><th>왜 이 모양인가</th></tr>
@@ -1029,6 +1031,16 @@
             <td>Rules 같은 자동 파일 로딩이 없어 최소 훅이 필요하지만,
               파일만 읽으므로 인증 불필요 — 같은 이유로 이중 로그인
               회피</td>
+          </tr>
+          <tr>
+            <td>Hermes</td>
+            <td><code>membase_handoff(mode="store")</code> — OpenClaw와
+              동일한 도구를 Python provider에 등록</td>
+            <td><code>membase_handoff(mode="recall")</code> — 세션 시작
+              주입이 없어 명시적 도구 재호출만</td>
+            <td>Hermes provider는 훅이 아니라 도구 스키마 등록 모델이고
+              로컬 파일 주입 경로가 없어, OpenClaw와 같은 이유로 도구가
+              맞는 선택</td>
           </tr>
         </table>
 
@@ -1184,15 +1196,19 @@
           계속 동작</strong>하고, 끊기는 건 크로스 클라이언트 경로뿐입니다
           — 파일 기반 설계의 부수 이득입니다. 조회 쪽도 Cursor(Rules
           로딩)·Codex(훅이 파일만 읽음)는 검색을 아예 안 쓰므로 검색
-          quota의 영향이 없습니다. OpenClaw는 store/recall 모두 도구
-          에러가 AI에게 그대로 반환됩니다.
+          quota의 영향이 없습니다. OpenClaw·Hermes는 store/recall 모두
+          도구 에러가 AI에게 그대로 반환됩니다.
         </p>
         <p>
-          아직 안 만든 것: handoff가 일반 메모리로 계속 누적되는데,
-          오래된 handoff를 정리하는 보존 정책(클라이언트별 최대 N개
-          같은)은 미구현입니다. MCP 도구 레벨에는 delete가 없어서(REST
-          <code>DELETE /memory/episodes/{uuid}</code>만 서버에 존재)
-          클라이언트가 지울 수단부터 필요합니다.
+          보존 정책: 클라우드는 프로젝트당 handoff를 정확히
+          <strong>1개</strong> 유지합니다(replace-on-store) — 저장 경로가
+          옛 <code>[HANDOFF]</code> 에피소드를 먼저 검색해 저장 성공 후
+          REST <code>DELETE /memory/episodes/{uuid}</code>로 정리합니다
+          (이름이 태그된 에피소드만, 배치 상한 10, 개별 실패는
+          non-fatal; Claude Code·OpenClaw·Hermes 구현). 원격 MCP로만 붙는
+          Cursor·Codex는 delete 수단이 없어 일시적으로 누적되지만, 같은
+          프로젝트에 delete 가능한 클라이언트가 다음 저장을 하면 남은
+          것들이 함께 정리되어 1개로 수렴합니다.
         </p>
       </section>
 
@@ -1595,17 +1611,19 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           </tr>
           <tr>
             <td>OpenClaw<br><span style="font-size:12px">(게이트웨이 플러그인 — 로컬 실행)</span></td>
-            <td>8개: <code>membase_store</code> · <code>membase_search</code> ·
+            <td>9개: <code>membase_store</code> · <code>membase_search</code> ·
               <code>membase_forget</code> · <code>membase_profile</code> ·
               <code>membase_add_wiki</code> · <code>membase_search_wiki</code> ·
-              <code>membase_update_wiki</code> · <code>membase_delete_wiki</code></td>
+              <code>membase_update_wiki</code> · <code>membase_delete_wiki</code> ·
+              <code>membase_handoff</code></td>
             <td><code>openclaw membase login</code> 등 CLI 서브커맨드</td>
           </tr>
           <tr>
             <td>Hermes<br><span style="font-size:12px">(Python provider — 로컬 실행)</span></td>
-            <td>8개 — OpenClaw와 동일한 이름 세트
+            <td>9개 — OpenClaw와 동일한 이름 세트
               (<code>membase_search</code>/<code>store</code>/
-              <code>forget</code>/<code>profile</code> + wiki 4종)</td>
+              <code>forget</code>/<code>profile</code> + wiki 4종 +
+              <code>membase_handoff</code>)</td>
             <td><code>hermes membase login</code> · <code>logout</code> ·
               <code>status</code> · <code>resync</code> +
               <code>hermes-membase-install</code></td>

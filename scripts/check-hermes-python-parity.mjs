@@ -19,6 +19,7 @@ const requiredFiles = [
   `${PYTHON_SRC_DIR}/cli.py`,
   `${PYTHON_SRC_DIR}/installer.py`,
   `${PYTHON_SRC_DIR}/provider.py`,
+  `${PYTHON_SRC_DIR}/handoff.py`,
   `${PYTHON_SRC_DIR}/plugin/__init__.py`,
   `${PYTHON_SRC_DIR}/plugin/cli.py`,
   PACKAGE_MANIFEST_PATH
@@ -115,7 +116,8 @@ function assertRuntimePresent() {
       "class MembaseMemoryProvider",
       '"membase_search"',
       '"membase_store"',
-      '"membase_forget"'
+      '"membase_forget"',
+      '"membase_handoff"'
     ]);
   }
 

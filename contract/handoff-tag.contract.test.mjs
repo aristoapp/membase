@@ -37,7 +37,7 @@ function treeContainsLiteral(root, literal) {
   return false;
 }
 
-test("C-HDF-1 the literal [HANDOFF] tag appears identically across all four clients", () => {
+test("C-HDF-1 the literal [HANDOFF] tag appears identically across all five clients", () => {
   // Text-level check across the surfaces the spec names. The exact literal —
   // brackets, capitals, no space — must match everywhere, since recall
   // identifies a handoff "by that prefix alone".
@@ -46,6 +46,7 @@ test("C-HDF-1 the literal [HANDOFF] tag appears identically across all four clie
     ["openclaw runtime", join(REPO_ROOT, "clients/openclaw/runtime")],
     ["cursor skill", join(REPO_ROOT, "clients/cursor/skills/handoff")],
     ["codex prompt", join(REPO_ROOT, "clients/codex/runtime/prompts")],
+    ["hermes provider", join(REPO_ROOT, "clients/hermes/python/src/membase_hermes")],
   ];
   for (const [label, root] of surfaces) {
     assert.ok(

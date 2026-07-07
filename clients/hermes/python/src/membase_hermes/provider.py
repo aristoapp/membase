@@ -21,7 +21,15 @@ from .config import (
     token_file_path_for_home,
     write_token_file,
 )
-from .format import format_bundles, format_profile, format_wiki_document, format_wiki_documents
+from .format import format_bundle, format_bundles, format_profile, format_wiki_document, format_wiki_documents
+from .handoff import (
+    HANDOFF_RECALL_LIMIT,
+    build_handoff_display_summary,
+    build_handoff_memory,
+    handoff_recall_query,
+    pick_latest_handoff,
+    sweep_replaced_handoffs,
+)
 from .mirror import MirrorAction, MirrorStore, MirrorWorker
 from .sanitize import (
     is_casual_chat,
@@ -53,6 +61,7 @@ TOOL_MEMBASE_SEARCH_WIKI = "membase_search_wiki"
 TOOL_MEMBASE_ADD_WIKI = "membase_add_wiki"
 TOOL_MEMBASE_UPDATE_WIKI = "membase_update_wiki"
 TOOL_MEMBASE_DELETE_WIKI = "membase_delete_wiki"
+TOOL_MEMBASE_HANDOFF = "membase_handoff"
 
 MEMORY_SEARCH_DEFAULT_LIMIT = 20
 MEMORY_SEARCH_MAX_LIMIT = 30
@@ -99,6 +108,14 @@ def _string_arg(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _project_arg(args: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Normalized (project, error) pair shared by every project-accepting tool."""
+    project = _string_arg(args.get("project"))
+    if project and len(project) > PROJECT_MAX_LENGTH:
+        return None, f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+    return project, None
 
 
 def _bool_arg(value: Any) -> bool:
@@ -152,6 +169,7 @@ def _tool_failure_prefix(tool_name: str) -> str:
         TOOL_MEMBASE_ADD_WIKI: "Add wiki failed",
         TOOL_MEMBASE_UPDATE_WIKI: "Update wiki failed",
         TOOL_MEMBASE_DELETE_WIKI: "Delete wiki failed",
+        TOOL_MEMBASE_HANDOFF: "Handoff failed",
     }.get(tool_name, "Tool call failed")
 
 
@@ -748,6 +766,43 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                     },
                 },
             },
+            {
+                "name": TOOL_MEMBASE_HANDOFF,
+                "description": (
+                    "Store or recall a session-state summary tagged as a handoff (what was done, "
+                    "decisions and why, current state, what's next). Call with mode='store' when the "
+                    "user asks to hand off, wrap up, or continue elsewhere — write a concise summary "
+                    "in the user's language and show it to the user directly in addition to storing it. "
+                    "Call with mode='recall' (or when the user asks 'what was I doing', 'pick up where "
+                    "I left off') to fetch the most recent handoff for this project."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": ["store", "recall"],
+                            "description": "'store' to save a new handoff, 'recall' to fetch the latest one.",
+                        },
+                        "summary": {
+                            "type": "string",
+                            "description": (
+                                "Required for mode='store'. Concise handoff summary: what was done, key "
+                                "decisions and why, current state, what's next."
+                            ),
+                        },
+                        "project": {
+                            "type": "string",
+                            "maxLength": PROJECT_MAX_LENGTH,
+                            "description": (
+                                "Project/category slug to scope this handoff. Set only when explicitly "
+                                "known — do not guess."
+                            ),
+                        },
+                    },
+                    "required": ["mode"],
+                },
+            },
         ]
 
     def _require_client(self) -> MembaseClient:
@@ -815,6 +870,87 @@ class MembaseMemoryProvider(HermesMemoryProvider):
 
         return format_profile(profile, bundles)
 
+    def _handle_handoff(self, client: MembaseClient, args: dict[str, Any]) -> str:
+        """membase_handoff, mirroring clients/openclaw/runtime/src/tools/handoff.ts."""
+        project, project_error = _project_arg(args)
+        if project_error:
+            return project_error
+
+        # The Hermes host passes tool args through without JSON-schema
+        # validation (OpenClaw's gateway validates before execute), so the
+        # mode enum and summary type must be enforced here — otherwise a
+        # store-intent call silently degrades to recall or, worse, stores a
+        # repr blob and sweeps the previous real handoff.
+        mode = _string_arg(args.get("mode"))
+        if mode not in ("store", "recall"):
+            return "mode must be 'store' or 'recall'."
+
+        # The recall query is generic ("session handoff summary"), so ordinary
+        # memories can outrank the real handoff; fetch a wider window and
+        # filter/sort client-side rather than trusting top relevance hits.
+        def recall_search(scope: str | None) -> list[dict[str, Any]]:
+            return client.search_bundles(
+                query=handoff_recall_query(),
+                limit=HANDOFF_RECALL_LIMIT,
+                project=scope,
+            )
+
+        if mode == "store":
+            raw_summary = args.get("summary")
+            if raw_summary is not None and not isinstance(raw_summary, str):
+                return "Store failed: summary must be a string."
+            summary = (raw_summary or "").strip()
+            if not summary:
+                return "Store failed: summary is required for mode='store'."
+            # Cloud policy: exactly ONE handoff per project — capture old
+            # handoffs BEFORE ingesting so the fresh one can't be in the
+            # deletion set; delete after the store succeeds.
+            try:
+                previous = recall_search(project)
+            except Exception as error:
+                self._logger.debug("handoff pre-store search failed: %s", error)
+                previous = []
+            result = client.ingest(
+                build_handoff_memory(summary, project),
+                # The display_summary becomes the episode name, which is the
+                # field recall's tag check reads — keep [HANDOFF] at its start.
+                display_summary=build_handoff_display_summary(summary, project),
+                project=project,
+            )
+            replaced = sweep_replaced_handoffs(
+                previous,
+                client.delete_memory,
+                project_scoped=bool(project),
+            )
+            status = result.get("status") if isinstance(result, dict) else "unknown"
+            suffix = f"; replaced {replaced} older handoff(s)." if replaced else "."
+            # Echo the stored summary so the user sees the handoff directly,
+            # as the tool description promises.
+            return self._success_text(f"Handoff stored in Membase ({status}){suffix}\n\n{summary}")
+
+        latest = pick_latest_handoff(recall_search(project))
+        # The `project` arg is model-supplied per call and may not match what
+        # `store` used. Fall back to an unscoped search so a scope mismatch
+        # doesn't silently hide an existing handoff.
+        from_other_scope = False
+        if latest is None and project:
+            latest = pick_latest_handoff(recall_search(None))
+            from_other_scope = latest is not None
+        if latest is None:
+            return self._success_text("No stored handoff found.")
+        # The fallback only fires when the requested project had no handoff,
+        # so anything it returns is from a different (or unscoped) project —
+        # flag it instead of passing another project's state off as this one's.
+        prefix = (
+            f'No handoff for project "{project}"; showing the most recent handoff from another scope:\n\n'
+            if from_other_scope
+            else ""
+        )
+        # full=True: a single handoff must round-trip intact (stores allow up
+        # to ~473 chars; the list-view clamps would cut the "what's next" tail
+        # that OpenClaw's untruncated formatBundle keeps).
+        return self._success_text(prefix + format_bundle(latest, 0, full=True))
+
     def handle_tool_call(self, tool_name: str, args: dict[str, Any], **kwargs: Any) -> str:
         auth_error = self._auth_guard()
         if auth_error:
@@ -823,9 +959,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         client = self._require_client()
         try:
             if tool_name == TOOL_MEMBASE_SEARCH:
-                project = _string_arg(args.get("project"))
-                if project and len(project) > PROJECT_MAX_LENGTH:
-                    return f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+                project, project_error = _project_arg(args)
+                if project_error:
+                    return project_error
                 bundles = client.search_bundles(
                     query=str(args.get("query", "")),
                     limit=_limit_arg(
@@ -851,9 +987,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 display_summary = _string_arg(args.get("display_summary"))
                 if not display_summary:
                     return "display_summary is required"
-                project = _string_arg(args.get("project"))
-                if project and len(project) > PROJECT_MAX_LENGTH:
-                    return f"project is too long (max {PROJECT_MAX_LENGTH} chars)"
+                project, project_error = _project_arg(args)
+                if project_error:
+                    return project_error
                 result = client.ingest(
                     content,
                     display_summary=display_summary,
@@ -952,6 +1088,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                     "Found these matching wiki documents. Ask the user which one to delete, "
                     "then call again with confirm=true and doc_id.\n\n" + "\n\n".join(lines),
                 )
+
+            if tool_name == TOOL_MEMBASE_HANDOFF:
+                return self._handle_handoff(client, args)
 
             return f"unknown tool: {tool_name}"
         except MembaseApiError as error:
