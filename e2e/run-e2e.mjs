@@ -1005,19 +1005,25 @@ async function evalNegative(entry, url, roles) {
     badSessionAccepted ? `HTTP ${badSession.status}` : errText(badSession) || `HTTP ${badSession.status}`
   ));
   if (badSessionAccepted && roles?.search) {
+    // Same async-indexing wait as every other recall check in this suite
+    // (e.g. evalLiveDeep's recall@1 observed ~26-32s on staging) — the
+    // previous [0, 3000, 8000] backoff (~11s max) was too short and made
+    // this flaky-fail as "write lost", not a real regression.
     let landedUnderThisToken = false;
-    for (const delay of [0, 3000, 8000]) {
-      if (delay) await new Promise((res) => setTimeout(res, delay));
+    const t0 = now();
+    while (true) {
       const s = await callTool(url, {
         token: TOKEN, sessionId: entry.sessionId, id: 64,
         name: roles.search.name, args: argsFor(roles.search, { primary: sessionSentinel })
       });
       if ((s.raw ?? "").includes(sessionSentinel)) { landedUnderThisToken = true; break; }
+      if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+      await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
     }
     entry.checks.push(check(
-      "negative: forged-session write lands under the token's own account (no identity smuggling)",
+      `negative: forged-session write lands under the token's own account within ${QUALITY_MAX_RECALL_MS / 1000}s (no identity smuggling)`,
       landedUnderThisToken,
-      landedUnderThisToken ? "found under this token's own search" : "not found — write may be lost or misattributed"
+      landedUnderThisToken ? "found under this token's own search" : "not found within SLO — write may be lost or misattributed"
     ));
   }
 
