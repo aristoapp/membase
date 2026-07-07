@@ -6887,7 +6887,7 @@ var require_dist = __commonJS({
 });
 
 // src/mcp/server.ts
-var import_node_fs7 = require("node:fs");
+var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
 
@@ -31225,19 +31225,19 @@ function createCaptureSpool(options) {
 // ../../../packages/capture-core/src/token-store.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-function writeJsonAtomic(path, value, mode = 384) {
+function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
+  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
   (0, import_node_fs2.renameSync)(tmp, path);
   try {
     (0, import_node_fs2.chmodSync)(path, mode);
   } catch {
   }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
 }
 function createTokenStore(options) {
   const filename = options.filename ?? "credentials.json";
@@ -31628,39 +31628,74 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
   });
 }
 
+// src/project/index.ts
+var import_node_fs3 = require("node:fs");
+var import_node_path3 = require("node:path");
+function normalizeProjectSlug(raw) {
+  return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+}
+function findGitRoot(cwd) {
+  let current = cwd;
+  while (current && current !== (0, import_node_path3.parse)(current).root) {
+    if ((0, import_node_fs3.existsSync)((0, import_node_path3.join)(current, ".git"))) return current;
+    current = (0, import_node_path3.dirname)(current);
+  }
+  return null;
+}
+function remoteSlug(gitRoot) {
+  try {
+    const gitConfig = (0, import_node_fs3.readFileSync)((0, import_node_path3.join)(gitRoot, ".git", "config"), "utf-8");
+    const match = gitConfig.match(/url\s*=\s*(.+)\n/);
+    if (!match?.[1]) return null;
+    const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
+    return normalizeProjectSlug(value);
+  } catch {
+    return null;
+  }
+}
+function resolveProjectSlug(cwd, config2) {
+  if (config2.projectMode === "off") return void 0;
+  if (config2.projectSlug) return normalizeProjectSlug(config2.projectSlug);
+  if (config2.projectMode === "manual") return void 0;
+  if (!cwd) return void 0;
+  const gitRoot = findGitRoot(cwd);
+  if (gitRoot)
+    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path3.basename)(gitRoot));
+  return normalizeProjectSlug((0, import_node_path3.basename)(cwd));
+}
+
 // src/handoff/file.ts
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
+var import_node_path5 = require("node:path");
 
 // src/config/index.ts
-var import_node_fs3 = require("node:fs");
+var import_node_fs4 = require("node:fs");
 var import_node_os = require("node:os");
-var import_node_path3 = require("node:path");
+var import_node_path4 = require("node:path");
 function getDataDir() {
   const dir = (
     // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
     // point this at their own state dir — or a shared one for a single
     // machine-wide login — without Claude-specific env names.
-    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
+    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path4.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
   );
-  return dir.startsWith("~/") ? (0, import_node_path3.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
+  return dir.startsWith("~/") ? (0, import_node_path4.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
 }
 function ensureDataDir() {
   const dir = getDataDir();
-  (0, import_node_fs3.mkdirSync)(dir, { recursive: true, mode: 448 });
+  (0, import_node_fs4.mkdirSync)(dir, { recursive: true, mode: 448 });
   try {
-    (0, import_node_fs3.chmodSync)(dir, 448);
+    (0, import_node_fs4.chmodSync)(dir, 448);
   } catch {
   }
   return dir;
 }
 function configPath() {
-  return (0, import_node_path3.join)(ensureDataDir(), "config.json");
+  return (0, import_node_path4.join)(ensureDataDir(), "config.json");
 }
 var tokenStore = createTokenStore({ dir: ensureDataDir });
 function readJsonObject(path) {
   try {
-    return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
+    return JSON.parse((0, import_node_fs4.readFileSync)(path, "utf-8"));
   } catch {
     return {};
   }
@@ -31748,17 +31783,16 @@ function clearTokens() {
 
 // src/handoff/file.ts
 function handoffFilePath(projectSlug) {
-  const dir = (0, import_node_path4.join)(ensureDataDir(), "handoff");
-  return (0, import_node_path4.join)(dir, `${projectSlug || "unscoped"}.md`);
+  return (0, import_node_path5.join)(getDataDir(), "handoff", `${projectSlug || "unscoped"}.md`);
 }
 function writeHandoffFile(summary, projectSlug) {
-  const path = handoffFilePath(projectSlug);
-  (0, import_node_fs4.mkdirSync)((0, import_node_path4.join)(ensureDataDir(), "handoff"), { recursive: true, mode: 448 });
-  (0, import_node_fs4.writeFileSync)(path, summary, { encoding: "utf-8", mode: 384 });
+  ensureDataDir();
+  writeTextAtomic(handoffFilePath(projectSlug), summary);
 }
 
 // src/handoff/store.ts
 var REPLACE_SEARCH_WINDOW = 20;
+var FILE_FIRST_CLIENTS = /* @__PURE__ */ new Set(["claude-code"]);
 async function replaceHandoff(client, args) {
   const project = args.project?.trim() || void 0;
   const previous = await client.searchMemory({
@@ -31775,9 +31809,14 @@ async function replaceHandoff(client, args) {
     metadata: args.metadata,
     project
   });
-  try {
-    writeHandoffFile(args.summary, project);
-  } catch {
+  if (FILE_FIRST_CLIENTS.has(MEMORY_SOURCE)) {
+    try {
+      writeHandoffFile(
+        args.summary,
+        project ? normalizeProjectSlug(project) : void 0
+      );
+    } catch {
+    }
   }
   const replaced = await sweepReplacedHandoffs(
     previous,
@@ -32041,44 +32080,8 @@ function profileResourceFields(profile) {
   };
 }
 
-// src/project/index.ts
-var import_node_fs5 = require("node:fs");
-var import_node_path5 = require("node:path");
-function normalizeProjectSlug(raw) {
-  return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-}
-function findGitRoot(cwd) {
-  let current = cwd;
-  while (current && current !== (0, import_node_path5.parse)(current).root) {
-    if ((0, import_node_fs5.existsSync)((0, import_node_path5.join)(current, ".git"))) return current;
-    current = (0, import_node_path5.dirname)(current);
-  }
-  return null;
-}
-function remoteSlug(gitRoot) {
-  try {
-    const gitConfig = (0, import_node_fs5.readFileSync)((0, import_node_path5.join)(gitRoot, ".git", "config"), "utf-8");
-    const match = gitConfig.match(/url\s*=\s*(.+)\n/);
-    if (!match?.[1]) return null;
-    const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
-    return normalizeProjectSlug(value);
-  } catch {
-    return null;
-  }
-}
-function resolveProjectSlug(cwd, config2) {
-  if (config2.projectMode === "off") return void 0;
-  if (config2.projectSlug) return normalizeProjectSlug(config2.projectSlug);
-  if (config2.projectMode === "manual") return void 0;
-  if (!cwd) return void 0;
-  const gitRoot = findGitRoot(cwd);
-  if (gitRoot)
-    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path5.basename)(gitRoot));
-  return normalizeProjectSlug((0, import_node_path5.basename)(cwd));
-}
-
 // src/update-check.ts
-var import_node_fs6 = require("node:fs");
+var import_node_fs5 = require("node:fs");
 var import_promises = require("node:fs/promises");
 var import_node_path6 = require("node:path");
 var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
@@ -32107,7 +32110,7 @@ function isNewerVersion(remote, local) {
 }
 async function loadState() {
   const path = updateCheckStatePath();
-  if (!(0, import_node_fs6.existsSync)(path)) return null;
+  if (!(0, import_node_fs5.existsSync)(path)) return null;
   try {
     const parsed = JSON.parse(
       await (0, import_promises.readFile)(path, "utf-8")
@@ -32272,9 +32275,9 @@ function duplicateMcpConfigs() {
   ];
   const matches = [];
   for (const path of candidates) {
-    if (!(0, import_node_fs7.existsSync)(path)) continue;
+    if (!(0, import_node_fs6.existsSync)(path)) continue;
     try {
-      const raw = (0, import_node_fs7.readFileSync)(path, "utf-8");
+      const raw = (0, import_node_fs6.readFileSync)(path, "utf-8");
       const lower = raw.toLowerCase();
       const hasMembaseRemoteUrl = lower.includes(DEFAULT_MCP_URL);
       const hasLegacyMembaseRemote = lower.includes("membase") && lower.includes("mcp-remote");

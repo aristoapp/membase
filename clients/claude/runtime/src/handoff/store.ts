@@ -5,9 +5,16 @@ import {
   sweepReplacedHandoffs,
 } from "@membase/capture-core";
 import type { MembaseClient } from "../api/client.js";
+import { MEMORY_SOURCE } from "../constants.js";
+import { normalizeProjectSlug } from "../project/index.js";
 import { writeHandoffFile } from "./file.js";
 
 const REPLACE_SEARCH_WINDOW = 20;
+
+// Clients whose SessionStart injection reads the per-project file this write
+// produces. Codex reads its own .codex/membase-handoff.md and Cursor reads a
+// .mdc Rules file, so writing the data-dir file for them is dead/orphaned.
+const FILE_FIRST_CLIENTS = new Set(["claude-code"]);
 
 /**
  * Store a handoff and enforce the cloud policy: exactly ONE handoff per
@@ -42,11 +49,19 @@ export async function replaceHandoff(
     metadata: args.metadata,
     project,
   });
-  try {
-    // Same-client continuation is file-first (no quota, no network).
-    writeHandoffFile(args.summary, project);
-  } catch {
-    // best-effort — cloud copy still covers recall
+  if (FILE_FIRST_CLIENTS.has(MEMORY_SOURCE)) {
+    try {
+      // Same-client continuation is file-first (no quota, no network). Key the
+      // file by the NORMALIZED slug so it matches resolveProjectSlug on the
+      // read side; the raw string could differ in case/separators (or, worse,
+      // contain path separators) and never be read back.
+      writeHandoffFile(
+        args.summary,
+        project ? normalizeProjectSlug(project) : undefined,
+      );
+    } catch {
+      // best-effort — cloud copy still covers recall
+    }
   }
   const replaced = await sweepReplacedHandoffs(
     previous,

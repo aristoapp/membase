@@ -77,8 +77,9 @@ CI/headless, a bearer token via `bearer_token_env_var`).
 ## Session Handoff
 
 File-based session handoff (design: `docs/implementation-overview.html` §7.5).
-The store side is a custom prompt; the recall side is a SessionStart hook that
-only reads a local file, so it needs no auth of its own.
+The store side is a custom prompt; the recall side is the shared SessionStart
+hook bundle. Its local-file injection needs no auth of its own; the cross-client
+cloud fallback runs only when a disk login is present.
 
 1. Install the store-side prompt (exposed as `/handoff` in Codex):
 
