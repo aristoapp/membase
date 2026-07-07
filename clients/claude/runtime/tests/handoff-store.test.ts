@@ -1,6 +1,24 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { replaceHandoff } from "../src/handoff/store.js";
 import type { MembaseClient } from "../src/api/client.js";
+
+// replaceHandoff writes a local handoff file via ensureDataDir(); redirect the
+// data dir to a temp location so the suite never touches the real ~/.claude
+// (which the next real session would then inject as a fresh handoff).
+let tempDir: string;
+const priorDataDir = process.env.MEMBASE_DATA_DIR;
+beforeAll(() => {
+  tempDir = mkdtempSync(join(tmpdir(), "handoff-store-"));
+  process.env.MEMBASE_DATA_DIR = tempDir;
+});
+afterAll(() => {
+  if (priorDataDir === undefined) delete process.env.MEMBASE_DATA_DIR;
+  else process.env.MEMBASE_DATA_DIR = priorDataDir;
+  rmSync(tempDir, { recursive: true, force: true });
+});
 
 function makeClient(overrides: Partial<Record<string, unknown>> = {}) {
   const calls: string[] = [];

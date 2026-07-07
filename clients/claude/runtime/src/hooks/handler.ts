@@ -30,6 +30,12 @@ import {
 } from "../spool/index.js";
 import type { HookInput } from "../types.js";
 import {
+  buildHandoffInjection,
+  buildStaleHandoffNotice,
+  isHandoffFresh,
+} from "@membase/capture-core";
+import { readLocalHandoff } from "../handoff/file.js";
+import {
   HANDOFF_RECALL_LIMIT,
   buildSessionStartContext,
   handoffRecallQuery,
@@ -186,12 +192,21 @@ async function handleSessionStart(input: HookInput): Promise<void> {
   const config = loadConfig();
   const tokens = readTokens();
   if (!tokens) {
+    // No client here (not logged in) — local file only, no cloud fallback.
+    // The handoff baton is continuity, not session-start noise, so it is
+    // injected even when sessionStartContext is "off".
+    const localHandoff = await resolveHandoffInjection(
+      input,
+      resolveProjectSlug(input.cwd, config),
+      undefined,
+    );
+    const lines: string[] = [];
     if (config.sessionStartContext !== "off") {
-      const lines = [
+      lines.push(
         MEMORY_SOURCE === "claude-code"
           ? "Membase is installed but not connected. Run /membase:login to enable memory."
           : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.",
-      ];
+      );
       // HTTP-fallback mode (north-star pillar 1): hooks collect without
       // tokens, so the authenticated in-app AI is the uploader — announce
       // the backlog so it can flush.
@@ -208,8 +223,9 @@ async function handleSessionStart(input: HookInput): Promise<void> {
             "the renamed file only after all non-secret records are stored.",
         );
       }
-      outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
+    if (localHandoff) lines.push(localHandoff);
+    if (lines.length) outputAdditionalContext(lines.join("\n"), "SessionStart");
     return;
   }
   const client = createClient(config.apiUrl, tokens, writeTokens, {
@@ -220,7 +236,13 @@ async function handleSessionStart(input: HookInput): Promise<void> {
     flushSpool(client, 1),
     SESSION_FETCH_TIMEOUT_MS + 200,
   ).catch(() => undefined);
-  if (config.sessionStartContext === "off") return;
+  // The handoff baton is continuity, not session-start noise: inject it even
+  // when sessionStartContext is "off" (which suppresses only profile/context).
+  const handoff = await resolveHandoffInjection(input, projectSlug, client);
+  if (config.sessionStartContext === "off") {
+    if (handoff) outputAdditionalContext(handoff, "SessionStart");
+    return;
+  }
   const profile = await withTimeout(
     client.getProfile(),
     SESSION_FETCH_TIMEOUT_MS,
@@ -232,23 +254,38 @@ async function handleSessionStart(input: HookInput): Promise<void> {
   });
   // Hook stdout must be a SINGLE JSON object — two concatenated
   // hookSpecificOutput objects are unparseable as one document, so the
-  // session context and the handoff prefetch are combined into one output.
-  const handoff = await prefetchHandoff(client, projectSlug);
+  // session context and the handoff injection are combined into one output.
   const combined = [context, handoff].filter(Boolean).join("\n\n");
   if (combined) {
     outputAdditionalContext(combined, "SessionStart");
   }
 }
 
+interface StoredHandoff {
+  text: string;
+  storedAtMs: number;
+}
+
+// Backend timestamps are normally tz-aware ISO, but a naive `2026-07-06T03:00`
+// (no offset) is parsed as LOCAL time by Date.parse, skewing age by the UTC
+// offset. Treat an offset-less datetime string as UTC. Returns null when
+// unparseable so the caller can decide (never fabricate "now").
+function parseStoredAt(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
+  const t = Date.parse(hasZone || !raw.includes("T") ? raw : `${raw}Z`);
+  return Number.isNaN(t) ? null : t;
+}
+
 /**
- * Recall the most recent /membase:handoff summary for this project, if any,
- * so a fresh session (or a different client, once other clients gain this
- * skill) can pick up where the last one left off without a manual search.
+ * Recall the most recent /membase:handoff summary for this project from the
+ * cloud, if any. Returns the text + stored time so the caller can apply the
+ * same freshness policy as the local file.
  */
-async function prefetchHandoff(
+async function fetchCloudHandoff(
   client: MembaseClient,
   projectSlug?: string,
-): Promise<string> {
+): Promise<StoredHandoff | null> {
   // The recall query is generic, so ordinary memories can outrank the real
   // handoff and relevance order is not recency — fetch a window and pick the
   // latest by time client-side (policy: inject exactly the latest one).
@@ -261,12 +298,54 @@ async function prefetchHandoff(
     SESSION_FETCH_TIMEOUT_MS,
   ).catch(() => undefined);
   const latest = bundles ? pickLatestHandoff(bundles) : undefined;
-  if (!latest) return "";
+  if (!latest) return null;
   // summary carries the full tagged display_summary (<=500 chars); name is
   // clipped to ~96 by the backend and can even be untagged when only the
   // summary matched — inject the richer field.
-  const text = latest.episode.summary ?? latest.episode.name;
-  return `<membase-handoff>\n${text}\n</membase-handoff>`;
+  const text = latest.episode.summary ?? latest.episode.name ?? "";
+  if (!text) return null;
+  const storedAtMs =
+    parseStoredAt(latest.episode.valid_at ?? latest.episode.created_at) ??
+    Date.now();
+  return { text, storedAtMs };
+}
+
+/**
+ * The single handoff-injection policy for every non-cursor client and both
+ * sources. Cursor is excluded — its Rules auto-load already injects the
+ * rolling .mdc file, and doubling it here would inject twice.
+ *
+ * Order: a FRESH local file wins (pillar 2: same-client continuation is
+ * local, no quota); otherwise the cloud is consulted (cross-client fallback),
+ * and only if the cloud has nothing does a stale local file degrade to a
+ * one-line notice — a stale local baton never suppresses a fresher cloud one.
+ * `client` is undefined when not logged in (local file only).
+ */
+async function resolveHandoffInjection(
+  input: HookInput,
+  projectSlug?: string,
+  client?: MembaseClient,
+): Promise<string> {
+  if (MEMORY_SOURCE === "cursor") return "";
+  const local = readLocalHandoff({
+    clientSource: MEMORY_SOURCE,
+    cwd: input.cwd,
+    projectSlug,
+  });
+  if (local && isHandoffFresh(local.storedAtMs)) {
+    return buildHandoffInjection(local);
+  }
+  const cloud = client
+    ? await fetchCloudHandoff(client, projectSlug)
+    : null;
+  if (cloud && isHandoffFresh(cloud.storedAtMs)) {
+    return buildHandoffInjection(cloud);
+  }
+  // Nothing fresh anywhere. Announce a stale handoff (prefer the newer of the
+  // two) so the model can recall it on request, without injecting the body.
+  const stale =
+    cloud && (!local || cloud.storedAtMs > local.storedAtMs) ? cloud : local;
+  return stale ? buildStaleHandoffNotice(stale) : "";
 }
 
 async function handleUserPromptSubmit(input: HookInput): Promise<void> {
@@ -380,10 +459,23 @@ async function spoolSessionSummary(
   });
 }
 
+function parseHookInput(raw: string): HookInput {
+  if (!raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object") return parsed as HookInput;
+  } catch {
+    // Invalid/truncated stdin (e.g. a host that stalled mid-payload): fall
+    // back to an empty input so the event — driven by argv[2] — still runs
+    // (handoff injection, spool announcement) instead of aborting the hook.
+  }
+  return {};
+}
+
 async function main(): Promise<void> {
   const explicitEvent = process.argv[2];
   const raw = await readStdin();
-  const input = raw.trim() ? (JSON.parse(raw) as HookInput) : {};
+  const input = parseHookInput(raw);
   input.hook_event_name =
     explicitEvent || (input.hook_event_name as string | undefined);
   const event = input.hook_event_name;
