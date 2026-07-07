@@ -18,6 +18,7 @@ import {
 } from "./config";
 import { flushAllBuffers, registerCaptureHook } from "./hooks/capture";
 import { registerRecallHook } from "./hooks/recall";
+import { flushCaptureSpool } from "./spool";
 import { registerAddWikiTool } from "./tools/add-wiki";
 import { registerDeleteWikiTool } from "./tools/delete-wiki";
 import { registerForgetTool } from "./tools/forget";
@@ -287,6 +288,20 @@ export default {
     }
     if (cfg.autoCapture) {
       registerCaptureHook(api, client, api.logger);
+      // Startup drain (ADR 0005): upload any captures a previous run spooled to
+      // disk on flush failure, so a gateway restart recovers them without
+      // waiting for a manual `membase dream`. Background + best-effort.
+      if (client.isAuthenticated()) {
+        flushCaptureSpool(client)
+          .then(({ flushed }) => {
+            if (flushed > 0) {
+              api.logger.info(
+                `membase: dreamed ${flushed} spooled capture(s) on startup`,
+              );
+            }
+          })
+          .catch(() => undefined);
+      }
     }
 
     registerCli(api, client);

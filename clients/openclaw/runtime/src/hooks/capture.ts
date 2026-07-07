@@ -1,12 +1,11 @@
 import type { MembaseClient } from "../client";
+import { spoolFailedCapture } from "../spool";
 import type { OpenClawPluginApi } from "../types";
 import { extractTextContent, sanitizeCaptureText } from "../utils";
 
 const SILENCE_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_BUFFER_SIZE = 20;
 const MIN_MESSAGES_TO_FLUSH = 2;
-// Upper bound on messages retained across failed flushes (~10 failed batches).
-const MAX_RETAINED_MESSAGES = 200;
 const HEARTBEAT_CONTROL_PATTERNS = [
   /^heartbeat$/i,
   /^heartbeat_ok$/i,
@@ -78,8 +77,14 @@ async function flushBuffer(
     await client.ingest(content);
     messageBuffers.delete(channelKey);
   } catch (err) {
+    // Failure path (ADR 0005): persist to the disk spool instead of retaining
+    // in RAM. RAM retention is lost on a gateway restart; the spool survives
+    // it and `membase dream` (or the next startup drain) uploads it. Clear the
+    // buffer so the batch lives in exactly one place (disk), not two.
+    spoolFailedCapture(content);
+    messageBuffers.delete(channelKey);
     logger.warn(
-      "membase: auto-capture flush failed (messages retained for retry):",
+      "membase: auto-capture flush failed (spooled to disk for dream):",
       err instanceof Error ? err.message : String(err),
     );
   }
@@ -146,13 +151,10 @@ export function registerCaptureHook(
 
       if (buffer.length >= MAX_BUFFER_SIZE) {
         const toFlush = buffer.splice(0, buffer.length - MIN_MESSAGES_TO_FLUSH);
+        // A failed flush now spools to disk (ADR 0005), so nothing is retained
+        // in RAM under the temp key across attempts — no merge/cap needed.
         const tempKey = `${channelKey}__flush`;
-        // Merge with any batch retained by a previous failed flush — a plain
-        // set() would silently drop it. Cap retention so a long API outage
-        // can't grow the buffer unbounded (oldest messages dropped first).
-        const retained = messageBuffers.get(tempKey) ?? [];
-        const merged = [...retained, ...toFlush].slice(-MAX_RETAINED_MESSAGES);
-        messageBuffers.set(tempKey, merged);
+        messageBuffers.set(tempKey, toFlush);
         await flushBuffer(tempKey, client, logger);
         return;
       }

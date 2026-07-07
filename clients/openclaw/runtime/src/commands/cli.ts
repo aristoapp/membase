@@ -11,6 +11,7 @@ import {
   writeTokenFile,
 } from "../config";
 import { formatBundles } from "../format";
+import { flushCaptureSpool, getCaptureSpool } from "../spool";
 import { maybePromptGithubStar } from "../star-prompt";
 import type { OpenClawPluginApi } from "../types";
 
@@ -735,6 +736,39 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
           } catch (error) {
             api.logger.error(
               "Membase connection failed:",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        });
+
+      membase
+        .command("dream")
+        .description(
+          "Upload captures that failed to sync and are waiting on disk",
+        )
+        .action(async () => {
+          if (!client.isAuthenticated()) {
+            api.logger.warn(
+              "Not logged in. Run 'openclaw membase login' first.",
+            );
+            return;
+          }
+          const pending = getCaptureSpool().pendingSpoolCount();
+          if (pending === 0) {
+            api.logger.info("Nothing to dream — the capture spool is empty.");
+            return;
+          }
+          try {
+            const { flushed, remaining } = await flushCaptureSpool(client);
+            api.logger.info(
+              `Dream complete: uploaded ${flushed} capture(s)` +
+                (remaining > 0
+                  ? `, ${remaining} still pending (retry later).`
+                  : "."),
+            );
+          } catch (error) {
+            api.logger.error(
+              "Dream failed:",
               error instanceof Error ? error.message : String(error),
             );
           }
