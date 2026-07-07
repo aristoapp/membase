@@ -6,7 +6,7 @@
 // never user prompts or assistant messages.
 import type { ToolObservation } from "./summary.js";
 import { CLIENT_LABEL } from "../constants.js";
-import { truncateText } from "../sanitize/index.js";
+import { looksSensitive, truncateText } from "../sanitize/index.js";
 
 // Caps keep a busy session's digest bounded and its recall useful.
 const MAX_FILES = 20;
@@ -15,9 +15,6 @@ const MAX_COMMANDS = 15;
 export interface SessionDigest {
   content: string;
   display_summary: string;
-  fileCount: number;
-  commandCount: number;
-  taskCount: number;
 }
 
 // Dedupe preserving first-seen order; a session edits the same file many times.
@@ -42,8 +39,18 @@ export function buildSessionDigest(args: {
   project?: string;
   dateLabel: string;
 }): SessionDigest | null {
-  const files = uniq(args.observations.flatMap((o) => o.files));
-  const commands = uniq(args.observations.flatMap((o) => o.commands));
+  // Drop sensitive entries PER FILE/COMMAND, not the whole digest: a single
+  // `.env`-adjacent path would otherwise make looksSensitive(content) true and
+  // discard an entire session's unrelated work. The remaining entries still
+  // form a useful digest.
+  const files = uniq(
+    args.observations.flatMap((o) => o.files).filter((f) => !looksSensitive(f)),
+  );
+  const commands = uniq(
+    args.observations
+      .flatMap((o) => o.commands)
+      .filter((c) => !looksSensitive(c)),
+  );
   const tasks = args.observations.reduce((sum, o) => sum + o.tasks, 0);
 
   if (files.length === 0 && commands.length === 0 && tasks === 0) {
@@ -84,8 +91,5 @@ export function buildSessionDigest(args: {
   return {
     content: lines.join("\n"),
     display_summary: truncateText(summaryBody, 180),
-    fileCount: files.length,
-    commandCount: commands.length,
-    taskCount: tasks,
   };
 }

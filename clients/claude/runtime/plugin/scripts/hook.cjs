@@ -1084,9 +1084,8 @@ var PASSIVE_BASH_RE = /^(pwd|ls|rg|grep|find|sed|cat|nl|wc|head|tail|git\s+(stat
 function objectValue(value) {
   return value && typeof value === "object" ? value : {};
 }
-function buildSessionCaptureCandidate(raw, captureKind) {
-  if (captureKind === "compact_summary") return sanitizeMembaseText(raw);
-  return "";
+function buildSessionCaptureCandidate(raw) {
+  return sanitizeMembaseText(raw);
 }
 function extractToolObservation(tool) {
   const name = String(tool.name ?? tool.tool_name ?? tool.type ?? "");
@@ -1118,7 +1117,7 @@ function extractToolObservation(tool) {
     const files = Array.from(
       patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
       (match) => match[1] ?? ""
-    ).filter(Boolean);
+    ).filter(Boolean).slice(0, 50);
     if (files.length === 0) return null;
     return { files, commands: [], tasks: 0 };
   }
@@ -1141,8 +1140,12 @@ function uniq(values) {
   return out;
 }
 function buildSessionDigest(args) {
-  const files = uniq(args.observations.flatMap((o) => o.files));
-  const commands = uniq(args.observations.flatMap((o) => o.commands));
+  const files = uniq(
+    args.observations.flatMap((o) => o.files).filter((f) => !looksSensitive2(f))
+  );
+  const commands = uniq(
+    args.observations.flatMap((o) => o.commands).filter((c) => !looksSensitive2(c))
+  );
   const tasks = args.observations.reduce((sum, o) => sum + o.tasks, 0);
   if (files.length === 0 && commands.length === 0 && tasks === 0) {
     return null;
@@ -1171,10 +1174,7 @@ function buildSessionDigest(args) {
   const summaryBody = `${CLIENT_LABEL} session: ${parts.join(", ")}${args.project ? ` \u2014 ${args.project}` : ""}`;
   return {
     content: lines.join("\n"),
-    display_summary: truncateText2(summaryBody, 180),
-    fileCount: files.length,
-    commandCount: commands.length,
-    taskCount: tasks
+    display_summary: truncateText2(summaryBody, 180)
   };
 }
 
@@ -1182,9 +1182,14 @@ function buildSessionDigest(args) {
 var import_node_fs6 = require("node:fs");
 var import_node_path7 = require("node:path");
 var SCRATCH_IDLE_MS = 30 * 60 * 1e3;
+var SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
 function scratchDir() {
   const dir = (0, import_node_path7.join)(ensureDataDir(), "scratch");
   (0, import_node_fs6.mkdirSync)(dir, { recursive: true, mode: 448 });
+  try {
+    (0, import_node_fs6.chmodSync)(dir, 448);
+  } catch {
+  }
   return dir;
 }
 function scratchPath(sessionId) {
@@ -1201,6 +1206,7 @@ function appendObservation(args) {
         meta: true,
         project: args.project,
         client_source: args.clientSource,
+        cwd: args.cwd,
         started_at: (/* @__PURE__ */ new Date()).toISOString()
       };
       lines.push(JSON.stringify(meta));
@@ -1216,8 +1222,15 @@ function appendObservation(args) {
       encoding: "utf-8",
       mode: 384
     });
+    try {
+      (0, import_node_fs6.chmodSync)(path, 384);
+    } catch {
+    }
   } catch {
   }
+}
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
 }
 function parseScratchFile(path) {
   const raw = (0, import_node_fs6.readFileSync)(path, "utf-8").trim();
@@ -1232,8 +1245,8 @@ function parseScratchFile(path) {
         continue;
       }
       observations.push({
-        files: Array.isArray(parsed.files) ? parsed.files : [],
-        commands: Array.isArray(parsed.commands) ? parsed.commands : [],
+        files: stringArray(parsed.files),
+        commands: stringArray(parsed.commands),
         tasks: typeof parsed.tasks === "number" ? parsed.tasks : 0
       });
     } catch {
@@ -1247,7 +1260,13 @@ function takeSession(sessionId) {
   try {
     const { meta, observations } = parseScratchFile(path);
     (0, import_node_fs6.rmSync)(path, { force: true });
-    return { sessionId: sessionId ?? "unknown", project: meta?.project, observations };
+    return {
+      sessionId: sessionId ?? "unknown",
+      project: meta?.project,
+      cwd: meta?.cwd,
+      startedAt: meta?.started_at,
+      observations
+    };
   } catch {
     try {
       (0, import_node_fs6.rmSync)(path, { force: true });
@@ -1258,25 +1277,30 @@ function takeSession(sessionId) {
 }
 function sweepIdleSessions(args) {
   const now = args.now ?? Date.now();
+  const dir = scratchDir();
   const currentPath = args.currentSessionId ? scratchPath(args.currentSessionId) : void 0;
   const out = [];
   let names;
   try {
-    names = (0, import_node_fs6.readdirSync)(scratchDir());
+    names = (0, import_node_fs6.readdirSync)(dir);
   } catch {
     return out;
   }
   for (const name of names) {
     if (!name.endsWith(".jsonl")) continue;
-    const path = (0, import_node_path7.join)(scratchDir(), name);
+    const path = (0, import_node_path7.join)(dir, name);
     if (currentPath && path === currentPath) continue;
     try {
-      if (now - (0, import_node_fs6.statSync)(path).mtimeMs < SCRATCH_IDLE_MS) continue;
+      const ageMs = now - (0, import_node_fs6.statSync)(path).mtimeMs;
+      if (ageMs < SCRATCH_IDLE_MS) continue;
       const { meta, observations } = parseScratchFile(path);
       (0, import_node_fs6.rmSync)(path, { force: true });
+      if (ageMs > SCRATCH_MAX_AGE_MS) continue;
       out.push({
         sessionId: name.replace(/\.jsonl$/, ""),
         project: meta?.project,
+        cwd: meta?.cwd,
+        startedAt: meta?.started_at,
         observations
       });
     } catch {
@@ -1545,7 +1569,8 @@ async function scratchToolBatch(input) {
       sessionId: input.session_id,
       observation,
       project,
-      clientSource: MEMORY_SOURCE
+      clientSource: MEMORY_SOURCE,
+      cwd: input.cwd
     });
   }
 }
@@ -1553,32 +1578,43 @@ async function scratchSingleTool(input) {
   if (typeof input.tool_name !== "string") return;
   await scratchToolBatch({ ...input, tool_calls: [input] });
 }
-function enqueueSessionDigest(session, input) {
+function enqueueSessionDigest(session) {
+  const dateLabel = (session.startedAt ?? (/* @__PURE__ */ new Date()).toISOString()).slice(
+    0,
+    10
+  );
   const digest = buildSessionDigest({
     observations: session.observations,
     project: session.project,
-    dateLabel: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)
+    dateLabel
   });
   if (!digest) return;
-  if (looksSensitive2(digest.content)) return;
   enqueueCapture({
     capture_kind: "session_summary",
     content: digest.content,
     display_summary: digest.display_summary,
     project: session.project,
     sessionId: session.sessionId,
-    metadata: captureMetadata(input, session.project)
+    metadata: {
+      plugin: PLUGIN_NAME,
+      plugin_version: PLUGIN_VERSION,
+      claude_session_id: session.sessionId,
+      cwd: session.cwd ?? process.cwd(),
+      project_slug: session.project ?? null,
+      hook_event: "session_digest"
+    }
   });
 }
 function enqueueEndedSessionDigest(input) {
+  if (loadConfig().captureMode !== "summary") return;
   const session = takeSession(input.session_id);
-  if (session) enqueueSessionDigest(session, input);
+  if (session) enqueueSessionDigest(session);
 }
 function enqueueSweptSessionDigests(input) {
   for (const session of sweepIdleSessions({
     currentSessionId: input.session_id
   })) {
-    enqueueSessionDigest(session, input);
+    enqueueSessionDigest(session);
   }
 }
 async function spoolSessionSummary(input, captureKind) {
@@ -1586,7 +1622,7 @@ async function spoolSessionSummary(input, captureKind) {
   if (config.captureMode !== "summary") return;
   const project = resolveProjectSlug(input.cwd, config);
   const raw = typeof input.compact_summary === "string" ? input.compact_summary : "";
-  const content = buildSessionCaptureCandidate(raw, captureKind);
+  const content = buildSessionCaptureCandidate(raw);
   if (!content || looksSensitive2(content)) return;
   enqueueCapture({
     capture_kind: captureKind,

@@ -48,6 +48,19 @@ describe("scratch store", () => {
     expect(takeSession("nope")).toBeNull();
   });
 
+  it("takeSession surfaces the session's own cwd and startedAt from meta", () => {
+    appendObservation({
+      sessionId: "s-meta",
+      observation: { files: ["a.ts"], commands: [], tasks: 0 },
+      project: "proj",
+      cwd: "/work/projX",
+    });
+    const session = takeSession("s-meta");
+    expect(session?.cwd).toBe("/work/projX");
+    // startedAt is a parseable ISO timestamp (used to date the digest).
+    expect(Number.isNaN(Date.parse(session?.startedAt ?? ""))).toBe(false);
+  });
+
   it("sweep only collects idle sessions and excludes the current one", () => {
     appendObservation({
       sessionId: "old",

@@ -12,6 +12,7 @@
 // possible during a sweep, guarded by the idle threshold below.
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -30,16 +31,31 @@ import type { ToolObservation } from "../hooks/summary.js";
 // out from under itself.
 export const SCRATCH_IDLE_MS = 30 * 60 * 1000; // 30 minutes
 
+// A scratch file older than this is deleted on sweep even if it can't be
+// digested (corrupt/empty), so crash-orphans can't accumulate without bound.
+// ponytail: bounds the common crash-orphan case; a machine that turns capture
+// off forever keeps at most its final summary-mode session's files (sweep runs
+// only in summary mode) — acceptable, not worth an unconditional prune pass.
+export const SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 interface ScratchMeta {
   meta: true;
   project?: string;
   client_source?: string;
+  cwd?: string;
   started_at: string;
 }
 
 function scratchDir(): string {
   const dir = join(ensureDataDir(), "scratch");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // mkdirSync's mode only applies on creation; a dir made earlier (looser
+  // umask, older version) keeps its perms. chmod so the 0o700 intent holds.
+  try {
+    chmodSync(dir, 0o700);
+  } catch {
+    // best-effort: a chmod failure (e.g. non-owner) must not break capture.
+  }
   return dir;
 }
 
@@ -62,6 +78,7 @@ export function appendObservation(args: {
   observation: ToolObservation;
   project?: string;
   clientSource?: string;
+  cwd?: string;
 }): void {
   const sessionId = args.sessionId ?? "unknown";
   const path = scratchPath(sessionId);
@@ -72,6 +89,7 @@ export function appendObservation(args: {
         meta: true,
         project: args.project,
         client_source: args.clientSource,
+        cwd: args.cwd,
         started_at: new Date().toISOString(),
       };
       lines.push(JSON.stringify(meta));
@@ -87,6 +105,14 @@ export function appendObservation(args: {
       encoding: "utf-8",
       mode: 0o600,
     });
+    // appendFileSync's mode only applies when it CREATES the file; a file made
+    // earlier under a looser umask keeps its perms. chmod every append so the
+    // 0o600 intent holds regardless (idempotent, best-effort).
+    try {
+      chmodSync(path, 0o600);
+    } catch {
+      // never block the host on a perms failure.
+    }
   } catch {
     // Scratch is best-effort: a failed append just loses one observation from
     // this session's digest, never blocks the host.
@@ -96,7 +122,20 @@ export function appendObservation(args: {
 export interface ScratchSession {
   sessionId: string;
   project?: string;
+  /** Working dir the session ran in — so a swept digest isn't mis-attributed. */
+  cwd?: string;
+  /** ISO time the session first wrote scratch — dates the digest correctly. */
+  startedAt?: string;
   observations: ToolObservation[];
+}
+
+// Keep only string elements: a corrupt/tampered line could carry non-strings
+// in files/commands, which would otherwise flow into the digest's join(...) as
+// "[object Object]" or numbers.
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
 }
 
 function parseScratchFile(path: string): {
@@ -115,10 +154,8 @@ function parseScratchFile(path: string): {
         continue;
       }
       observations.push({
-        files: Array.isArray(parsed.files) ? (parsed.files as string[]) : [],
-        commands: Array.isArray(parsed.commands)
-          ? (parsed.commands as string[])
-          : [],
+        files: stringArray(parsed.files),
+        commands: stringArray(parsed.commands),
         tasks: typeof parsed.tasks === "number" ? parsed.tasks : 0,
       });
     } catch {
@@ -139,7 +176,13 @@ export function takeSession(sessionId?: string): ScratchSession | null {
   try {
     const { meta, observations } = parseScratchFile(path);
     rmSync(path, { force: true });
-    return { sessionId: sessionId ?? "unknown", project: meta?.project, observations };
+    return {
+      sessionId: sessionId ?? "unknown",
+      project: meta?.project,
+      cwd: meta?.cwd,
+      startedAt: meta?.started_at,
+      observations,
+    };
   } catch {
     // Unreadable: remove it so it can't wedge future sweeps.
     try {
@@ -160,27 +203,34 @@ export function sweepIdleSessions(args: {
   now?: number;
 }): ScratchSession[] {
   const now = args.now ?? Date.now();
+  const dir = scratchDir();
   const currentPath = args.currentSessionId
     ? scratchPath(args.currentSessionId)
     : undefined;
   const out: ScratchSession[] = [];
   let names: string[];
   try {
-    names = readdirSync(scratchDir());
+    names = readdirSync(dir);
   } catch {
     return out;
   }
   for (const name of names) {
     if (!name.endsWith(".jsonl")) continue;
-    const path = join(scratchDir(), name);
+    const path = join(dir, name);
     if (currentPath && path === currentPath) continue;
     try {
-      if (now - statSync(path).mtimeMs < SCRATCH_IDLE_MS) continue;
+      const ageMs = now - statSync(path).mtimeMs;
+      if (ageMs < SCRATCH_IDLE_MS) continue;
       const { meta, observations } = parseScratchFile(path);
       rmSync(path, { force: true });
+      // A file too old to trust (crash-orphan that never digested) is deleted
+      // but not returned — don't resurrect week-old work as a "new" memory.
+      if (ageMs > SCRATCH_MAX_AGE_MS) continue;
       out.push({
         sessionId: name.replace(/\.jsonl$/, ""),
         project: meta?.project,
+        cwd: meta?.cwd,
+        startedAt: meta?.started_at,
         observations,
       });
     } catch {

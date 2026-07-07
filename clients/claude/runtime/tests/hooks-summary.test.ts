@@ -97,14 +97,32 @@ describe("buildSessionDigest", () => {
       dateLabel: "2026-07-07",
     });
     expect(digest).not.toBeNull();
-    expect(digest?.fileCount).toBe(2);
-    expect(digest?.commandCount).toBe(1);
-    expect(digest?.taskCount).toBe(2);
     expect(digest?.content).toContain("Edited: src/a.ts, src/b.ts");
     expect(digest?.content).toContain("Commands: git commit -m x");
     expect(digest?.content).toContain("Sub-agent tasks: 2");
     expect(digest?.content).toContain("2026-07-07");
     expect(digest?.content).toContain("project: membase");
+    expect(digest?.display_summary).toContain("2 file(s)");
+    expect(digest?.display_summary).toContain("1 command(s)");
+    expect(digest?.display_summary).toContain("2 task(s)");
+  });
+
+  it("drops only the sensitive file, keeps the rest of the digest", () => {
+    const digest = buildSessionDigest({
+      observations: [
+        obs({ files: ["apps/web/.env.example", "src/a.ts"] }),
+        obs({ commands: ["curl --token secret-value https://x"] }),
+        obs({ commands: ["pnpm build"] }),
+      ],
+      dateLabel: "2026-07-07",
+    });
+    // The .env file and the secret-bearing command are scrubbed per item, but
+    // the unrelated work survives (a single .env used to nuke the whole digest).
+    expect(digest).not.toBeNull();
+    expect(digest?.content).toContain("src/a.ts");
+    expect(digest?.content).not.toContain(".env");
+    expect(digest?.content).toContain("pnpm build");
+    expect(digest?.content).not.toContain("secret-value");
   });
 
   it("returns null for a session with no meaningful observations", () => {
@@ -125,7 +143,7 @@ describe("buildSessionDigest", () => {
       observations: files.map((f) => obs({ files: [f] })),
       dateLabel: "2026-07-07",
     });
-    expect(digest?.fileCount).toBe(25);
     expect(digest?.content).toContain("(+5 more)");
+    expect(digest?.display_summary).toContain("25 file(s)");
   });
 });

@@ -443,6 +443,7 @@ async function scratchToolBatch(input: HookInput): Promise<void> {
       observation,
       project,
       clientSource: MEMORY_SOURCE,
+      cwd: input.cwd,
     });
   }
 }
@@ -457,32 +458,48 @@ async function scratchSingleTool(input: HookInput): Promise<void> {
 }
 
 // Fold a consumed scratch session into one digest and enqueue it to the real
-// upload spool. Silent when the session did nothing meaningful.
-function enqueueSessionDigest(
-  session: ScratchSession,
-  input: HookInput,
-): void {
+// upload spool. Silent when the session did nothing meaningful. Metadata and
+// date come from the SESSION itself (persisted in its scratch), never the
+// current hook input — a swept/ended digest must describe the work's own
+// session/cwd/day, not the session that happened to trigger the sweep.
+function enqueueSessionDigest(session: ScratchSession): void {
+  const dateLabel = (session.startedAt ?? new Date().toISOString()).slice(
+    0,
+    10,
+  );
   const digest = buildSessionDigest({
     observations: session.observations,
     project: session.project,
-    dateLabel: new Date().toISOString().slice(0, 10),
+    dateLabel,
   });
   if (!digest) return;
-  if (looksSensitive(digest.content)) return;
+  // No whole-content looksSensitive gate here: buildSessionDigest already drops
+  // sensitive files/commands per item, so a lone `.env`-adjacent path no longer
+  // discards the whole session.
   enqueueCapture({
     capture_kind: "session_summary",
     content: digest.content,
     display_summary: digest.display_summary,
     project: session.project,
     sessionId: session.sessionId,
-    metadata: captureMetadata(input, session.project),
+    metadata: {
+      plugin: PLUGIN_NAME,
+      plugin_version: PLUGIN_VERSION,
+      claude_session_id: session.sessionId,
+      cwd: session.cwd ?? process.cwd(),
+      project_slug: session.project ?? null,
+      hook_event: "session_digest",
+    },
   });
 }
 
-// Session-end path: take THIS session's scratch and enqueue its digest.
+// Session-end / stop path: take THIS session's scratch and enqueue its digest.
+// Guarded on captureMode so an explicit opt-out mid-session is honored (matches
+// the scratch-write and sweep paths — disk `off` must win).
 function enqueueEndedSessionDigest(input: HookInput): void {
+  if (loadConfig().captureMode !== "summary") return;
   const session = takeSession(input.session_id);
-  if (session) enqueueSessionDigest(session, input);
+  if (session) enqueueSessionDigest(session);
 }
 
 // SessionStart sweep: enqueue digests for any sessions that ended without an
@@ -492,7 +509,7 @@ function enqueueSweptSessionDigests(input: HookInput): void {
   for (const session of sweepIdleSessions({
     currentSessionId: input.session_id,
   })) {
-    enqueueSessionDigest(session, input);
+    enqueueSessionDigest(session);
   }
 }
 
@@ -505,7 +522,7 @@ async function spoolSessionSummary(
   const project = resolveProjectSlug(input.cwd, config);
   const raw =
     typeof input.compact_summary === "string" ? input.compact_summary : "";
-  const content = buildSessionCaptureCandidate(raw, captureKind);
+  const content = buildSessionCaptureCandidate(raw);
   if (!content || looksSensitive(content)) return;
   enqueueCapture({
     capture_kind: captureKind,

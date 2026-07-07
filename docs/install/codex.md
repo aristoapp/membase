@@ -105,9 +105,12 @@ Auto-capture (north-star pillar 1): conversations upload memory passively.
 Capture is per-SESSION, not per-tool: meaningful tool calls (file edits,
 important commands, sub-agent tasks) accumulate in a local per-session scratch
 during the session, and are folded into ONE session digest that uploads when
-the session ends. Codex has no session-end event, so its digest uploads on the
-NEXT session's start (a ≤1-session lag; no data lost). User prompts and
-assistant messages are never captured. Two modes, both official-features-only:
+the session ends. Codex has no session-end event, so its digest uploads on a
+later session's start — specifically the next start that finds the scratch idle
+>30min (back-to-back sessions defer it until you stay away that long). One
+consequence: if you run a Codex session and then never open Codex again, that
+final session's digest is never built. User prompts and assistant messages are
+never captured. Two modes, both official-features-only:
 
 1. Install the hook adapter: merge `clients/codex/runtime/hooks.json` into
    `~/.codex/hooks.json`, replacing `REPO_ROOT` with this repository's

@@ -15,12 +15,11 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export function buildSessionCaptureCandidate(
-  raw: string,
-  captureKind: "compact_summary",
-): string {
-  if (captureKind === "compact_summary") return sanitizeMembaseText(raw);
-  return "";
+// Only compact_summary flows through here today; sanitize the raw compact
+// summary for capture. (Kept as a named seam in case other kinds need
+// candidate shaping later.)
+export function buildSessionCaptureCandidate(raw: string): string {
+  return sanitizeMembaseText(raw);
 }
 
 // One structured observation drawn from a single tool call — the raw material
@@ -74,7 +73,11 @@ export function extractToolObservation(
     const files = Array.from(
       patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
       (match) => match[1] ?? "",
-    ).filter(Boolean);
+    )
+      .filter(Boolean)
+      // Cap per patch so a giant generated mono-patch can't bloat the scratch
+      // line (the digest only ever shows 20; well above that is enough).
+      .slice(0, 50);
     if (files.length === 0) return null;
     return { files, commands: [], tasks: 0 };
   }
