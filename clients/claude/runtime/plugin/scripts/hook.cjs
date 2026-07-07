@@ -241,7 +241,9 @@ function createCaptureSpool(options) {
     let flushed = 0;
     for (const record of drained.batch) {
       try {
-        await send(record);
+        if (await send(record) === false) {
+          throw new Error("uploader returned false");
+        }
         withSpoolLock(() => {
           const sentIds = readSentIds();
           sentIds.add(record.capture_id);
@@ -1041,14 +1043,30 @@ function buildSessionCaptureCandidate(raw, captureKind) {
 var SESSION_FETCH_TIMEOUT_MS = 1800;
 var ASYNC_FLUSH_TIMEOUT_MS = 4e3;
 var ASYNC_FLUSH_LIMIT = 3;
+var STDIN_DEADLINE_MS = 2e3;
+var STDIN_MAX_BYTES = 1048576;
 function readStdin() {
   return new Promise((resolve2) => {
     let data = "";
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        process.stdin.destroy();
+      } catch {
+      }
+      resolve2(data);
+    };
+    const timer = setTimeout(done, STDIN_DEADLINE_MS);
+    timer.unref?.();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
-      data += chunk;
+      if (data.length < STDIN_MAX_BYTES) data += chunk;
     });
-    process.stdin.on("end", () => resolve2(data));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
   });
 }
 function outputAdditionalContext(text, event = "UserPromptSubmit") {
@@ -1154,10 +1172,11 @@ async function handleSessionStart(input) {
     projectSlug,
     profile
   });
-  if (context) {
-    outputAdditionalContext(context, "SessionStart");
+  const handoff = await prefetchHandoff(client, projectSlug);
+  const combined = [context, handoff].filter(Boolean).join("\n\n");
+  if (combined) {
+    outputAdditionalContext(combined, "SessionStart");
   }
-  await prefetchHandoff(client, projectSlug);
 }
 async function prefetchHandoff(client, projectSlug) {
   const bundles = await withTimeout(
@@ -1171,13 +1190,10 @@ async function prefetchHandoff(client, projectSlug) {
   const latest = bundles?.find(
     (bundle) => isHandoffMemory(bundle.episode.name ?? "")
   );
-  if (!latest) return;
-  outputAdditionalContext(
-    `<membase-handoff>
+  if (!latest) return "";
+  return `<membase-handoff>
 ${latest.episode.name}
-</membase-handoff>`,
-    "SessionStart"
-  );
+</membase-handoff>`;
 }
 async function handleUserPromptSubmit(input) {
   const config = loadConfig();
