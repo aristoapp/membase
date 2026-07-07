@@ -78,11 +78,16 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   semantic context must retrieve the sentinel, and search p95 ≤
   `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms).
 - **negative cases**: no token → 401 Bearer, forged token → 401, malformed
-  tool calls (missing/empty required arg, unknown tool) → tool-level error,
-  a forged `mcp-session-id` → rejected, an oversized (~230KB) `add_memory`
-  content → rejected rather than silently truncated, and two concurrent
-  `tools/call`s on one session → responses don't cross-wire (each JSON-RPC id
-  comes back matched to its own request).
+  tool calls (missing/empty required arg, unknown tool) → tool-level error, an
+  oversized (~230KB) `add_memory` content → rejected rather than silently
+  truncated, and two concurrent `tools/call`s on one session → responses
+  don't cross-wire (each JSON-RPC id comes back matched to its own request).
+  An unknown `mcp-session-id` + a valid Bearer token is confirmed (against
+  the live server's own code, not assumed) to auto-reinitialize a fresh
+  session bound to that token's own userId rather than being rejected — by
+  design, since session-id is a continuity id, not a second credential — so
+  the check instead confirms the forged-session write lands under the
+  token's own account, not that the call is refused.
 - **handoff replace-on-store** (north-star pillar 2): the "exactly one
   handoff per project" policy (`packages/capture-core/src/handoff.ts`'s
   `sweepReplacedHandoffs`) means storing a new `[HANDOFF]` must delete the
