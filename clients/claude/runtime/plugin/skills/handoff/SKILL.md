@@ -8,9 +8,11 @@ description: Store a session-state summary in Membase, tagged so a future sessio
 Use `/membase:handoff` when a session is ending, context is about to be
 compacted, or the user is switching to another client and wants continuity.
 
-- Store the summary via `add_memory`, prefixed with the literal tag
-  `[HANDOFF]` — this tag is how SessionStart's automatic prefetch and other
-  clients' manual `search_memory` calls both find it.
+- Store the summary via the `store_handoff` tool — it applies the literal
+  `[HANDOFF]` tag (how SessionStart's automatic prefetch and other clients'
+  manual `search_memory` calls find it) and replaces the previous handoff
+  for the project: the cloud keeps exactly one per project. Fall back to
+  `add_memory` with the `[HANDOFF]` prefix only if the tool is missing.
 - Always show the same summary to the user directly, not just store it —
   handoff is for both the human and the next session.
 - Scope with `project` when a project slug is known, so unrelated projects

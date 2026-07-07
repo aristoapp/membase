@@ -7,6 +7,7 @@ import {
   buildHandoffMemory,
   handoffRecallQuery,
   pickLatestHandoff,
+  selectReplaceableHandoffs,
 } from "../utils";
 
 // The recall query is generic ("session handoff summary"), so ordinary
@@ -57,12 +58,30 @@ export function registerHandoffTool(
       params: { mode: "store" | "recall"; summary?: string; project?: string },
     ) {
       try {
+        const recallSearch = (project?: string) =>
+          client.search(
+            handoffRecallQuery(),
+            RECALL_LIMIT,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            project,
+          );
+
         if (params.mode === "store") {
           if (!params.summary?.trim()) {
             return await toolResponse(
               "Store failed: summary is required for mode='store'.",
             );
           }
+          // Cloud policy: exactly ONE handoff per project — capture old
+          // handoffs BEFORE ingesting so the fresh one can't be in the
+          // deletion set; delete after the store succeeds.
+          const previous = await recallSearch(
+            params.project?.trim() || undefined,
+          ).catch(() => []);
           const content = buildHandoffMemory({
             summary: params.summary,
             project: params.project,
@@ -76,24 +95,25 @@ export function registerHandoffTool(
             }),
             project: params.project,
           });
+          let replaced = 0;
+          for (const bundle of selectReplaceableHandoffs(previous)) {
+            const uuid = bundle.episode.uuid;
+            if (!uuid) continue;
+            try {
+              await client.deleteMemory(uuid);
+              replaced += 1;
+            } catch {
+              // non-fatal — leftovers are swept by the next successful store
+            }
+          }
           // Echo the stored summary so the user sees the handoff directly, as
           // the tool description promises.
           return await toolResponse(
-            `Handoff stored in Membase (${result.status}).\n\n${params.summary.trim()}`,
+            `Handoff stored in Membase (${result.status})` +
+              (replaced ? `; replaced ${replaced} older handoff(s).` : ".") +
+              `\n\n${params.summary.trim()}`,
           );
         }
-
-        const recallSearch = (project?: string) =>
-          client.search(
-            handoffRecallQuery(),
-            RECALL_LIMIT,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            project,
-          );
 
         // Trim/blank out so a model-supplied "" is treated the same as an
         // omitted project, rather than silently skipping the fallback below.

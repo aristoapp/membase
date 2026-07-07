@@ -154,8 +154,14 @@ cross-client continuation is shared by **asking the client to recall** the
 | OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
 | Hermes | Not implemented | |
 
-Injection policy (decided 2026-07-07): always exactly the **latest one**
-handoff; older handoffs stay reachable via manual `search_memory`. Handoff
+Storage policy (decided 2026-07-06, superseding append-only): the cloud
+keeps exactly **ONE handoff per project** via replace-on-store — storing a
+new handoff deletes the previous `[HANDOFF]` episodes in the same project
+scope (only tagged episodes, capped batch, failures non-fatal). Clients that
+cannot delete on the remote MCP server (HTTP-mode Cursor/Codex) append
+temporarily; the next store from a delete-capable client sweeps the
+leftovers, so the state converges to one. Injection stays exactly the
+**latest one** by time — the safety net for the convergence window. Handoff
 store also flushes the capture spool first (Pillar 1 HTTP mode), so switching
 clients never leaves fresh captures behind.
 

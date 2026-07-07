@@ -95,3 +95,29 @@ export function pickLatestHandoff<
     return bTime > latestTime ? b : latest;
   });
 }
+
+/** Replace-on-store cap: never delete more than this many old handoffs. */
+export const HANDOFF_REPLACE_LIMIT = 10;
+
+/**
+ * Bundles eligible for replace-on-store deletion (policy: the cloud keeps
+ * exactly ONE handoff per project). Only [HANDOFF]-tagged bundles qualify —
+ * ordinary memories that leaked into the generic recall query are never
+ * deleted — and the batch is capped as a blast-radius guard.
+ */
+export function selectReplaceableHandoffs<
+  T extends {
+    episode: {
+      name?: string | null;
+      summary?: string | null;
+    };
+  },
+>(bundles: T[], max = HANDOFF_REPLACE_LIMIT): T[] {
+  return bundles
+    .filter(
+      (b) =>
+        isHandoffMemory(b.episode.name ?? "") ||
+        isHandoffMemory(b.episode.summary ?? ""),
+    )
+    .slice(0, max);
+}
