@@ -2,4 +2,4 @@ name: membase
 version: 0.0.0
 description: "Connect Hermes Agent to Membase context APIs for remember, search, task context, and forget actions."
 pip_dependencies:
-  - hermes-membase>=0.2.0
+  - hermes-membase

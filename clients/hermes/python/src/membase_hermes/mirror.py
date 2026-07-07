@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import queue
 import threading
 from dataclasses import dataclass
@@ -13,6 +14,20 @@ from .client import MembaseClient
 
 def content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write via a per-process temp then os.replace so a crash mid-write never
+    truncates the target, and two writers never interleave. On rename failure
+    the temp is removed rather than left behind (it may hold real data)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    tmp.write_text(text, encoding="utf-8")
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 # Index values that are local placeholders, not server episode UUIDs.
@@ -51,10 +66,13 @@ class MirrorStore:
             return {}
 
     def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Serialize a consistent snapshot under the lock, then write outside it:
+        # the atomic tmp+rename is already crash-safe without the lock, so we
+        # don't hold it across disk I/O and block dedup lookups (has_content /
+        # get_uuid_by_content take the same lock).
         with self._lock:
             payload = json.dumps(self._index, indent=2)
-        self.path.write_text(f"{payload}\n", encoding="utf-8")
+        atomic_write_text(self.path, f"{payload}\n")
 
     def has_content(self, content: str) -> bool:
         digest = content_hash(content)

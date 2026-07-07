@@ -22,6 +22,10 @@ concurrency:
   group: e2e-staging
   cancel-in-progress: false
 
+# Least privilege: this job only reads the repo and calls Membase over HTTP.
+permissions:
+  contents: read
+
 jobs:
   e2e-staging:
     name: staging remember/search/context lifecycle

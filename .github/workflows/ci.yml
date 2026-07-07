@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: pnpm install can run arbitrary postinstall scripts and this
+# runs on fork PRs, so don't hand the default token org-wide write scope.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: pnpm check + smoke

@@ -51,7 +51,16 @@ export function writeTextAtomic(
   // crash mid-write leaves the previous content intact.
   const tmp = `${path}.tmp.${process.pid}`;
   writeFileSync(tmp, text, { encoding: "utf-8", mode });
-  renameSync(tmp, path);
+  try {
+    renameSync(tmp, path);
+  } catch (err) {
+    // Rename failed after the tmp was written (e.g. the dir was removed by a
+    // concurrent logout). Don't leak a tmp file that may hold a credential.
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+    throw err;
+  }
   try {
     chmodSync(path, mode);
   } catch {}
