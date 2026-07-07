@@ -72,11 +72,13 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   exclude a memory written via the MCP tool call path. Previously only the
   add/search happy path was checked — never whether the live server actually
   applies these documented filters.
-- **quality gates**: hard pass/fail on measured quality — memory must become
-  searchable within `MEMBASE_E2E_MAX_RECALL_MS` (correctness ceiling, default
-  180s; slower than `MEMBASE_E2E_TARGET_RECALL_MS` (default 60s) only warns),
-  semantic context must retrieve the sentinel, and search p95 ≤
-  `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms).
+- **quality gates**: hard pass/fail on measured *correctness* — memory must
+  become searchable within `MEMBASE_E2E_MAX_RECALL_MS` (correctness ceiling,
+  default 180s; slower than `MEMBASE_E2E_TARGET_RECALL_MS` (default 60s) only
+  warns) and semantic context must retrieve the sentinel. Search p95 above
+  `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms) only **warns** — it's a
+  server-load signal, not a code property (staging p95 swings ~0.8s–4.7s
+  run-to-run), so it must not flaky-fail unrelated PRs.
 - **negative cases**: no token → 401 Bearer, forged token → 401, malformed
   tool calls (missing/empty required arg, unknown tool) → tool-level error, an
   oversized (~230KB) `add_memory` content → rejected rather than silently
