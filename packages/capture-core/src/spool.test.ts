@@ -87,3 +87,50 @@ describe("capture spool contract", () => {
     expect(spool.pendingSpoolCount()).toBe(1);
   });
 });
+
+// Golden vectors binding this spool to the Hermes Python port (ADR 0005).
+// The Python suite (tests/test_spool_vectors.py) consumes the SAME file, so
+// capture_id hashing and the enqueue drop rules can't drift between languages.
+describe("spool golden vectors (spec/spool-vectors.json)", () => {
+  const vectors = JSON.parse(
+    readFileSync(join(import.meta.dir, "..", "spec", "spool-vectors.json"), "utf-8"),
+  ) as {
+    capture_id: {
+      cases: {
+        session_id: string | null;
+        capture_kind: string;
+        content: string;
+        out: string;
+      }[];
+    };
+    enqueue_drop_rules: { cases: { content: string; keep: boolean }[] };
+  };
+
+  // Vector content is already sanitized, so bind identity-sanitize to isolate
+  // the hash (sanitize itself is covered by sanitize-vectors.json).
+  const identity = (t: string) => t;
+
+  test("capture_id matches every vector", () => {
+    const { spool } = makeSpool(identity);
+    for (const c of vectors.capture_id.cases) {
+      const id = spool.captureId({
+        sessionId: c.session_id ?? undefined,
+        captureKind: c.capture_kind,
+        content: c.content,
+      });
+      expect(id).toBe(c.out);
+    }
+  });
+
+  test("enqueue keep/drop matches every vector", () => {
+    for (const c of vectors.enqueue_drop_rules.cases) {
+      const { spool } = makeSpool(identity);
+      const rec = spool.enqueueCapture({
+        capture_kind: "conversation",
+        content: c.content,
+        metadata: {},
+      });
+      expect(rec !== null).toBe(c.keep);
+    }
+  });
+});
