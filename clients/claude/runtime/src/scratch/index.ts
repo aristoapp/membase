@@ -19,6 +19,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  utimesSync,
 } from "node:fs";
 import { join } from "node:path";
 import { ensureDataDir } from "../config/index.js";
@@ -150,7 +151,10 @@ function parseScratchFile(path: string): {
     try {
       const parsed = JSON.parse(line) as Record<string, unknown>;
       if (parsed.meta === true) {
-        meta = parsed as unknown as ScratchMeta;
+        // Concurrent first-writes (PostToolBatch is async) can each prepend a
+        // meta header. Keep the FIRST one so started_at/dateLabel is the true
+        // session start, deterministically — never the later racer's clock.
+        if (!meta) meta = parsed as unknown as ScratchMeta;
         continue;
       }
       observations.push({
@@ -163,6 +167,24 @@ function parseScratchFile(path: string): {
     }
   }
   return { meta, observations };
+}
+
+/**
+ * Mark a session as alive by bumping its scratch mtime — the sweep's idle test
+ * is mtime-based, so a live session that is merely quiet (a >30min human pause,
+ * no tool calls) is not mistaken for a crashed one and swept out from under
+ * itself. Called on every Stop (fires each turn). No-op if the session has no
+ * scratch yet (nothing meaningful captured), so it never creates an empty file.
+ */
+export function touchSession(sessionId?: string): void {
+  const path = scratchPath(sessionId ?? "unknown");
+  if (!existsSync(path)) return;
+  try {
+    const now = new Date();
+    utimesSync(path, now, now);
+  } catch {
+    // best-effort: a failed touch just risks an early sweep, never blocks.
+  }
 }
 
 /**

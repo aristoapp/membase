@@ -1122,7 +1122,7 @@ function extractToolObservation(tool) {
     return { files, commands: [], tasks: 0 };
   }
   const path = typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : void 0;
-  if (!path) return null;
+  if (!path || looksSensitive2(path)) return null;
   return { files: [path], commands: [], tasks: 0 };
 }
 
@@ -1241,7 +1241,7 @@ function parseScratchFile(path) {
     try {
       const parsed = JSON.parse(line);
       if (parsed.meta === true) {
-        meta = parsed;
+        if (!meta) meta = parsed;
         continue;
       }
       observations.push({
@@ -1253,6 +1253,15 @@ function parseScratchFile(path) {
     }
   }
   return { meta, observations };
+}
+function touchSession(sessionId) {
+  const path = scratchPath(sessionId ?? "unknown");
+  if (!(0, import_node_fs6.existsSync)(path)) return;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    (0, import_node_fs6.utimesSync)(path, now, now);
+  } catch {
+  }
 }
 function takeSession(sessionId) {
   const path = scratchPath(sessionId ?? "unknown");
@@ -1652,6 +1661,7 @@ async function main() {
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
   if (event === "PostToolUse") await scratchSingleTool(input);
+  if (event === "Stop") touchSession(input.session_id);
   if (event === "SessionEnd") enqueueEndedSessionDigest(input);
   if (event === "Stop" || event === "SessionEnd") {
     const config = loadConfig();

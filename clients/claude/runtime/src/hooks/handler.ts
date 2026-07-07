@@ -49,6 +49,7 @@ import {
   appendObservation,
   sweepIdleSessions,
   takeSession,
+  touchSession,
   type ScratchSession,
 } from "../scratch/index.js";
 import type { EpisodeBundle } from "../types.js";
@@ -558,6 +559,10 @@ async function main(): Promise<void> {
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
   if (event === "PostToolUse") await scratchSingleTool(input);
+  // Stop fires every turn: keep this session's scratch marked alive so a long
+  // human pause (>30min, no tool calls) isn't mistaken for a crash and swept by
+  // another window's SessionStart. Digest still only on SessionEnd, not Stop.
+  if (event === "Stop") touchSession(input.session_id);
   // SessionEnd: fold this session's scratch into a digest BEFORE flushing, so
   // it uploads in the same batch. Stop fires every turn — flush only, never a
   // digest (that would upload N partial digests per session).

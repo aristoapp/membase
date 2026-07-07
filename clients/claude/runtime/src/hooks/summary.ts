@@ -82,13 +82,16 @@ export function extractToolObservation(
     return { files, commands: [], tasks: 0 };
   }
 
-  // Edit / Write / MultiEdit — a single file path.
+  // Edit / Write / MultiEdit — a single file path. Reject a sensitive path
+  // (e.g. an edit of `.env`) here so it never reaches the on-disk scratch —
+  // matching the Bash/apply_patch branches. The digest-time filter only keeps
+  // it out of the upload, not off local disk.
   const path =
     typeof input.file_path === "string"
       ? input.file_path
       : typeof input.path === "string"
         ? input.path
         : undefined;
-  if (!path) return null;
+  if (!path || looksSensitive(path)) return null;
   return { files: [path], commands: [], tasks: 0 };
 }

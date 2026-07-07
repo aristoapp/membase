@@ -37,6 +37,21 @@ describe("extractToolObservation", () => {
     expect(obs).toEqual({ files: ["src/a.ts"], commands: [], tasks: 0 });
   });
 
+  it("rejects a sensitive Edit path so it never reaches scratch on disk", () => {
+    expect(
+      extractToolObservation({
+        tool_name: "Edit",
+        tool_input: { file_path: "apps/web/.env" },
+      }),
+    ).toBeNull();
+    expect(
+      extractToolObservation({
+        tool_name: "Write",
+        tool_input: { file_path: "config/.env.local" },
+      }),
+    ).toBeNull();
+  });
+
   it("counts a sub-agent Task", () => {
     const obs = extractToolObservation({ tool_name: "Task", tool_input: {} });
     expect(obs).toEqual({ files: [], commands: [], tasks: 1 });
