@@ -116,12 +116,15 @@ export function appendObservation(args: {
   try {
     const lines: string[] = [];
     const fresh = !existsSync(path);
-    // Bound a pathological session's file: once it's past the observation cap
-    // (roughly measured by byte size — each line is small), stop appending. The
-    // digest only ever shows MAX_FILES/MAX_COMMANDS, so later lines add nothing
-    // but disk that every read must load.
-    if (!fresh && overCap(path)) return;
-    if (fresh || metaChanged(path, args.project, args.cwd)) {
+    // A moved session (different project/cwd than last recorded) appends a
+    // refreshed header so the digest reflects where the work ended up.
+    const moved = !fresh && metaChanged(path, args.project, args.cwd);
+    // Bound a pathological session's file: once past the observation cap, stop
+    // appending — the digest only shows MAX_FILES/MAX_COMMANDS, so later lines
+    // add nothing but disk every read must load. A `moved` refresh is let
+    // through (rare, tiny, and losing a project change is worse than one line).
+    if (!fresh && !moved && overCap(path)) return;
+    if (fresh || moved) {
       const meta: ScratchMeta = {
         meta: true,
         session_id: sessionId,
@@ -184,9 +187,10 @@ function flatten(value: string): string {
 // one this call resolved — so a moved session appends a refreshed header rather
 // than staying pinned to its first project. Best-effort: any read error means
 // "assume unchanged" (don't spam headers on a transient failure).
-// ponytail: re-parses the file per append (O(n²) over a session), but the file
-// is bounded by overCap and real sessions rarely change project — a per-process
-// cache of the last-seen project/cwd is the upgrade if profiling ever flags it.
+// ponytail: reads the scratch once per append to find the latest project/cwd.
+// One read per hook process (PostToolUse is its own process; a PostToolBatch
+// reads once per call) — same order as the digest read, and the file is capped
+// by overCap. A tail-only read is the upgrade if a huge-session profile flags it.
 function metaChanged(
   path: string,
   project?: string,

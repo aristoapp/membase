@@ -1214,8 +1214,9 @@ function appendObservation(args) {
   try {
     const lines = [];
     const fresh = !(0, import_node_fs6.existsSync)(path);
-    if (!fresh && overCap(path)) return;
-    if (fresh || metaChanged(path, args.project, args.cwd)) {
+    const moved = !fresh && metaChanged(path, args.project, args.cwd);
+    if (!fresh && !moved && overCap(path)) return;
+    if (fresh || moved) {
       const meta = {
         meta: true,
         session_id: sessionId,
