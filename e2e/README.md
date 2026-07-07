@@ -50,16 +50,29 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
 - **tool contract**: asserts every expected tool is exposed (basis: the shipped
   tool surface — `add_memory`, `search_memory`, `get_current_date`,
   `search_wiki`, `add_wiki`, `update_wiki`, `delete_wiki`; a missing tool fails
-  the run), that `get_current_date` returns a date, and runs a full wiki CRUD
+  the run), that `get_current_date` returns a date that's sane (within 2 days
+  of wall clock) and stable across repeated calls, and runs a full wiki CRUD
   round-trip (add → search → update → delete → confirm gone) that cleans up
   after itself.
+- **filter params**: `search_memory`'s `project`, `sources`, and
+  `date_from`/`date_to` filters, and `add_wiki`/`search_wiki`'s `project`
+  scoping — two project-tagged memories are written and a `project`-scoped
+  search must return its own memory and exclude the other's; a `date_to`
+  window ending before the write must exclude it; `sources=["slack"]` must
+  exclude a memory written via the MCP tool call path. Previously only the
+  add/search happy path was checked — never whether the live server actually
+  applies these documented filters.
 - **quality gates**: hard pass/fail on measured quality — memory must become
   searchable within `MEMBASE_E2E_MAX_RECALL_MS` (correctness ceiling, default
   180s; slower than `MEMBASE_E2E_TARGET_RECALL_MS` (default 60s) only warns),
   semantic context must retrieve the sentinel, and search p95 ≤
   `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms).
-- **negative cases**: no token → 401 Bearer, forged token → 401, and malformed
-  tool calls (missing/empty required arg, unknown tool) → tool-level error.
+- **negative cases**: no token → 401 Bearer, forged token → 401, malformed
+  tool calls (missing/empty required arg, unknown tool) → tool-level error,
+  a forged `mcp-session-id` → rejected, an oversized (~230KB) `add_memory`
+  content → rejected rather than silently truncated, and two concurrent
+  `tools/call`s on one session → responses don't cross-wire (each JSON-RPC id
+  comes back matched to its own request).
 
 Obtain the token through the client's normal OAuth flow, or set
 `MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a
