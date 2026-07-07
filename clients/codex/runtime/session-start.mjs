@@ -9,14 +9,38 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Never hang the host: resolve with whatever arrived after a short idle
+// deadline if the host leaves stdin open (fail-open, same contract as the
+// Claude/Cursor hooks). Codex kills the hook at its own timeout anyway, but a
+// hung read would still block session start until then.
 function readStdin() {
   return new Promise((resolve) => {
     let data = "";
+    let settled = false;
+    let timer;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        process.stdin.destroy();
+      } catch {}
+      resolve(data);
+    };
+    // Idle deadline, reset per chunk — never cuts an active stream.
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(done, 2000);
+      timer.unref?.();
+    };
+    arm();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
+      arm();
       data += chunk;
     });
-    process.stdin.on("end", () => resolve(data));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
   });
 }
 
@@ -41,12 +65,25 @@ export function readHandoff(candidates) {
   return "";
 }
 
+// The handoff text is interpolated into a <membase-handoff> block and can come
+// from a checked-in repo file (.codex/membase-handoff.md), so it must not be
+// able to close the block early or forge the harness's system-reminder tag.
+// Insert a zero-width space after the "<" of those delimiters; the text stays
+// readable, the tags inert. Inlined (not imported from capture-core) to keep
+// this hook dependency-free — it runs as a bare `node …/session-start.mjs`.
+function neutralizeInjection(text) {
+  return text.replace(
+    /<\/?(membase-handoff|system-reminder)\b/gi,
+    (m) => `${m[0]}​${m.slice(1)}`,
+  );
+}
+
 export function buildHookOutput(text) {
   if (!text) return "";
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: `<membase-handoff>\n${text}\n</membase-handoff>`,
+      additionalContext: `<membase-handoff>\n${neutralizeInjection(text)}\n</membase-handoff>`,
     },
   });
 }
