@@ -10,7 +10,10 @@ keys, passwords, or raw source files.
 2. Call the Membase MCP `add_memory` tool with the SAME summary, prefixed
    with the literal tag `[HANDOFF]` (e.g. `[HANDOFF] <summary>`). Pass the
    project slug as `project` if one is known. This is how other clients find
-   it via `search_memory`.
+   it via `search_memory`. Cloud policy is ONE handoff per project; this
+   client cannot delete on the remote server, so an older copy may linger
+   briefly — it is swept the next time a delete-capable client (Claude Code,
+   OpenClaw) stores a handoff.
 3. Write the SAME summary to `.codex/membase-handoff.md` in the workspace
    root (or `~/.codex/membase-handoff.md` when not in a project), overwriting
    any existing file — only the latest handoff lives there. Do this even if

@@ -8,10 +8,12 @@ and why, current state, and what's next. If `$ARGUMENTS` is given, focus the
 summary on that instead of the whole session.
 
 1. Print the summary to the user directly, in the user's language.
-2. Call the Membase MCP `add_memory` tool with the SAME summary content,
-   prefixed with the literal tag `[HANDOFF]` (e.g.
-   `[HANDOFF] <summary text>`). Pass the current project's slug as `project`
-   if one is available from `membase://profile` or prior context.
+2. Call the Membase MCP `store_handoff` tool with the SAME summary (pass the
+   current project's slug as `project` when available). It adds the
+   `[HANDOFF]` tag automatically and REPLACES the previous handoff for that
+   project — the cloud keeps exactly one handoff per project. If
+   `store_handoff` is unavailable, fall back to `add_memory` with the
+   literal `[HANDOFF]` prefix.
 
 Only store durable state — no secrets, API keys, passwords, or raw source
 files. A future session (in this client or another) may recall this via

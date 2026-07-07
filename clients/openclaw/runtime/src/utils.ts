@@ -129,6 +129,7 @@ export {
   buildHandoffDisplaySummary,
   isHandoffMemory,
   pickLatestHandoff,
+  selectReplaceableHandoffs,
 } from "@membase/capture-core";
 
 export function extractLastUserMessage(event: Record<string, unknown>): string {
