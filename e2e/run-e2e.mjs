@@ -26,9 +26,11 @@ import {
   callTool,
   discoverProtectedResource,
   initialize,
+  listResources,
   listTools,
   now,
-  percentile
+  percentile,
+  readResource
 } from "./mcp-client.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 
@@ -135,7 +137,11 @@ for (const client of CLIENTS) {
         if (TIER3 && fast) {
           await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+          await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
+          await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
+          await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
+          await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
           await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
@@ -281,15 +287,39 @@ async function evalContract(entry, url, tools) {
   }
   entry.quality.contractToolsPresent = `${EXPECTED_TOOLS.length - missing}/${EXPECTED_TOOLS.length}`;
 
-  // 2. get_current_date returns an actual date.
+  // 2. get_current_date returns an actual, sane, parseable date. Beyond the
+  // format regex: parses to a real calendar date within +/-2 days of this
+  // machine's wall clock (loose enough for timezone offset, tight enough to
+  // catch a stuck/mocked date), and repeated calls agree with each other —
+  // this is the anchor every relative-date memory query (search_memory
+  // date_from/date_to, "today"/"yesterday") is built on.
   if (names.has("get_current_date")) {
     const d = await call("get_current_date", {}, 50);
-    const hasDate = /\d{4}-\d{2}-\d{2}/.test(d.raw ?? "");
+    const dateMatch = (d.raw ?? "").match(/\d{4}-\d{2}-\d{2}/);
+    const hasDate = Boolean(dateMatch);
     entry.checks.push(check(
       "contract: get_current_date returns a date",
       !d.payload?.error && d.status < 400 && hasDate,
       hasDate ? "ISO date present" : errText(d) || "no date in response"
     ));
+    if (hasDate) {
+      const parsed = new Date(dateMatch[0]);
+      const diffDays = Math.abs(parsed.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+      const sane = !Number.isNaN(parsed.getTime()) && diffDays <= 2;
+      entry.checks.push(check(
+        "contract: get_current_date is within 2 days of wall clock",
+        sane,
+        sane ? `${dateMatch[0]} (Δ${diffDays.toFixed(2)}d)` : `${dateMatch[0]} is Δ${diffDays.toFixed(2)}d from now — stuck/mocked date?`
+      ));
+
+      const d2 = await call("get_current_date", {}, 50);
+      const dateMatch2 = (d2.raw ?? "").match(/\d{4}-\d{2}-\d{2}/)?.[0];
+      entry.checks.push(check(
+        "contract: get_current_date is stable across repeated calls",
+        dateMatch2 === dateMatch[0],
+        dateMatch2 === dateMatch[0] ? "consistent" : `first=${dateMatch[0]} second=${dateMatch2}`
+      ));
+    }
   }
 
   // 3. Wiki full lifecycle (create -> read -> update -> delete -> confirm gone).
@@ -333,6 +363,174 @@ async function evalContract(entry, url, tools) {
     } else {
       entry.checks.push(warn("contract: wiki update/delete skipped", "add_wiki returned no doc_id to target"));
     }
+  }
+}
+
+// ---------- Tier 3: MCP resources (membase://profile, membase://recent) ----------
+// The harness only ever spoke tools/list + tools/call — resources/list and
+// resources/read were never implemented in mcp-client.mjs, so this real
+// client-facing surface (Claude's SessionStart prefetch reads both; the
+// membase MCP usage instructions tell every client when to read them) has
+// never been exercised live. apps/mcp/src/resources.ts registers exactly two
+// resources: membase://profile (JSON: display_name/role/interests/
+// instructions/timezone, backed by GET /user/settings) and membase://recent
+// (text/markdown starting with "# Membase Recent Memories", backed by an
+// empty-query search_memory). Basis for the two URIs and shapes: apps/mcp/
+// src/resources.ts and resources/{profile,recent}.ts in the membase backend.
+const EXPECTED_RESOURCE_URIS = ["membase://profile", "membase://recent"];
+async function evalResources(entry, url) {
+  const sessionId = entry.sessionId;
+
+  const list = await listResources(url, { token: TOKEN, sessionId, id: 90 });
+  const uris = new Set((list.payload?.result?.resources ?? []).map((r) => r.uri));
+  entry.checks.push(check(
+    "resources: resources/list exposes membase://profile and membase://recent",
+    !list.payload?.error && EXPECTED_RESOURCE_URIS.every((u) => uris.has(u)),
+    list.payload?.error ? errText(list) : `found: ${[...uris].join(", ") || "none"}`
+  ));
+
+  const profile = await readResource(url, { token: TOKEN, sessionId, uri: "membase://profile", id: 91 });
+  const profileContent = profile.payload?.result?.contents?.[0];
+  let profileParsed;
+  try {
+    profileParsed = profileContent?.text ? JSON.parse(profileContent.text) : undefined;
+  } catch {
+    profileParsed = undefined;
+  }
+  const profileOk =
+    !profile.payload?.error &&
+    profileContent?.mimeType === "application/json" &&
+    profileParsed !== undefined &&
+    "timezone" in profileParsed;
+  entry.checks.push(check(
+    "resources: membase://profile reads as JSON with expected shape",
+    profileOk,
+    profileOk ? "application/json with timezone field present" : (errText(profile) || `unexpected content: ${JSON.stringify(profileContent).slice(0, 100)}`)
+  ));
+
+  const recent = await readResource(url, { token: TOKEN, sessionId, uri: "membase://recent", id: 92 });
+  const recentContent = recent.payload?.result?.contents?.[0];
+  const recentOk =
+    !recent.payload?.error &&
+    recentContent?.mimeType === "text/markdown" &&
+    (recentContent.text ?? "").startsWith("# Membase Recent Memories");
+  entry.checks.push(check(
+    "resources: membase://recent reads as markdown with expected header",
+    recentOk,
+    recentOk ? "text/markdown starting with the recent-memories header" : (errText(recent) || `unexpected content: ${JSON.stringify(recentContent).slice(0, 100)}`)
+  ));
+
+  // Negative: an unregistered URI must error, not silently return empty content.
+  const bogus = await readResource(url, { token: TOKEN, sessionId, uri: "membase://not-a-real-resource", id: 93 });
+  const bogusRejected = Boolean(bogus.payload?.error) || bogus.status >= 400;
+  entry.checks.push(check(
+    "resources: reading an unregistered URI errors rather than returning empty content",
+    bogusRejected,
+    bogusRejected ? (errText(bogus) || `HTTP ${bogus.status}`) : "unregistered URI returned a response without error"
+  ));
+}
+
+// ---------- Tier 3: search_memory/search_wiki filter params (project/sources/date) ----------
+// Basis: this repo's own MCP server-usage instructions document `project`
+// (exact-slug scope), `sources` (origin filter), and `date_from`/`date_to`
+// (ISO 8601 range) as real search_memory params, and `project` on add_wiki/
+// search_wiki. Nothing elsewhere in this suite ever asserts the live server
+// actually applies these filters (only that add/search work at all) — this
+// proves it, including that project scoping doesn't leak across tags.
+async function evalFilters(entry, url, roles) {
+  const sessionId = entry.sessionId;
+  const call = (name, args, id) => callTool(url, { token: TOKEN, sessionId, id, name, args });
+
+  // project filter on search_memory: two memories tagged with different
+  // project slugs: search scoped to A must not surface B's sentinel.
+  const stamp = Date.now();
+  const projectA = `e2e-proj-a-${stamp}`;
+  const projectB = `e2e-proj-b-${stamp}`;
+  const sentinelA = `membase-e2e-filter-a-${stamp}`;
+  const sentinelB = `membase-e2e-filter-b-${stamp}`;
+
+  const addA = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelA}` }, { project: projectA }), 70);
+  const addB = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelB}` }, { project: projectB }), 71);
+  const bothStored = !addA.payload?.error && !addB.payload?.error;
+  entry.checks.push(check("filters: two project-tagged memories stored", bothStored, bothStored ? "stored" : `${errText(addA)} / ${errText(addB)}`));
+  if (!bothStored) return;
+
+  // Async indexing: poll project-scoped search for sentinelA up to the same
+  // recall SLO used elsewhere, then check sentinelB is absent from that result.
+  let scoped;
+  const t0 = now();
+  while (true) {
+    scoped = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA }), 72);
+    if ((scoped.raw ?? "").includes(sentinelA)) break;
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+  }
+  const foundOwn = (scoped.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    `filters: project=A search finds A's memory within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    foundOwn,
+    foundOwn ? "found" : "not searchable within SLO"
+  ));
+  if (foundOwn) {
+    const leaked = (scoped.raw ?? "").includes(sentinelB);
+    entry.checks.push(check("filters: project=A search excludes B's memory", !leaked, leaked ? "LEAK: B's sentinel returned under project=A" : "excluded"));
+  }
+
+  // date_from/date_to: a window covering [24h ago, now] must include the
+  // just-written memory; a window ending 1s before it was written must
+  // exclude it. Uses the same query text (sentinelA) so only the date window
+  // varies between the two calls. `stamp` is Date.now()-based (wall clock);
+  // `now()`/`t0` above is performance.now() (monotonic) and not comparable to it.
+  const nowIso = new Date().toISOString();
+  const past = new Date(stamp - 24 * 60 * 60 * 1000).toISOString();
+  const before = new Date(stamp - 1000).toISOString();
+
+  const withinWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: nowIso }), 73);
+  entry.checks.push(check(
+    "filters: date_from/date_to including now finds recent memory",
+    !withinWindow.payload?.error && (withinWindow.raw ?? "").includes(sentinelA),
+    !withinWindow.payload?.error ? ((withinWindow.raw ?? "").includes(sentinelA) ? "found" : "not found in window") : errText(withinWindow)
+  ));
+
+  const outsideWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: before }), 74);
+  const excludedPast = !(outsideWindow.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    "filters: date_to before write excludes the memory",
+    !outsideWindow.payload?.error && excludedPast,
+    outsideWindow.payload?.error ? errText(outsideWindow) : (excludedPast ? "excluded" : "LEAK: found outside date window")
+  ));
+
+  // sources filter: an out-of-band source (e.g. "slack") must not surface a
+  // memory written via the MCP tool call path (which has no source tag).
+  const wrongSource = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { sources: ["slack"] }), 75);
+  const notLeakedViaSource = !(wrongSource.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    "filters: sources=[slack] excludes an MCP-written memory",
+    !wrongSource.payload?.error && notLeakedViaSource,
+    wrongSource.payload?.error ? errText(wrongSource) : (notLeakedViaSource ? "excluded" : "LEAK: found under unrelated source filter")
+  ));
+
+  // search_wiki project scoping, mirroring the memory check above.
+  const names = new Set((await listTools(url, { token: TOKEN, sessionId })).payload?.result?.tools?.map((t) => t.name) ?? []);
+  if (names.has("add_wiki") && names.has("search_wiki")) {
+    const wikiStamp = `e2e-wiki-filter-${stamp}`;
+    const wikiProject = `e2e-wiki-proj-${stamp}`;
+    const addWiki = await call("add_wiki", { title: `[e2e-filter] ${wikiStamp}`, content: `Filter-test wiki body ${wikiStamp}.`, project: wikiProject }, 76);
+    const wikiOk = !addWiki.payload?.error && addWiki.status < 400;
+    entry.checks.push(check("filters: add_wiki with project stores the doc", wikiOk, wikiOk ? "stored" : errText(addWiki)));
+    if (wikiOk) {
+      const docId = (addWiki.raw ?? "").match(UUID_RE)?.[0];
+      let wikiFound = false;
+      for (const delay of [0, 3000, 8000]) {
+        if (delay) await new Promise((res) => setTimeout(res, delay));
+        const s = await call("search_wiki", { query: wikiStamp, project: wikiProject }, 77);
+        if ((s.raw ?? "").includes(wikiStamp)) { wikiFound = true; break; }
+      }
+      entry.checks.push(check("filters: search_wiki project scope finds the doc", wikiFound, wikiFound ? "found" : "not searchable within ~11s"));
+      if (docId) await call("delete_wiki", { doc_id: docId }, 78); // cleanup, best-effort
+    }
+  } else {
+    entry.checks.push(warn("filters: search_wiki project scoping skipped", "add_wiki/search_wiki not both exposed"));
   }
 }
 
@@ -424,6 +622,222 @@ async function evalHandoff(entry) {
       ? `tag survived into episode.name/summary after ~${ttr}s`
       : `no [HANDOFF] episode with sentinel found within ${QUALITY_MAX_RECALL_MS / 1000}s — tag likely not on name/summary`,
   ));
+}
+
+// ---------- Tier 3: handoff replace-on-store (REST ingest/search/delete) ----------
+// North-star pillar 2 policy (exactly ONE handoff per project — replace-on-
+// store, see packages/capture-core/src/handoff.ts's sweepReplacedHandoffs):
+// storing a new [HANDOFF] must search for the prior one, then DELETE it. This
+// is the one piece of that contract evalHandoff (above) never exercises — it
+// only proves store+recall, never that a second store deletes the first.
+// That gap existed because the MCP tool surface has no delete tool (see
+// evalNegative/evalLiveDeep's "forget" warnings) — but the runtime's real
+// delete path is a REST call, `DELETE /memory/episodes/{episode_uuid}`
+// (apps/api/src/api/routes/memory.py), the same one Claude/OpenClaw/Hermes's
+// deleteEpisode/deleteMemory call. This test drives that exact contract:
+// ingest A -> search finds A's episode.uuid -> DELETE that uuid -> ingest B
+// (replacement) -> search confirms A is gone and B is present. Scoped to a
+// unique project tag so it never collides with evalHandoff's untagged run or
+// real handoffs on the test account.
+async function evalHandoffReplace(entry) {
+  const restBase = REST_API_BASE.replace(/\/$/, "");
+  const authedFetch = (path, init) =>
+    fetch(`${restBase}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+  const stamp = Date.now();
+  const project = `e2e-handoff-replace-${stamp}`;
+  const sentinelA = `e2e-handoff-replace-a-${stamp}`;
+  const sentinelB = `e2e-handoff-replace-b-${stamp}`;
+
+  const ingest = async (sentinel) => {
+    const body = {
+      content: `${HANDOFF_TAG} Replace-on-store test ${sentinel}. (safe to delete)`,
+      display_summary: `${HANDOFF_TAG} Replace-on-store test ${sentinel}. (safe to delete)`,
+      source: "openclaw",
+      channel: "api",
+      project,
+    };
+    const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+    return res.status < 400;
+  };
+
+  // find the episode bundle for a given sentinel, polling to the recall SLO.
+  const findEpisode = async (sentinel) => {
+    const t0 = now();
+    while (true) {
+      try {
+        const res = await authedFetch(
+          `/memory/search?query=${encodeURIComponent(HANDOFF_TAG)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`
+        );
+        if (res.status < 400) {
+          const data = await res.json();
+          const episodes = data?.episodes ?? [];
+          const hit = episodes.find((b) => {
+            const name = b?.episode?.name ?? "";
+            const sum = b?.episode?.summary ?? "";
+            return name.includes(sentinel) || sum.includes(sentinel);
+          });
+          if (hit) return hit;
+        }
+      } catch {
+        // transient; keep polling to the deadline
+      }
+      if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) return null;
+      await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+    }
+  };
+
+  const storedA = await ingest(sentinelA);
+  entry.checks.push(check("handoff replace: first ingest (A) accepted", storedA, storedA ? "stored" : "ingest rejected"));
+  if (!storedA) return;
+
+  const episodeA = await findEpisode(sentinelA);
+  entry.checks.push(check(
+    `handoff replace: recall finds A's episode within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    Boolean(episodeA),
+    episodeA ? `uuid=${short(episodeA.episode?.uuid ?? "")}` : "not found within SLO"
+  ));
+  if (!episodeA?.episode?.uuid) return;
+
+  // Replicate the runtime's replace-on-store: ingest the replacement (B)
+  // FIRST, then delete the prior handoff (A) — matching sweepReplacedHandoffs'
+  // "ingest -> sweep old" ordering (store.ts:replaceHandoff), not delete-first.
+  const storedB = await ingest(sentinelB);
+  entry.checks.push(check("handoff replace: second ingest (B, the replacement) accepted", storedB, storedB ? "stored" : "ingest rejected"));
+  if (!storedB) return;
+
+  let deleteOk = false;
+  let deleteDetail = "";
+  try {
+    const del = await authedFetch(`/memory/episodes/${encodeURIComponent(episodeA.episode.uuid)}`, { method: "DELETE" });
+    deleteOk = del.status === 204;
+    deleteDetail = deleteOk ? "204 No Content" : `HTTP ${del.status}`;
+  } catch (err) {
+    deleteDetail = String(err?.message ?? err);
+  }
+  entry.checks.push(check("handoff replace: DELETE /memory/episodes/{uuid} on the old handoff succeeds", deleteOk, deleteDetail));
+  if (!deleteOk) return;
+
+  // Confirm the swap: A gone, B present. Poll since delete-then-reindex is
+  // also async; failure to disappear within the SLO is a real regression
+  // (replace-on-store's whole point is exactly one handoff per project).
+  const t0 = now();
+  let aGone = false;
+  let bPresent = false;
+  while (true) {
+    const stillA = await findEpisode(sentinelA);
+    const stillB = await findEpisode(sentinelB);
+    aGone = !stillA;
+    bPresent = Boolean(stillB);
+    if (aGone && bPresent) break;
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+  }
+  entry.checks.push(check(
+    "handoff replace: old handoff (A) no longer searchable after delete",
+    aGone,
+    aGone ? "gone" : "STALE: A still searchable after delete — replace-on-store is leaking old handoffs"
+  ));
+  entry.checks.push(check(
+    "handoff replace: replacement (B) remains searchable",
+    bPresent,
+    bPresent ? "present" : "B not found — search regressed independent of the delete"
+  ));
+}
+
+// ---------- Tier 3: hook-capture source tagging (REST ingest, per client) ----------
+// North-star pillar 1 (hook-based passive capture): every client's hook
+// eventually flushes its spool via a real POST to the same REST ingest
+// endpoint this harness already drives (packages/capture-core/src/spool.ts
+// flushSpool -> client.ingest). This suite cannot fire an actual hook process
+// (that needs each client app running) — what it CAN and previously did not
+// prove is the shared backend contract every hook flush depends on: a memory
+// tagged with a given client's `source` is accepted, and `sources=[...]`
+// filtering actually isolates one client's captures from another's. If this
+// contract breaks, every client's hook capture breaks silently right along
+// with it, so it is the highest-leverage piece of pillar 1 a network-only
+// harness can verify. Client-side hook firing itself needs a live per-app
+// run (see docs/implementation-overview.html §7.5-style gap notes).
+const CAPTURE_SOURCES = ["cursor", "codex", "claude-code", "hermes", "openclaw"];
+async function evalCaptureSourceTags(entry) {
+  const restBase = REST_API_BASE.replace(/\/$/, "");
+  const authedFetch = (path, init) =>
+    fetch(`${restBase}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+  const stamp = Date.now();
+  const project = `e2e-capture-src-${stamp}`;
+  const sentinelFor = (source) => `e2e-capture-${source}-${stamp}`;
+
+  const results = {};
+  for (const source of CAPTURE_SOURCES) {
+    const sentinel = sentinelFor(source);
+    const body = {
+      content: `[e2e-capture] hook-flush simulation for ${source}: ${sentinel}. (safe to delete)`,
+      source,
+      channel: "api",
+      project,
+    };
+    try {
+      const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+      results[source] = res.status < 400;
+    } catch {
+      results[source] = false;
+    }
+  }
+  const allStored = CAPTURE_SOURCES.every((s) => results[s]);
+  entry.checks.push(check(
+    "capture: ingest accepts every client's source tag",
+    allStored,
+    allStored ? `stored: ${CAPTURE_SOURCES.join(", ")}` : `failed: ${CAPTURE_SOURCES.filter((s) => !results[s]).join(", ")}`
+  ));
+  if (!allStored) return;
+
+  // Poll until cursor's own sentinel is searchable scoped to its source, then
+  // check every OTHER client's sentinel is excluded from that same query —
+  // proves sources=[...] actually isolates one client's captures from
+  // another's, which is exactly what a hook flush relies on to not have its
+  // captures blended with a different client's.
+  const primary = "cursor";
+  const t0 = now();
+  let ownFound = false;
+  let raw = "";
+  while (true) {
+    const res = await authedFetch(
+      `/memory/search?query=${encodeURIComponent("[e2e-capture]")}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
+    );
+    raw = res.status < 400 ? await res.text() : "";
+    if (raw.includes(sentinelFor(primary))) { ownFound = true; break; }
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
+  }
+  entry.checks.push(check(
+    `capture: sources=[${primary}] finds ${primary}'s own memory within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    ownFound,
+    ownFound ? "found" : "not searchable within SLO"
+  ));
+  if (ownFound) {
+    const others = CAPTURE_SOURCES.filter((s) => s !== primary);
+    const leaked = others.filter((s) => raw.includes(sentinelFor(s)));
+    entry.checks.push(check(
+      `capture: sources=[${primary}] excludes other clients' memories`,
+      leaked.length === 0,
+      leaked.length === 0 ? "isolated" : `LEAK: ${leaked.join(", ")} sentinel(s) returned under sources=[${primary}]`
+    ));
+  }
 }
 
 // ---------- Tier 3: deep quality/latency eval (async-indexing waits) ----------
@@ -566,6 +980,45 @@ async function evalNegative(entry, url) {
     toolErrored(unknown) && /not found|unknown/i.test(textOf(unknown.payload)),
     (textOf(unknown.payload) || errText(unknown) || "no error").slice(0, 80)
   ));
+
+  // Malformed session — a made-up mcp-session-id must not be treated as valid
+  // (either rejected outright, or at minimum not allowed to execute a tool).
+  const badSession = await callTool(url, {
+    token: TOKEN, sessionId: "e2e-forged-session-id-00000000", id: 63,
+    name: "add_memory", args: { content: "[e2e-negative] should not be stored under a forged session" }
+  });
+  const sessionRejected = badSession.status === 401 || badSession.status === 404 || toolErrored(badSession);
+  entry.checks.push(check(
+    "negative: forged mcp-session-id → rejected",
+    sessionRejected,
+    sessionRejected ? `HTTP ${badSession.status}${toolErrored(badSession) ? ", tool isError" : ""}` : `HTTP ${badSession.status}, call appeared to succeed`
+  ));
+
+  // Oversized content — 200KB of text is well beyond any real memory/note and
+  // should be rejected as a validation error, not silently truncated/stored
+  // (silent truncation would be a data-loss bug, not caught elsewhere).
+  const oversized = "e2e-oversized-payload-".repeat(10000); // ~230KB
+  const big = await callTool(url, { token: TOKEN, sessionId, id: 64, name: "add_memory", args: { content: oversized } });
+  const bigRejected = toolErrored(big) || big.status === 413 || big.status >= 400;
+  entry.checks.push(check(
+    "negative: oversized (~230KB) add_memory content → rejected",
+    bigRejected,
+    bigRejected ? (textOf(big.payload) || `HTTP ${big.status}`).slice(0, 80) : "accepted a 230KB payload without error"
+  ));
+
+  // Concurrent tools/call on one session — responses must not cross-wire
+  // (each JSON-RPC id must come back matched to its own request).
+  const [concA, concB] = await Promise.all([
+    callTool(url, { token: TOKEN, sessionId, id: 65, name: "get_current_date", args: {} }),
+    callTool(url, { token: TOKEN, sessionId, id: 66, name: "get_current_date", args: {} })
+  ]);
+  const idsMatch = concA.payload?.id === 65 && concB.payload?.id === 66;
+  const bothOk = !concA.payload?.error && !concB.payload?.error;
+  entry.checks.push(check(
+    "negative: concurrent tools/call on one session don't cross-wire responses",
+    idsMatch && bothOk,
+    idsMatch ? "response ids matched requests" : `id mismatch: got ${concA.payload?.id}/${concB.payload?.id}, expected 65/66`
+  ));
 }
 
 function textOf(payload) {
@@ -604,7 +1057,11 @@ function matchRoles(tools) {
   return roles;
 }
 
-function argsFor(tool, { primary, id }) {
+// extra: optional filter params (project/sources/date_from/date_to) to merge
+// in verbatim — these are documented search_memory/add_wiki/search_wiki
+// params that are rarely "required" in the schema, so they must bypass the
+// required-props loop below to actually reach the tool call.
+function argsFor(tool, { primary, id }, extra) {
   const schema = tool.inputSchema ?? tool.input_schema ?? {};
   const props = schema.properties ?? {};
   const required = schema.required ?? Object.keys(props);
@@ -629,6 +1086,7 @@ function argsFor(tool, { primary, id }) {
     const target = Object.keys(props).find((k) => idKeys.test(k));
     if (target) args[target] = id;
   }
+  if (extra) Object.assign(args, extra);
   return args;
 }
 

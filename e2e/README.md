@@ -50,16 +50,57 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
 - **tool contract**: asserts every expected tool is exposed (basis: the shipped
   tool surface — `add_memory`, `search_memory`, `get_current_date`,
   `search_wiki`, `add_wiki`, `update_wiki`, `delete_wiki`; a missing tool fails
-  the run), that `get_current_date` returns a date, and runs a full wiki CRUD
+  the run), that `get_current_date` returns a date that's sane (within 2 days
+  of wall clock) and stable across repeated calls, and runs a full wiki CRUD
   round-trip (add → search → update → delete → confirm gone) that cleans up
   after itself.
+- **MCP resources**: `resources/list` exposes `membase://profile` and
+  `membase://recent`, and `resources/read` returns the expected shape for
+  each — `membase://profile` as `application/json` with a `timezone` field,
+  `membase://recent` as `text/markdown` starting with `# Membase Recent
+  Memories`. Also confirms reading an unregistered URI errors rather than
+  returning empty content. This is real client-facing surface (the membase
+  MCP usage instructions tell every client when to read these) that the
+  harness previously couldn't reach at all — `mcp-client.mjs` only spoke
+  `tools/list`/`tools/call` until `resources/list`/`resources/read` were
+  added alongside this check.
+- **filter params**: `search_memory`'s `project`, `sources`, and
+  `date_from`/`date_to` filters, and `add_wiki`/`search_wiki`'s `project`
+  scoping — two project-tagged memories are written and a `project`-scoped
+  search must return its own memory and exclude the other's; a `date_to`
+  window ending before the write must exclude it; `sources=["slack"]` must
+  exclude a memory written via the MCP tool call path. Previously only the
+  add/search happy path was checked — never whether the live server actually
+  applies these documented filters.
 - **quality gates**: hard pass/fail on measured quality — memory must become
   searchable within `MEMBASE_E2E_MAX_RECALL_MS` (correctness ceiling, default
   180s; slower than `MEMBASE_E2E_TARGET_RECALL_MS` (default 60s) only warns),
   semantic context must retrieve the sentinel, and search p95 ≤
   `MEMBASE_E2E_MAX_SEARCH_P95_MS` (default 3000ms).
-- **negative cases**: no token → 401 Bearer, forged token → 401, and malformed
-  tool calls (missing/empty required arg, unknown tool) → tool-level error.
+- **negative cases**: no token → 401 Bearer, forged token → 401, malformed
+  tool calls (missing/empty required arg, unknown tool) → tool-level error,
+  a forged `mcp-session-id` → rejected, an oversized (~230KB) `add_memory`
+  content → rejected rather than silently truncated, and two concurrent
+  `tools/call`s on one session → responses don't cross-wire (each JSON-RPC id
+  comes back matched to its own request).
+- **handoff replace-on-store** (north-star pillar 2): the "exactly one
+  handoff per project" policy (`packages/capture-core/src/handoff.ts`'s
+  `sweepReplacedHandoffs`) means storing a new `[HANDOFF]` must delete the
+  prior one. The MCP tool surface has no delete tool, but the runtime's real
+  delete path is REST (`DELETE /memory/episodes/{episode_uuid}`) — this test
+  ingests handoff A, recovers its episode UUID via search, ingests
+  replacement B, deletes A by UUID, then confirms search shows A gone and B
+  present. Previously only store→recall was proven (`evalHandoff`); never
+  that a second store actually deletes the first.
+- **hook-capture source tagging** (north-star pillar 1): every client's hook
+  eventually flushes its spool via a POST to this same REST ingest endpoint
+  (`packages/capture-core/src/spool.ts`'s `flushSpool`). This harness cannot
+  fire an actual hook process (that needs each client app running — see
+  `docs/implementation-overview.html` §7.5 for that gap), but it proves the
+  shared backend contract every hook flush depends on: a memory tagged with
+  each client's `source` (`cursor`, `codex`, `claude-code`, `hermes`,
+  `openclaw`) is accepted, and `sources=[...]` filtering isolates one
+  client's captures from another's.
 
 Obtain the token through the client's normal OAuth flow, or set
 `MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a

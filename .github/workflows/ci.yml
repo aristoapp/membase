@@ -99,3 +99,34 @@ jobs:
             exit 0
           fi
           node e2e/run-e2e.mjs --live
+
+  e2e-tier3-staging:
+    # Deep quality/latency + filter/negative-case eval against STAGING.
+    # Minutes-long, so it does NOT run on every push/PR — manual only (the
+    # "press the button" tier, requested via this repo's Actions tab). Nightly
+    # deep coverage already lives in e2e-staging.yml's schedule; this job lets
+    # a run be requested here too, without remembering/typing the --tier3 flag.
+    name: e2e tier 3 (staging, deep — manual only)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
+      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Tier 3 (deep quality/latency + filters + negative cases) against staging
+        env:
+          MEMBASE_SERVICE_CLIENT_ID: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_ID }}
+          MEMBASE_SERVICE_CLIENT_SECRET: ${{ secrets.MEMBASE_STAGING_SERVICE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$MEMBASE_SERVICE_CLIENT_ID" ]; then
+            echo "::error::MEMBASE_STAGING_SERVICE_CLIENT_ID is not set — cannot run Tier 3."
+            exit 1
+          fi
+          node e2e/run-e2e.mjs --tier3
