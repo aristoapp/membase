@@ -15,7 +15,6 @@ export const HERMES_CLIENT_ID = "hermes";
 export const HERMES_DISPLAY_NAME = "Hermes Agent";
 export const HERMES_PLUGIN_NAME = "membase";
 export const HERMES_PYTHON_PACKAGE = "hermes-membase";
-export const HERMES_PYTHON_PACKAGE_MIN_VERSION = "0.2.0";
 export const HERMES_MCP_SERVER_NAME = "membase";
 export const HERMES_MCP_SERVER_URL = "https://mcp.membase.so/mcp";
 
@@ -58,9 +57,7 @@ export function generateHermesPluginManifest(
     version: config.client.version ?? "0.0.0",
     description:
       "Connect Hermes Agent to Membase context APIs for remember, search, task context, and forget actions.",
-    pip_dependencies: [
-      `${HERMES_PYTHON_PACKAGE}>=${HERMES_PYTHON_PACKAGE_MIN_VERSION}`
-    ]
+    pip_dependencies: [HERMES_PYTHON_PACKAGE]
   };
 }
 

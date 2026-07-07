@@ -17,6 +17,7 @@ from .config import (
     save_membase_config_file,
     write_token_file,
 )
+from .mirror import atomic_write_text
 from .star_prompt import maybe_prompt_github_star
 
 if TYPE_CHECKING:
@@ -289,8 +290,7 @@ def _cmd_resync(args: argparse.Namespace, config_path: Path) -> int:
         )
         return 0
 
-    mirror_index_path.parent.mkdir(parents=True, exist_ok=True)
-    mirror_index_path.write_text(f"{json.dumps(index, indent=2)}\n", encoding="utf-8")
+    atomic_write_text(mirror_index_path, f"{json.dumps(index, indent=2)}\n")
     print(
         f"Mirror index rebuilt: {mirror_index_path} (entries={len(index)}, source={memory_file})",
     )

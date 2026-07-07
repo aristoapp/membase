@@ -47,6 +47,9 @@ const secretPatterns = [
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
   /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,
   /\b(?:MEMBASE_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|NPM_TOKEN|API_KEY|TOKEN|SECRET|PASSWORD)\s*=\s*(["']?)(?!\$\{|<|your-|example|placeholder|dummy|test|smoke|redacted|process\.env)[^\s"']{8,}\1/gi,
+  // Committed PEM private key. Mirrors capture-core's PRIVATE_KEY_RE (the
+  // runtime redactor) so the static gate catches what the runtime would strip.
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
 ];
 
 // Redaction-feature test fixtures deliberately contain secret-shaped
@@ -54,6 +57,7 @@ const secretPatterns = [
 const redactionFixtureFiles = new Set([
   "clients/claude/runtime/tests/sanitize.test.ts",
   "clients/openclaw/runtime/src/utils.test.ts",
+  "clients/openclaw/runtime/src/tools/secret-guard.test.ts",
   "packages/capture-core/spec/sanitize-vectors.json",
 ]);
 
