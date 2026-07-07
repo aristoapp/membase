@@ -1531,13 +1531,17 @@ defineMcpHostAgent&lt;CodexPluginManifest&gt;({ ... })</code></pre>
           </tr>
           <tr>
             <td>Cursor / Codex</td>
-            <td>handoff만 파일 기반으로 연결(7.5절) — Cursor는 훅 없이
-              Rules 자동 로딩, Codex는 <code>hooks.json</code>
-              <code>SessionStart</code>(스폰형, 로컬 파일만 읽음)</td>
-            <td>캡처는 D3에서 추가 예정: Cursor는 <code>hooks.json</code>
-              (Claude와 같은 스폰형이라 디스크 스풀 재사용), Codex는
-              plugin hook/<code>notify</code>. 둘 다 capture-core 위에
-              이벤트 이름·페이로드 변환만 하는 어댑터</td>
+            <td>스폰형 <code>hooks.json</code> — Codex는 공유
+              <code>hook.cjs</code> 직결(SessionStart/UserPromptSubmit/
+              PostToolUse/Stop), Cursor는 <code>cursor-hook.mjs</code>가
+              이벤트·페이로드·출력 스키마만 번역해 같은 번들에 위임.
+              handoff 파일 주입은 별도(7.5절: Cursor Rules 로딩,
+              Codex session-start 스크립트)</td>
+            <td>캡처는 capture-core 디스크 스풀 공유(Claude와 동일).
+              디스크 로그인(stdio 번들)이 있으면 훅이 실시간 flush,
+              없으면(HTTP 폴백) 스풀에 쌓고 세션 시작 주입이 "보류
+              N건 — flush하라"를 알려 앱 안의 인증된 AI가 업로드
+              (dream = 그 flush의 이름, rename-먼저 프로토콜)</td>
           </tr>
         </table>
         <p style="margin-top: 8px; font-size: 14px; color: var(--muted);">
