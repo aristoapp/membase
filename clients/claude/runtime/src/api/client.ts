@@ -158,6 +158,12 @@ export class MembaseClient {
     });
   }
 
+  async deleteEpisode(uuid: string): Promise<void> {
+    await this.request(`/memory/episodes/${encodeURIComponent(uuid)}`, {
+      method: "DELETE",
+    });
+  }
+
   async deleteWiki(docId: string): Promise<void> {
     await this.request(`/wiki/documents/${docId}`, { method: "DELETE" });
   }

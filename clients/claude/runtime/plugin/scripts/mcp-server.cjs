@@ -31278,6 +31278,48 @@ function createTokenStore(options) {
   return { path, read, write, clear };
 }
 
+// ../../../packages/capture-core/src/handoff.ts
+var HANDOFF_TAG = "[HANDOFF]";
+var HANDOFF_SUMMARY_MAX = 400;
+function handoffRecallQuery() {
+  return `${HANDOFF_TAG} session handoff summary`;
+}
+function taggedHandoff(args) {
+  const project = args.project?.trim();
+  const scope = project ? ` (${project})` : "";
+  return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
+}
+function buildHandoffMemory(args) {
+  return taggedHandoff(args);
+}
+function buildHandoffDisplaySummary(args) {
+  return taggedHandoff({
+    ...args,
+    summary: args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX)
+  });
+}
+function isHandoffMemory(text) {
+  return text.trimStart().startsWith(HANDOFF_TAG);
+}
+var HANDOFF_REPLACE_LIMIT = 10;
+var SCOPED_HANDOFF_RE = /^\s*\[HANDOFF\]\s*\(/;
+function selectReplaceableHandoffs(bundles, opts) {
+  const max = opts.max ?? HANDOFF_REPLACE_LIMIT;
+  return bundles.filter((b) => {
+    const name = b.episode.name ?? "";
+    if (!isHandoffMemory(name)) return false;
+    if (!opts.projectScoped && SCOPED_HANDOFF_RE.test(name)) return false;
+    return true;
+  }).slice(0, max);
+}
+async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
+  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => Boolean(uuid3));
+  const results = await Promise.allSettled(
+    targets.map((uuid3) => deleteEpisode(uuid3))
+  );
+  return results.filter((r) => r.status === "fulfilled").length;
+}
+
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
 var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
@@ -31555,6 +31597,11 @@ var MembaseClient = class {
       })
     });
   }
+  async deleteEpisode(uuid3) {
+    await this.request(`/memory/episodes/${encodeURIComponent(uuid3)}`, {
+      method: "DELETE"
+    });
+  }
   async deleteWiki(docId) {
     await this.request(`/wiki/documents/${docId}`, { method: "DELETE" });
   }
@@ -31578,6 +31625,32 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
     onTokenRefresh,
     timeoutMs: options?.timeoutMs
   });
+}
+
+// src/handoff/store.ts
+var REPLACE_SEARCH_WINDOW = 20;
+async function replaceHandoff(client, args) {
+  const project = args.project?.trim() || void 0;
+  const previous = await client.searchMemory({
+    query: handoffRecallQuery(),
+    limit: REPLACE_SEARCH_WINDOW,
+    project
+  }).catch(() => []);
+  const result = await client.ingestMemory({
+    content: buildHandoffMemory({ summary: args.summary, project }),
+    display_summary: buildHandoffDisplaySummary({
+      summary: args.summary,
+      project
+    }),
+    metadata: args.metadata,
+    project
+  });
+  const replaced = await sweepReplacedHandoffs(
+    previous,
+    (uuid3) => client.deleteEpisode(uuid3),
+    { projectScoped: Boolean(project) }
+  );
+  return { status: result.status, replaced };
 }
 
 // src/auth/oauth.ts
@@ -32399,6 +32472,46 @@ async function main() {
       });
       await client.recordUsage().catch(() => void 0);
       return success2(`Stored in Membase (${result.status}).`);
+    }
+  );
+  server.registerTool(
+    "store_handoff",
+    {
+      title: "Store Session Handoff",
+      description: "Store a session-state handoff summary (what was done, decisions, current state, next steps) and REPLACE any older handoff for the same project \u2014 the cloud keeps exactly one handoff per project. The [HANDOFF] tag is added automatically. Never include secrets.",
+      inputSchema: {
+        summary: MemoryContentSchema.describe(
+          "Handoff summary in the user's language. Do not add the [HANDOFF] tag yourself."
+        ),
+        project: MemoryProjectSchema.describe(
+          "Project/category slug scoping this handoff. One handoff is kept per project."
+        )
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false
+      }
+    },
+    async (args) => {
+      const { client } = requireClient();
+      if (looksSensitive2(args.summary)) {
+        throw new Error("Refusing to store content that looks like a secret.");
+      }
+      const { status, replaced } = await replaceHandoff(client, {
+        summary: args.summary,
+        project: args.project,
+        metadata: {
+          plugin: INGEST_PLUGIN_LABEL,
+          plugin_version: PLUGIN_VERSION,
+          capture_kind: "handoff",
+          source: MEMORY_SOURCE
+        }
+      });
+      await client.recordUsage().catch(() => void 0);
+      return success2(
+        `Handoff stored in Membase (${status})` + (replaced ? `; replaced ${replaced} older handoff(s).` : ".")
+      );
     }
   );
   server.registerTool(

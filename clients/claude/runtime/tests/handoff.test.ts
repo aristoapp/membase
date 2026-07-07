@@ -10,7 +10,7 @@ describe("handoff memory tagging", () => {
   it("tags stored handoff content with the literal marker", () => {
     const content = buildHandoffMemory({
       summary: "Shipped D1 slices, gate closed.",
-      projectSlug: "membase-plugin-mcp",
+      project: "membase-plugin-mcp",
     });
 
     expect(content.startsWith(HANDOFF_TAG)).toBe(true);

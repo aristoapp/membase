@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createClient } from "../api/client.js";
+import { replaceHandoff } from "../handoff/store.js";
 import { loginWithOAuth } from "../auth/oauth.js";
 import {
   clearTokens,
@@ -323,6 +324,49 @@ async function main(): Promise<void> {
       });
       await client.recordUsage().catch(() => undefined);
       return success(`Stored in Membase (${result.status}).`);
+    },
+  );
+
+  server.registerTool(
+    "store_handoff",
+    {
+      title: "Store Session Handoff",
+      description:
+        "Store a session-state handoff summary (what was done, decisions, current state, next steps) and REPLACE any older handoff for the same project — the cloud keeps exactly one handoff per project. The [HANDOFF] tag is added automatically. Never include secrets.",
+      inputSchema: {
+        summary: MemoryContentSchema.describe(
+          "Handoff summary in the user's language. Do not add the [HANDOFF] tag yourself.",
+        ),
+        project: MemoryProjectSchema.describe(
+          "Project/category slug scoping this handoff. One handoff is kept per project.",
+        ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (args) => {
+      const { client } = requireClient();
+      if (looksSensitive(args.summary)) {
+        throw new Error("Refusing to store content that looks like a secret.");
+      }
+      const { status, replaced } = await replaceHandoff(client, {
+        summary: args.summary,
+        project: args.project,
+        metadata: {
+          plugin: INGEST_PLUGIN_LABEL,
+          plugin_version: PLUGIN_VERSION,
+          capture_kind: "handoff",
+          source: MEMORY_SOURCE,
+        },
+      });
+      await client.recordUsage().catch(() => undefined);
+      return success(
+        `Handoff stored in Membase (${status})` +
+          (replaced ? `; replaced ${replaced} older handoff(s).` : "."),
+      );
     },
   );
 

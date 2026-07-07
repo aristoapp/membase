@@ -607,6 +607,11 @@ var MembaseClient = class {
       })
     });
   }
+  async deleteEpisode(uuid) {
+    await this.request(`/memory/episodes/${encodeURIComponent(uuid)}`, {
+      method: "DELETE"
+    });
+  }
   async deleteWiki(docId) {
     await this.request(`/wiki/documents/${docId}`, { method: "DELETE" });
   }

@@ -172,6 +172,7 @@ export function truncateText(
 
 export * from "./spool.js";
 export * from "./token-store.js";
+export * from "./handoff.js";
 
 // ---------------------------------------------------------------------------
 // OAuth HTTP transport (D1 slice 2)
