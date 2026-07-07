@@ -99,6 +99,25 @@ export function readSpool(dataDir) {
     .map((l) => JSON.parse(l));
 }
 
+export function scratchDir(dataDir) {
+  return join(dataDir, "scratch");
+}
+
+/** Parsed lines of a session's scratch file, or [] when absent. */
+export function readScratch(dataDir, sessionId) {
+  const p = join(scratchDir(dataDir), `${sessionId}.jsonl`);
+  if (!existsSync(p)) return [];
+  return readFileSync(p, "utf8")
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .map((l) => JSON.parse(l));
+}
+
+/** true when a session's scratch file exists on disk. */
+export function scratchExists(dataDir, sessionId) {
+  return existsSync(join(scratchDir(dataDir), `${sessionId}.jsonl`));
+}
+
 /**
  * Stub Membase API (node:http). Records every request; behavior is
  * scriptable per test:

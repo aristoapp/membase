@@ -62,7 +62,11 @@ export interface WikiDocument {
 export interface CaptureRecord {
   capture_id: string;
   capture_kind:
+    // "tool_summary" is legacy (dreaming v1 per-tool-batch upload). No new
+    // records use it, but the union keeps it so a spool holding pre-upgrade
+    // records still flushes cleanly.
     | "tool_summary"
+    | "session_summary"
     | "compact_summary"
     | "explicit"
     | "project_index";
