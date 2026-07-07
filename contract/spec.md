@@ -158,12 +158,13 @@ Codex hooks output schema per developers.openai.com/codex/hooks)
   the same literal (cross-client greppable: the string `[HANDOFF]` appears
   identically in claude runtime, openclaw runtime, cursor skill, codex
   prompt).
-- C-HDF-2 — SessionStart handoff injection: with credentials and a stub API
-  whose search response (per the wire schema above) returns one bundle whose
-  `episode.name` starts with `[HANDOFF]`, the SessionStart output's single
-  JSON contains that handoff text. KNOWN LIMIT (do not test yet): "latest by
-  time, not most relevant" is currently delegated to the server via
-  `limit=1`; client-side latest-picking is an open north-star item.
+- C-HDF-2 — SessionStart handoff injection picks the LATEST handoff by
+  time, not the most relevant: with credentials and a stub API returning
+  (per the wire schema above) an OLDER `[HANDOFF]` bundle first (higher
+  relevance rank) and a NEWER one second, the single-JSON SessionStart
+  output contains the newer handoff and not the older one. Non-handoff
+  bundles in the window are ignored. Source: north-star "always exactly the
+  latest one".
 
 ## Dream flush protocol (source: the four dream docs after #35)
 
