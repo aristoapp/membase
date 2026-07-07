@@ -7,7 +7,7 @@
  *
  * The tag MUST live on a field the search bundle exposes — the episode name /
  * summary — not just the ingested content body: the bundle carries `name` and
- * `summary` but not the raw body (see NodeResponse in types.ts). The backend
+ * `summary` but not the raw body (see NodeResponse in clients/openclaw/runtime/src/types.ts). The backend
  * derives the episode name from `display_summary` (graph_sync.py:298 →
  * build_safe_episode_name(display_title or display_summary or content)), so
  * `buildHandoffDisplaySummary` prefixes the tag there and `isHandoffMemory`
@@ -18,6 +18,10 @@ export const HANDOFF_TAG = "[HANDOFF]";
 // display_summary max_length on the backend (models/ingest.py) is 500; the tag
 // + scope is short, so clamp the user summary to leave headroom.
 const HANDOFF_SUMMARY_MAX = 400;
+
+/** Recall/replace search window: relevance can outrank the real handoff,
+ * so both read and sweep paths fetch this many and filter client-side. */
+export const HANDOFF_RECALL_LIMIT = 20;
 
 export function handoffRecallQuery(): string {
   return `${HANDOFF_TAG} session handoff summary`;
@@ -99,11 +103,19 @@ export function pickLatestHandoff<
 /** Replace-on-store cap: never delete more than this many old handoffs. */
 export const HANDOFF_REPLACE_LIMIT = 10;
 
+// Project-scoped handoffs carry the "(project)" marker right after the tag
+// (see taggedHandoff). Used to keep an UNSCOPED store from deleting scoped
+// handoffs that leak into an unscoped search.
+const SCOPED_HANDOFF_RE = /^\s*\[HANDOFF\]\s*\(/;
+
 /**
  * Bundles eligible for replace-on-store deletion (policy: the cloud keeps
- * exactly ONE handoff per project). Only [HANDOFF]-tagged bundles qualify —
- * ordinary memories that leaked into the generic recall query are never
- * deleted — and the batch is capped as a blast-radius guard.
+ * exactly ONE handoff per project). Deletion is stricter than recall:
+ * - episode.name only (recall also matches summary; deletion must not kill
+ *   lookalike ordinary memories whose summary echoes the tag),
+ * - when the store is UNSCOPED, project-scoped handoffs are excluded (a
+ *   project-scoped store already relies on the server-side project filter),
+ * - batch capped as a blast-radius guard.
  */
 export function selectReplaceableHandoffs<
   T extends {
@@ -112,12 +124,47 @@ export function selectReplaceableHandoffs<
       summary?: string | null;
     };
   },
->(bundles: T[], max = HANDOFF_REPLACE_LIMIT): T[] {
+>(
+  bundles: T[],
+  opts: { projectScoped: boolean; max?: number },
+): T[] {
+  const max = opts.max ?? HANDOFF_REPLACE_LIMIT;
   return bundles
-    .filter(
-      (b) =>
-        isHandoffMemory(b.episode.name ?? "") ||
-        isHandoffMemory(b.episode.summary ?? ""),
-    )
+    .filter((b) => {
+      const name = b.episode.name ?? "";
+      if (!isHandoffMemory(name)) return false;
+      if (!opts.projectScoped && SCOPED_HANDOFF_RE.test(name)) return false;
+      return true;
+    })
     .slice(0, max);
+}
+
+/**
+ * Delete the replaceable old handoffs in parallel; failures are non-fatal
+ * (leftovers are swept by the next successful store). Returns how many were
+ * actually deleted. NOTE: callers invoke this after an ingest that is only
+ * ENQUEUED (the ingest pipeline is async by design); if the pipeline later
+ * rejects the new handoff the old ones are already gone — accepted, since
+ * this is the same durability class as every other stored memory.
+ */
+export async function sweepReplacedHandoffs<
+  T extends {
+    episode: {
+      uuid?: string | null;
+      name?: string | null;
+      summary?: string | null;
+    };
+  },
+>(
+  bundles: T[],
+  deleteEpisode: (uuid: string) => Promise<void>,
+  opts: { projectScoped: boolean; max?: number },
+): Promise<number> {
+  const targets = selectReplaceableHandoffs(bundles, opts)
+    .map((b) => b.episode.uuid)
+    .filter((uuid): uuid is string => Boolean(uuid));
+  const results = await Promise.allSettled(
+    targets.map((uuid) => deleteEpisode(uuid)),
+  );
+  return results.filter((r) => r.status === "fulfilled").length;
 }

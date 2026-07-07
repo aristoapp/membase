@@ -20,7 +20,8 @@ later session or another client (Claude Code, Codex, etc.).
    is known. This is how other clients find it via `search_memory`.
    Cloud policy is ONE handoff per project; this client cannot delete on the
    remote server, so an older copy may linger briefly — it is swept the next
-   time a delete-capable client (Claude Code, OpenClaw) stores a handoff.
+   time a delete-capable client (Claude Code, OpenClaw) stores a handoff
+   for the SAME project.
 4. **Write** the same summary to `.cursor/rules/membase-handoff.mdc` in the
    workspace root (overwrite if it exists — only the latest handoff lives
    there). Do this even if step 3 failed (e.g. memory quota reached) — the

@@ -326,6 +326,7 @@ function createTokenStore(options) {
 
 // ../../../packages/capture-core/src/handoff.ts
 var HANDOFF_TAG = "[HANDOFF]";
+var HANDOFF_RECALL_LIMIT = 20;
 function handoffRecallQuery() {
   return `${HANDOFF_TAG} session handoff summary`;
 }
@@ -1066,15 +1067,15 @@ function buildSessionCaptureCandidate(raw, captureKind) {
 
 // src/hooks/handler.ts
 var SESSION_FETCH_TIMEOUT_MS = 1800;
-var HANDOFF_RECALL_LIMIT = 20;
 var ASYNC_FLUSH_TIMEOUT_MS = 4e3;
 var ASYNC_FLUSH_LIMIT = 3;
-var STDIN_DEADLINE_MS = 2e3;
-var STDIN_MAX_BYTES = 1048576;
+var STDIN_IDLE_MS = 2e3;
+var STDIN_MAX_BYTES = 8388608;
 function readStdin() {
   return new Promise((resolve2) => {
     let data = "";
     let settled = false;
+    let timer;
     const done = () => {
       if (settled) return;
       settled = true;
@@ -1085,10 +1086,15 @@ function readStdin() {
       }
       resolve2(data);
     };
-    const timer = setTimeout(done, STDIN_DEADLINE_MS);
-    timer.unref?.();
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(done, STDIN_IDLE_MS);
+      timer.unref?.();
+    };
+    arm();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
+      arm();
       if (data.length < STDIN_MAX_BYTES) data += chunk;
     });
     process.stdin.on("end", done);
@@ -1215,8 +1221,9 @@ async function prefetchHandoff(client, projectSlug) {
   ).catch(() => void 0);
   const latest = bundles ? pickLatestHandoff(bundles) : void 0;
   if (!latest) return "";
+  const text = latest.episode.summary ?? latest.episode.name;
   return `<membase-handoff>
-${latest.episode.name}
+${text}
 </membase-handoff>`;
 }
 async function handleUserPromptSubmit(input) {

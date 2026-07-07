@@ -45,7 +45,7 @@
     "version-parity": "node scripts/check-version-parity.mjs",
     "capture-core:typecheck": "pnpm --filter @membase/capture-core typecheck",
     "capture-core:test": "cd packages/capture-core && bun test",
-    "contract:test": "node --test \"contract/*.contract.test.mjs\""
+    "contract:test": "pnpm --filter @membase/capture-core typecheck && node --test contract/*.contract.test.mjs"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

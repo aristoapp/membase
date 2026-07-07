@@ -42,6 +42,7 @@ export function buildSessionStartContext(args: {
 // Handoff tagging + selection now come from the shared capture-core module
 // so all clients agree on the literal tag and the latest-by-time picker.
 export {
+  HANDOFF_RECALL_LIMIT,
   HANDOFF_TAG,
   handoffRecallQuery,
   buildHandoffMemory,

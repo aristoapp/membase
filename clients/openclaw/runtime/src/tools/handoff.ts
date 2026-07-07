@@ -3,17 +3,18 @@ import { formatBundle } from "../format";
 import type { OpenClawPluginApi } from "../types";
 import { toolResponse } from "../update-check";
 import {
+  HANDOFF_RECALL_LIMIT,
   buildHandoffDisplaySummary,
   buildHandoffMemory,
   handoffRecallQuery,
   pickLatestHandoff,
-  selectReplaceableHandoffs,
+  sweepReplacedHandoffs,
 } from "../utils";
 
 // The recall query is generic ("session handoff summary"), so ordinary
 // memories can outrank the real handoff; fetch a wider window and filter/sort
 // client-side rather than trusting the top few relevance hits.
-const RECALL_LIMIT = 20;
+const RECALL_LIMIT = HANDOFF_RECALL_LIMIT;
 
 export function registerHandoffTool(
   api: OpenClawPluginApi,
@@ -95,17 +96,11 @@ export function registerHandoffTool(
             }),
             project: params.project,
           });
-          let replaced = 0;
-          for (const bundle of selectReplaceableHandoffs(previous)) {
-            const uuid = bundle.episode.uuid;
-            if (!uuid) continue;
-            try {
-              await client.deleteMemory(uuid);
-              replaced += 1;
-            } catch {
-              // non-fatal — leftovers are swept by the next successful store
-            }
-          }
+          const replaced = await sweepReplacedHandoffs(
+            previous,
+            (uuid) => client.deleteMemory(uuid),
+            { projectScoped: Boolean(params.project?.trim()) },
+          );
           // Echo the stored summary so the user sees the handoff directly, as
           // the tool description promises.
           return await toolResponse(

@@ -159,8 +159,8 @@ keeps exactly **ONE handoff per project** via replace-on-store — storing a
 new handoff deletes the previous `[HANDOFF]` episodes in the same project
 scope (only tagged episodes, capped batch, failures non-fatal). Clients that
 cannot delete on the remote MCP server (HTTP-mode Cursor/Codex) append
-temporarily; the next store from a delete-capable client sweeps the
-leftovers, so the state converges to one. Injection stays exactly the
+temporarily; the next store from a delete-capable client FOR THE SAME
+PROJECT sweeps the leftovers, so each project's state converges to one. Injection stays exactly the
 **latest one** by time — the safety net for the convergence window. Handoff
 store also flushes the capture spool first (Pillar 1 HTTP mode), so switching
 clients never leaves fresh captures behind.

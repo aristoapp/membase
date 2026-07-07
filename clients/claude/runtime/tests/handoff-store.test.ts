@@ -36,7 +36,7 @@ describe("replaceHandoff (one cloud handoff per project)", () => {
     });
     expect(calls[0]).toBe("search");
     expect(calls[1]).toBe("ingest");
-    expect(deleted).toEqual(["u-old-1", "u-old-2"]);
+    expect([...deleted].sort()).toEqual(["u-old-1", "u-old-2"]);
     expect(result.replaced).toBe(2);
     expect(result.status).toBe("queued");
   });
@@ -52,6 +52,18 @@ describe("replaceHandoff (one cloud handoff per project)", () => {
       },
     });
     const result = await replaceHandoff(client, { summary: "state" });
+    expect(result.replaced).toBe(1);
+  });
+
+  it("unscoped store does not delete project-scoped handoffs", async () => {
+    const { client, deleted } = makeClient({
+      searchMemory: async () => [
+        { episode: { uuid: "u-scoped", name: "[HANDOFF] (proj) scoped" } },
+        { episode: { uuid: "u-free", name: "[HANDOFF] unscoped" } },
+      ],
+    });
+    const result = await replaceHandoff(client, { summary: "state" });
+    expect(deleted).toEqual(["u-free"]);
     expect(result.replaced).toBe(1);
   });
 
