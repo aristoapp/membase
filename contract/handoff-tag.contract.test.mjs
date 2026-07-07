@@ -55,23 +55,17 @@ test("C-HDF-1 the literal [HANDOFF] tag appears identically across all four clie
   }
 });
 
-test("C-HDF-2 SessionStart injects a [HANDOFF] bundle from the documented envelope", async (t) => {
-  // Wire schema per spec: {"episodes": [{"episode": {name, summary,
-  // valid_at, ...}}]}. Latest-vs-relevant stays server-delegated today
-  // (KNOWN LIMIT in the spec) — this contract pins that a returned handoff
-  // bundle IS injected, inside the single JSON stdout (C-HOOK-7).
-  const bundle = {
-    episode: {
-      uuid: "u-handoff",
-      name: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
-      summary: "[HANDOFF] NEW-MARKER started the dashboard rewrite",
-      valid_at: "2026-07-05T00:00:00Z",
-    },
-  };
+test("C-HDF-2 SessionStart injects the LATEST [HANDOFF] bundle, not the most relevant", async (t) => {
+  // Relevance-ranked response: OLD handoff first (top relevance), a
+  // non-handoff distractor, then the NEWER handoff last. Latest-by-time
+  // must win, inside a single-JSON stdout (C-HOOK-7).
+  const bundles = [
+    { episode: { uuid: "u-old", name: "[HANDOFF] OLD-MARKER finished migration groundwork", summary: "[HANDOFF] OLD-MARKER", valid_at: "2026-07-01T00:00:00Z" } },
+    { episode: { uuid: "u-noise", name: "we decided to use postgres", summary: "ordinary memory", valid_at: "2026-07-06T00:00:00Z" } },
+    { episode: { uuid: "u-new", name: "[HANDOFF] NEW-MARKER started dashboard rewrite", summary: "[HANDOFF] NEW-MARKER", valid_at: "2026-07-05T00:00:00Z" } },
+  ];
   const dir = await makeDataDir(t);
-  const api = await startStubApi(t, {
-    searchBody: { episodes: [bundle] },
-  });
+  const api = await startStubApi(t, { searchBody: { episodes: bundles } });
   await writeConfig(dir, { apiUrl: api.url });
   await writeCredentials(dir);
   const run = await runEntry(CLAUDE_HOOK, ["SessionStart"], {
@@ -79,16 +73,9 @@ test("C-HDF-2 SessionStart injects a [HANDOFF] bundle from the documented envelo
     env: { MEMBASE_DATA_DIR: dir },
   });
   assert.equal(run.code, 0);
-  const searches = api.requests.filter((r) => r.url.includes("search"));
-  assert.ok(
-    searches.length >= 1,
-    "session start with credentials must attempt a handoff recall",
-  );
-  // C-HOOK-7: the whole stdout must parse as ONE JSON document.
-  const parsed = JSON.parse(run.stdout);
+  const parsed = JSON.parse(run.stdout); // C-HOOK-7: single document
   const ctx = parsed.hookSpecificOutput?.additionalContext ?? "";
-  assert.ok(
-    ctx.includes("NEW-MARKER"),
-    `handoff must be injected; context was: ${ctx.slice(0, 400)}`,
-  );
+  assert.ok(ctx.includes("NEW-MARKER"), `latest handoff must win; context: ${ctx.slice(0, 300)}`);
+  assert.ok(!ctx.includes("OLD-MARKER"), "older, more-relevant handoff must not win");
+  assert.ok(!ctx.includes("postgres"), "non-handoff bundles must be ignored");
 });

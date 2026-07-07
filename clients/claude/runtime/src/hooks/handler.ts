@@ -30,9 +30,10 @@ import {
 } from "../spool/index.js";
 import type { HookInput } from "../types.js";
 import {
+  HANDOFF_RECALL_LIMIT,
   buildSessionStartContext,
   handoffRecallQuery,
-  isHandoffMemory,
+  pickLatestHandoff,
 } from "./session-start.js";
 import { buildSessionCaptureCandidate, summarizeToolCall } from "./summary.js";
 import type { EpisodeBundle } from "../types.js";
@@ -45,13 +46,16 @@ const ASYNC_FLUSH_LIMIT = 3;
 // Hooks must never hang the host session: hosts are expected to close stdin
 // after one JSON payload, but if one doesn't (or the stream errors), resolve
 // with whatever arrived after a short deadline instead of waiting for EOF.
-const STDIN_DEADLINE_MS = 2_000;
-const STDIN_MAX_BYTES = 1_048_576;
+const STDIN_IDLE_MS = 2_000;
+// ponytail: 8MB ceiling — beyond it the payload is dropped rather than
+// summarized; raise or chunk if real hook payloads ever exceed this.
+const STDIN_MAX_BYTES = 8_388_608;
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = "";
     let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
     const done = () => {
       if (settled) return;
       settled = true;
@@ -61,10 +65,17 @@ function readStdin(): Promise<string> {
       } catch {}
       resolve(data);
     };
-    const timer = setTimeout(done, STDIN_DEADLINE_MS);
-    timer.unref?.();
+    // Idle deadline, reset on every chunk: a slow-but-active stream is never
+    // cut, while an abandoned open pipe still resolves fail-open.
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(done, STDIN_IDLE_MS);
+      timer.unref?.();
+    };
+    arm();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
+      arm();
       if (data.length < STDIN_MAX_BYTES) data += chunk;
     });
     process.stdin.on("end", done);
@@ -238,19 +249,24 @@ async function prefetchHandoff(
   client: MembaseClient,
   projectSlug?: string,
 ): Promise<string> {
+  // The recall query is generic, so ordinary memories can outrank the real
+  // handoff and relevance order is not recency — fetch a window and pick the
+  // latest by time client-side (policy: inject exactly the latest one).
   const bundles = await withTimeout(
     client.searchMemory({
       query: handoffRecallQuery(),
-      limit: 1,
+      limit: HANDOFF_RECALL_LIMIT,
       project: projectSlug,
     }),
     SESSION_FETCH_TIMEOUT_MS,
   ).catch(() => undefined);
-  const latest = bundles?.find((bundle) =>
-    isHandoffMemory(bundle.episode.name ?? ""),
-  );
+  const latest = bundles ? pickLatestHandoff(bundles) : undefined;
   if (!latest) return "";
-  return `<membase-handoff>\n${latest.episode.name}\n</membase-handoff>`;
+  // summary carries the full tagged display_summary (<=500 chars); name is
+  // clipped to ~96 by the backend and can even be untagged when only the
+  // summary matched — inject the richer field.
+  const text = latest.episode.summary ?? latest.episode.name;
+  return `<membase-handoff>\n${text}\n</membase-handoff>`;
 }
 
 async function handleUserPromptSubmit(input: HookInput): Promise<void> {
