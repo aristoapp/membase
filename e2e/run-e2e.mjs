@@ -138,6 +138,7 @@ for (const client of CLIENTS) {
           await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
           await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
+          await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
           await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
@@ -682,6 +683,94 @@ async function evalHandoffReplace(entry) {
     bPresent,
     bPresent ? "present" : "B not found — search regressed independent of the delete"
   ));
+}
+
+// ---------- Tier 3: hook-capture source tagging (REST ingest, per client) ----------
+// North-star pillar 1 (hook-based passive capture): every client's hook
+// eventually flushes its spool via a real POST to the same REST ingest
+// endpoint this harness already drives (packages/capture-core/src/spool.ts
+// flushSpool -> client.ingest). This suite cannot fire an actual hook process
+// (that needs each client app running) — what it CAN and previously did not
+// prove is the shared backend contract every hook flush depends on: a memory
+// tagged with a given client's `source` is accepted, and `sources=[...]`
+// filtering actually isolates one client's captures from another's. If this
+// contract breaks, every client's hook capture breaks silently right along
+// with it, so it is the highest-leverage piece of pillar 1 a network-only
+// harness can verify. Client-side hook firing itself needs a live per-app
+// run (see docs/implementation-overview.html §7.5-style gap notes).
+const CAPTURE_SOURCES = ["cursor", "codex", "claude-code", "hermes", "openclaw"];
+async function evalCaptureSourceTags(entry) {
+  const restBase = REST_API_BASE.replace(/\/$/, "");
+  const authedFetch = (path, init) =>
+    fetch(`${restBase}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+  const stamp = Date.now();
+  const project = `e2e-capture-src-${stamp}`;
+  const sentinelFor = (source) => `e2e-capture-${source}-${stamp}`;
+
+  const results = {};
+  for (const source of CAPTURE_SOURCES) {
+    const sentinel = sentinelFor(source);
+    const body = {
+      content: `[e2e-capture] hook-flush simulation for ${source}: ${sentinel}. (safe to delete)`,
+      source,
+      channel: "api",
+      project,
+    };
+    try {
+      const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+      results[source] = res.status < 400;
+    } catch {
+      results[source] = false;
+    }
+  }
+  const allStored = CAPTURE_SOURCES.every((s) => results[s]);
+  entry.checks.push(check(
+    "capture: ingest accepts every client's source tag",
+    allStored,
+    allStored ? `stored: ${CAPTURE_SOURCES.join(", ")}` : `failed: ${CAPTURE_SOURCES.filter((s) => !results[s]).join(", ")}`
+  ));
+  if (!allStored) return;
+
+  // Poll until cursor's own sentinel is searchable scoped to its source, then
+  // check every OTHER client's sentinel is excluded from that same query —
+  // proves sources=[...] actually isolates one client's captures from
+  // another's, which is exactly what a hook flush relies on to not have its
+  // captures blended with a different client's.
+  const primary = "cursor";
+  const t0 = now();
+  let ownFound = false;
+  let raw = "";
+  while (true) {
+    const res = await authedFetch(
+      `/memory/search?query=${encodeURIComponent("[e2e-capture]")}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
+    );
+    raw = res.status < 400 ? await res.text() : "";
+    if (raw.includes(sentinelFor(primary))) { ownFound = true; break; }
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
+  }
+  entry.checks.push(check(
+    `capture: sources=[${primary}] finds ${primary}'s own memory within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    ownFound,
+    ownFound ? "found" : "not searchable within SLO"
+  ));
+  if (ownFound) {
+    const others = CAPTURE_SOURCES.filter((s) => s !== primary);
+    const leaked = others.filter((s) => raw.includes(sentinelFor(s)));
+    entry.checks.push(check(
+      `capture: sources=[${primary}] excludes other clients' memories`,
+      leaked.length === 0,
+      leaked.length === 0 ? "isolated" : `LEAK: ${leaked.join(", ")} sentinel(s) returned under sources=[${primary}]`
+    ));
+  }
 }
 
 // ---------- Tier 3: deep quality/latency eval (async-indexing waits) ----------

@@ -73,6 +73,24 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   content → rejected rather than silently truncated, and two concurrent
   `tools/call`s on one session → responses don't cross-wire (each JSON-RPC id
   comes back matched to its own request).
+- **handoff replace-on-store** (north-star pillar 2): the "exactly one
+  handoff per project" policy (`packages/capture-core/src/handoff.ts`'s
+  `sweepReplacedHandoffs`) means storing a new `[HANDOFF]` must delete the
+  prior one. The MCP tool surface has no delete tool, but the runtime's real
+  delete path is REST (`DELETE /memory/episodes/{episode_uuid}`) — this test
+  ingests handoff A, recovers its episode UUID via search, ingests
+  replacement B, deletes A by UUID, then confirms search shows A gone and B
+  present. Previously only store→recall was proven (`evalHandoff`); never
+  that a second store actually deletes the first.
+- **hook-capture source tagging** (north-star pillar 1): every client's hook
+  eventually flushes its spool via a POST to this same REST ingest endpoint
+  (`packages/capture-core/src/spool.ts`'s `flushSpool`). This harness cannot
+  fire an actual hook process (that needs each client app running — see
+  `docs/implementation-overview.html` §7.5 for that gap), but it proves the
+  shared backend contract every hook flush depends on: a memory tagged with
+  each client's `source` (`cursor`, `codex`, `claude-code`, `hermes`,
+  `openclaw`) is accepted, and `sources=[...]` filtering isolates one
+  client's captures from another's.
 
 Obtain the token through the client's normal OAuth flow, or set
 `MEMBASE_SERVICE_CLIENT_ID`/`MEMBASE_SERVICE_CLIENT_SECRET` for a
