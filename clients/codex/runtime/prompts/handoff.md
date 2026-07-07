@@ -6,6 +6,9 @@ Write a concise handoff summary of this session: what was done, key decisions
 and why, current state, and what's next. Only durable state — no secrets, API
 keys, passwords, or raw source files.
 
+0. If `~/.membase/codex/spool/pending.jsonl` is non-empty, flush it per the
+   `/dream` prompt's rename-first protocol before storing the handoff —
+   switching clients must not leave fresh captures behind.
 1. Print the summary to the user directly, in the user's language.
 2. Call the Membase MCP `add_memory` tool with the SAME summary, prefixed
    with the literal tag `[HANDOFF]` (e.g. `[HANDOFF] <summary>`). Pass the
