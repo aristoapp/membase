@@ -99,6 +99,12 @@ const EXPECTED_TOOLS = [
   "delete_wiki",
 ];
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+// Basis: apps/mcp/src/resources.ts registers exactly these two resource URIs.
+const EXPECTED_RESOURCE_URIS = ["membase://profile", "membase://recent"];
+// The literal tag every client's handoff store/recall convention shares.
+const HANDOFF_TAG = "[HANDOFF]";
+// The client source values pillar-1 hook capture tags memories with.
+const CAPTURE_SOURCES = ["cursor", "codex", "claude-code", "hermes", "openclaw"];
 
 // Tier 3 quality gates (env-tunable). Defaults sit well above observed staging
 // values (search p95 ~0.8s, write→searchable ~40s) so they catch gross
@@ -377,7 +383,6 @@ async function evalContract(entry, url, tools) {
 // (text/markdown starting with "# Membase Recent Memories", backed by an
 // empty-query search_memory). Basis for the two URIs and shapes: apps/mcp/
 // src/resources.ts and resources/{profile,recent}.ts in the membase backend.
-const EXPECTED_RESOURCE_URIS = ["membase://profile", "membase://recent"];
 async function evalResources(entry, url) {
   const sessionId = entry.sessionId;
 
@@ -543,7 +548,6 @@ async function evalFilters(entry, url, roles) {
 // placed on display_summary — not just the content — or recall silently finds
 // nothing. This test asserts that contract end-to-end against the live REST
 // path the runtime actually uses. Runs once per endpoint under --tier3.
-const HANDOFF_TAG = "[HANDOFF]";
 async function evalHandoff(entry) {
   const restBase = REST_API_BASE.replace(/\/$/, "");
   const stamp = `e2e-handoff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -765,7 +769,6 @@ async function evalHandoffReplace(entry) {
 // with it, so it is the highest-leverage piece of pillar 1 a network-only
 // harness can verify. Client-side hook firing itself needs a live per-app
 // run (see docs/implementation-overview.html §7.5-style gap notes).
-const CAPTURE_SOURCES = ["cursor", "codex", "claude-code", "hermes", "openclaw"];
 async function evalCaptureSourceTags(entry) {
   const restBase = REST_API_BASE.replace(/\/$/, "");
   const authedFetch = (path, init) =>
