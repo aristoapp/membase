@@ -135,6 +135,7 @@ for (const client of CLIENTS) {
         if (TIER3 && fast) {
           await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+          await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
           await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
@@ -281,15 +282,39 @@ async function evalContract(entry, url, tools) {
   }
   entry.quality.contractToolsPresent = `${EXPECTED_TOOLS.length - missing}/${EXPECTED_TOOLS.length}`;
 
-  // 2. get_current_date returns an actual date.
+  // 2. get_current_date returns an actual, sane, parseable date. Beyond the
+  // format regex: parses to a real calendar date within +/-2 days of this
+  // machine's wall clock (loose enough for timezone offset, tight enough to
+  // catch a stuck/mocked date), and repeated calls agree with each other —
+  // this is the anchor every relative-date memory query (search_memory
+  // date_from/date_to, "today"/"yesterday") is built on.
   if (names.has("get_current_date")) {
     const d = await call("get_current_date", {}, 50);
-    const hasDate = /\d{4}-\d{2}-\d{2}/.test(d.raw ?? "");
+    const dateMatch = (d.raw ?? "").match(/\d{4}-\d{2}-\d{2}/);
+    const hasDate = Boolean(dateMatch);
     entry.checks.push(check(
       "contract: get_current_date returns a date",
       !d.payload?.error && d.status < 400 && hasDate,
       hasDate ? "ISO date present" : errText(d) || "no date in response"
     ));
+    if (hasDate) {
+      const parsed = new Date(dateMatch[0]);
+      const diffDays = Math.abs(parsed.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+      const sane = !Number.isNaN(parsed.getTime()) && diffDays <= 2;
+      entry.checks.push(check(
+        "contract: get_current_date is within 2 days of wall clock",
+        sane,
+        sane ? `${dateMatch[0]} (Δ${diffDays.toFixed(2)}d)` : `${dateMatch[0]} is Δ${diffDays.toFixed(2)}d from now — stuck/mocked date?`
+      ));
+
+      const d2 = await call("get_current_date", {}, 50);
+      const dateMatch2 = (d2.raw ?? "").match(/\d{4}-\d{2}-\d{2}/)?.[0];
+      entry.checks.push(check(
+        "contract: get_current_date is stable across repeated calls",
+        dateMatch2 === dateMatch[0],
+        dateMatch2 === dateMatch[0] ? "consistent" : `first=${dateMatch[0]} second=${dateMatch2}`
+      ));
+    }
   }
 
   // 3. Wiki full lifecycle (create -> read -> update -> delete -> confirm gone).
@@ -333,6 +358,110 @@ async function evalContract(entry, url, tools) {
     } else {
       entry.checks.push(warn("contract: wiki update/delete skipped", "add_wiki returned no doc_id to target"));
     }
+  }
+}
+
+// ---------- Tier 3: search_memory/search_wiki filter params (project/sources/date) ----------
+// Basis: this repo's own MCP server-usage instructions document `project`
+// (exact-slug scope), `sources` (origin filter), and `date_from`/`date_to`
+// (ISO 8601 range) as real search_memory params, and `project` on add_wiki/
+// search_wiki. Nothing elsewhere in this suite ever asserts the live server
+// actually applies these filters (only that add/search work at all) — this
+// proves it, including that project scoping doesn't leak across tags.
+async function evalFilters(entry, url, roles) {
+  const sessionId = entry.sessionId;
+  const call = (name, args, id) => callTool(url, { token: TOKEN, sessionId, id, name, args });
+
+  // project filter on search_memory: two memories tagged with different
+  // project slugs: search scoped to A must not surface B's sentinel.
+  const stamp = Date.now();
+  const projectA = `e2e-proj-a-${stamp}`;
+  const projectB = `e2e-proj-b-${stamp}`;
+  const sentinelA = `membase-e2e-filter-a-${stamp}`;
+  const sentinelB = `membase-e2e-filter-b-${stamp}`;
+
+  const addA = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelA}` }, { project: projectA }), 70);
+  const addB = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelB}` }, { project: projectB }), 71);
+  const bothStored = !addA.payload?.error && !addB.payload?.error;
+  entry.checks.push(check("filters: two project-tagged memories stored", bothStored, bothStored ? "stored" : `${errText(addA)} / ${errText(addB)}`));
+  if (!bothStored) return;
+
+  // Async indexing: poll project-scoped search for sentinelA up to the same
+  // recall SLO used elsewhere, then check sentinelB is absent from that result.
+  let scoped;
+  const t0 = now();
+  while (true) {
+    scoped = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA }), 72);
+    if ((scoped.raw ?? "").includes(sentinelA)) break;
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+  }
+  const foundOwn = (scoped.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    `filters: project=A search finds A's memory within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    foundOwn,
+    foundOwn ? "found" : "not searchable within SLO"
+  ));
+  if (foundOwn) {
+    const leaked = (scoped.raw ?? "").includes(sentinelB);
+    entry.checks.push(check("filters: project=A search excludes B's memory", !leaked, leaked ? "LEAK: B's sentinel returned under project=A" : "excluded"));
+  }
+
+  // date_from/date_to: a window covering [24h ago, now] must include the
+  // just-written memory; a window ending 1s before it was written must
+  // exclude it. Uses the same query text (sentinelA) so only the date window
+  // varies between the two calls. `stamp` is Date.now()-based (wall clock);
+  // `now()`/`t0` above is performance.now() (monotonic) and not comparable to it.
+  const nowIso = new Date().toISOString();
+  const past = new Date(stamp - 24 * 60 * 60 * 1000).toISOString();
+  const before = new Date(stamp - 1000).toISOString();
+
+  const withinWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: nowIso }), 73);
+  entry.checks.push(check(
+    "filters: date_from/date_to including now finds recent memory",
+    !withinWindow.payload?.error && (withinWindow.raw ?? "").includes(sentinelA),
+    !withinWindow.payload?.error ? ((withinWindow.raw ?? "").includes(sentinelA) ? "found" : "not found in window") : errText(withinWindow)
+  ));
+
+  const outsideWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: before }), 74);
+  const excludedPast = !(outsideWindow.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    "filters: date_to before write excludes the memory",
+    !outsideWindow.payload?.error && excludedPast,
+    outsideWindow.payload?.error ? errText(outsideWindow) : (excludedPast ? "excluded" : "LEAK: found outside date window")
+  ));
+
+  // sources filter: an out-of-band source (e.g. "slack") must not surface a
+  // memory written via the MCP tool call path (which has no source tag).
+  const wrongSource = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { sources: ["slack"] }), 75);
+  const notLeakedViaSource = !(wrongSource.raw ?? "").includes(sentinelA);
+  entry.checks.push(check(
+    "filters: sources=[slack] excludes an MCP-written memory",
+    !wrongSource.payload?.error && notLeakedViaSource,
+    wrongSource.payload?.error ? errText(wrongSource) : (notLeakedViaSource ? "excluded" : "LEAK: found under unrelated source filter")
+  ));
+
+  // search_wiki project scoping, mirroring the memory check above.
+  const names = new Set((await listTools(url, { token: TOKEN, sessionId })).payload?.result?.tools?.map((t) => t.name) ?? []);
+  if (names.has("add_wiki") && names.has("search_wiki")) {
+    const wikiStamp = `e2e-wiki-filter-${stamp}`;
+    const wikiProject = `e2e-wiki-proj-${stamp}`;
+    const addWiki = await call("add_wiki", { title: `[e2e-filter] ${wikiStamp}`, content: `Filter-test wiki body ${wikiStamp}.`, project: wikiProject }, 76);
+    const wikiOk = !addWiki.payload?.error && addWiki.status < 400;
+    entry.checks.push(check("filters: add_wiki with project stores the doc", wikiOk, wikiOk ? "stored" : errText(addWiki)));
+    if (wikiOk) {
+      const docId = (addWiki.raw ?? "").match(UUID_RE)?.[0];
+      let wikiFound = false;
+      for (const delay of [0, 3000, 8000]) {
+        if (delay) await new Promise((res) => setTimeout(res, delay));
+        const s = await call("search_wiki", { query: wikiStamp, project: wikiProject }, 77);
+        if ((s.raw ?? "").includes(wikiStamp)) { wikiFound = true; break; }
+      }
+      entry.checks.push(check("filters: search_wiki project scope finds the doc", wikiFound, wikiFound ? "found" : "not searchable within ~11s"));
+      if (docId) await call("delete_wiki", { doc_id: docId }, 78); // cleanup, best-effort
+    }
+  } else {
+    entry.checks.push(warn("filters: search_wiki project scoping skipped", "add_wiki/search_wiki not both exposed"));
   }
 }
 
@@ -566,6 +695,45 @@ async function evalNegative(entry, url) {
     toolErrored(unknown) && /not found|unknown/i.test(textOf(unknown.payload)),
     (textOf(unknown.payload) || errText(unknown) || "no error").slice(0, 80)
   ));
+
+  // Malformed session — a made-up mcp-session-id must not be treated as valid
+  // (either rejected outright, or at minimum not allowed to execute a tool).
+  const badSession = await callTool(url, {
+    token: TOKEN, sessionId: "e2e-forged-session-id-00000000", id: 63,
+    name: "add_memory", args: { content: "[e2e-negative] should not be stored under a forged session" }
+  });
+  const sessionRejected = badSession.status === 401 || badSession.status === 404 || toolErrored(badSession);
+  entry.checks.push(check(
+    "negative: forged mcp-session-id → rejected",
+    sessionRejected,
+    sessionRejected ? `HTTP ${badSession.status}${toolErrored(badSession) ? ", tool isError" : ""}` : `HTTP ${badSession.status}, call appeared to succeed`
+  ));
+
+  // Oversized content — 200KB of text is well beyond any real memory/note and
+  // should be rejected as a validation error, not silently truncated/stored
+  // (silent truncation would be a data-loss bug, not caught elsewhere).
+  const oversized = "e2e-oversized-payload-".repeat(10000); // ~230KB
+  const big = await callTool(url, { token: TOKEN, sessionId, id: 64, name: "add_memory", args: { content: oversized } });
+  const bigRejected = toolErrored(big) || big.status === 413 || big.status >= 400;
+  entry.checks.push(check(
+    "negative: oversized (~230KB) add_memory content → rejected",
+    bigRejected,
+    bigRejected ? (textOf(big.payload) || `HTTP ${big.status}`).slice(0, 80) : "accepted a 230KB payload without error"
+  ));
+
+  // Concurrent tools/call on one session — responses must not cross-wire
+  // (each JSON-RPC id must come back matched to its own request).
+  const [concA, concB] = await Promise.all([
+    callTool(url, { token: TOKEN, sessionId, id: 65, name: "get_current_date", args: {} }),
+    callTool(url, { token: TOKEN, sessionId, id: 66, name: "get_current_date", args: {} })
+  ]);
+  const idsMatch = concA.payload?.id === 65 && concB.payload?.id === 66;
+  const bothOk = !concA.payload?.error && !concB.payload?.error;
+  entry.checks.push(check(
+    "negative: concurrent tools/call on one session don't cross-wire responses",
+    idsMatch && bothOk,
+    idsMatch ? "response ids matched requests" : `id mismatch: got ${concA.payload?.id}/${concB.payload?.id}, expected 65/66`
+  ));
 }
 
 function textOf(payload) {
@@ -604,7 +772,11 @@ function matchRoles(tools) {
   return roles;
 }
 
-function argsFor(tool, { primary, id }) {
+// extra: optional filter params (project/sources/date_from/date_to) to merge
+// in verbatim — these are documented search_memory/add_wiki/search_wiki
+// params that are rarely "required" in the schema, so they must bypass the
+// required-props loop below to actually reach the tool call.
+function argsFor(tool, { primary, id }, extra) {
   const schema = tool.inputSchema ?? tool.input_schema ?? {};
   const props = schema.properties ?? {};
   const required = schema.required ?? Object.keys(props);
@@ -629,6 +801,7 @@ function argsFor(tool, { primary, id }) {
     const target = Object.keys(props).find((k) => idKeys.test(k));
     if (target) args[target] = id;
   }
+  if (extra) Object.assign(args, extra);
   return args;
 }
 
