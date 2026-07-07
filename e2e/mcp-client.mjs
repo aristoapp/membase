@@ -129,6 +129,14 @@ export async function callTool(url, { token, sessionId, name, args, id }) {
   });
 }
 
+export async function listResources(url, { token, sessionId, id }) {
+  return rpc(url, { token, sessionId, method: "resources/list", id, params: {} });
+}
+
+export async function readResource(url, { token, sessionId, uri, id }) {
+  return rpc(url, { token, sessionId, method: "resources/read", id, params: { uri } });
+}
+
 // RFC 9728 OAuth protected-resource metadata discovery.
 export async function discoverProtectedResource(mcpUrl) {
   const u = new URL(mcpUrl);

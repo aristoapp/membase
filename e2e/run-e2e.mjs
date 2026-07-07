@@ -26,9 +26,11 @@ import {
   callTool,
   discoverProtectedResource,
   initialize,
+  listResources,
   listTools,
   now,
-  percentile
+  percentile,
+  readResource
 } from "./mcp-client.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 
@@ -135,6 +137,7 @@ for (const client of CLIENTS) {
         if (TIER3 && fast) {
           await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+          await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
           await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
           await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
@@ -361,6 +364,70 @@ async function evalContract(entry, url, tools) {
       entry.checks.push(warn("contract: wiki update/delete skipped", "add_wiki returned no doc_id to target"));
     }
   }
+}
+
+// ---------- Tier 3: MCP resources (membase://profile, membase://recent) ----------
+// The harness only ever spoke tools/list + tools/call — resources/list and
+// resources/read were never implemented in mcp-client.mjs, so this real
+// client-facing surface (Claude's SessionStart prefetch reads both; the
+// membase MCP usage instructions tell every client when to read them) has
+// never been exercised live. apps/mcp/src/resources.ts registers exactly two
+// resources: membase://profile (JSON: display_name/role/interests/
+// instructions/timezone, backed by GET /user/settings) and membase://recent
+// (text/markdown starting with "# Membase Recent Memories", backed by an
+// empty-query search_memory). Basis for the two URIs and shapes: apps/mcp/
+// src/resources.ts and resources/{profile,recent}.ts in the membase backend.
+const EXPECTED_RESOURCE_URIS = ["membase://profile", "membase://recent"];
+async function evalResources(entry, url) {
+  const sessionId = entry.sessionId;
+
+  const list = await listResources(url, { token: TOKEN, sessionId, id: 90 });
+  const uris = new Set((list.payload?.result?.resources ?? []).map((r) => r.uri));
+  entry.checks.push(check(
+    "resources: resources/list exposes membase://profile and membase://recent",
+    !list.payload?.error && EXPECTED_RESOURCE_URIS.every((u) => uris.has(u)),
+    list.payload?.error ? errText(list) : `found: ${[...uris].join(", ") || "none"}`
+  ));
+
+  const profile = await readResource(url, { token: TOKEN, sessionId, uri: "membase://profile", id: 91 });
+  const profileContent = profile.payload?.result?.contents?.[0];
+  let profileParsed;
+  try {
+    profileParsed = profileContent?.text ? JSON.parse(profileContent.text) : undefined;
+  } catch {
+    profileParsed = undefined;
+  }
+  const profileOk =
+    !profile.payload?.error &&
+    profileContent?.mimeType === "application/json" &&
+    profileParsed !== undefined &&
+    "timezone" in profileParsed;
+  entry.checks.push(check(
+    "resources: membase://profile reads as JSON with expected shape",
+    profileOk,
+    profileOk ? "application/json with timezone field present" : (errText(profile) || `unexpected content: ${JSON.stringify(profileContent).slice(0, 100)}`)
+  ));
+
+  const recent = await readResource(url, { token: TOKEN, sessionId, uri: "membase://recent", id: 92 });
+  const recentContent = recent.payload?.result?.contents?.[0];
+  const recentOk =
+    !recent.payload?.error &&
+    recentContent?.mimeType === "text/markdown" &&
+    (recentContent.text ?? "").startsWith("# Membase Recent Memories");
+  entry.checks.push(check(
+    "resources: membase://recent reads as markdown with expected header",
+    recentOk,
+    recentOk ? "text/markdown starting with the recent-memories header" : (errText(recent) || `unexpected content: ${JSON.stringify(recentContent).slice(0, 100)}`)
+  ));
+
+  // Negative: an unregistered URI must error, not silently return empty content.
+  const bogus = await readResource(url, { token: TOKEN, sessionId, uri: "membase://not-a-real-resource", id: 93 });
+  const bogusRejected = Boolean(bogus.payload?.error) || bogus.status >= 400;
+  entry.checks.push(check(
+    "resources: reading an unregistered URI errors rather than returning empty content",
+    bogusRejected,
+    bogusRejected ? (errText(bogus) || `HTTP ${bogus.status}`) : "unregistered URI returned a response without error"
+  ));
 }
 
 // ---------- Tier 3: search_memory/search_wiki filter params (project/sources/date) ----------
