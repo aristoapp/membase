@@ -1,13 +1,12 @@
 import type { MembaseClient } from "../client";
 import { formatBundle } from "../format";
 import type { OpenClawPluginApi } from "../types";
-import { toolResponse } from "../update-check";
+import { rejectIfSensitive, toolResponse } from "../update-check";
 import {
   HANDOFF_RECALL_LIMIT,
   buildHandoffDisplaySummary,
   buildHandoffMemory,
   handoffRecallQuery,
-  looksSensitive,
   pickLatestHandoff,
   sweepReplacedHandoffs,
 } from "../utils";
@@ -73,11 +72,8 @@ export function registerHandoffTool(
               "Store failed: summary is required for mode='store'.",
             );
           }
-          if (looksSensitive(params.summary)) {
-            return await toolResponse(
-              "Refusing to store content that looks like a secret.",
-            );
-          }
+          const rejection = await rejectIfSensitive(params.summary);
+          if (rejection) return rejection;
           // Cloud policy: exactly ONE handoff per project — capture old
           // handoffs BEFORE ingesting so the fresh one can't be in the
           // deletion set; delete after the store succeeds.

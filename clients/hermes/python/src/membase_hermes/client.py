@@ -91,8 +91,12 @@ class MembaseClient:
         self.on_token_refresh = on_token_refresh
         # One shared client is used across mirror/capture/prefetch worker
         # threads (see provider.py). Serialize token refresh so two concurrent
-        # 401s don't both refresh and race-overwrite the token pair.
+        # 401s don't both refresh and race-overwrite the token pair. `_refresh_gen`
+        # bumps on each successful refresh; a waiter that entered the lock with a
+        # stale generation skips — correct even if the new access token happens to
+        # equal the old string (a token-value comparison would miss that).
         self._refresh_lock = threading.Lock()
+        self._refresh_gen = 0
         self._http = httpx.Client(timeout=timeout_s)
 
     def close(self) -> None:
@@ -105,13 +109,13 @@ class MembaseClient:
         if self.debug:
             self.logger.info("membase: " + message, *args)
 
-    def _remint_service_token(self, seen_token: str) -> None:
+    def _remint_service_token(self, seen_gen: int) -> None:
         """Re-exchange client_credentials for a fresh access token (no refresh
-        token exists on the service-token path). `seen_token` is the access
-        token the caller used before its 401; if another thread already
+        token exists on the service-token path). `seen_gen` is the refresh
+        generation the caller observed before its 401; if another thread already
         re-minted while we waited for the lock, skip and reuse that result."""
         with self._refresh_lock:
-            if self.access_token != seen_token:
+            if self._refresh_gen != seen_gen:
                 return
             from .oauth import exchange_client_credentials
 
@@ -120,9 +124,10 @@ class MembaseClient:
                 client_id=self.service_client_id,
                 client_secret=self.service_client_secret,
             )
+            self._refresh_gen += 1
             self._log("re-minted service access token via client_credentials")
 
-    def _refresh_access_token(self, seen_token: str) -> None:
+    def _refresh_access_token(self, seen_gen: int) -> None:
         if not self.refresh_token or not self.client_id:
             raise MembaseApiError(
                 "Session expired. Run 'hermes membase login' to re-authenticate.",
@@ -131,7 +136,7 @@ class MembaseClient:
 
         with self._refresh_lock:
             # Another thread already refreshed after our 401 — reuse its token.
-            if self.access_token != seen_token:
+            if self._refresh_gen != seen_gen:
                 return
             data = {
                 "grant_type": "refresh_token",
@@ -153,10 +158,20 @@ class MembaseClient:
                     response.text,
                 )
             payload = response.json()
-            self.access_token = str(payload.get("access_token") or "")
+            new_token = str(payload.get("access_token") or "")
+            if not new_token:
+                # 200 but no usable token — treat as a dead session rather than
+                # retrying with an empty `Bearer ` (which just 401s again with a
+                # generic error). Point the user at re-login.
+                raise MembaseApiError(
+                    "Session expired. Run 'hermes membase login' to re-authenticate.",
+                    401,
+                )
+            self.access_token = new_token
             maybe_refresh = payload.get("refresh_token")
             if isinstance(maybe_refresh, str) and maybe_refresh:
                 self.refresh_token = maybe_refresh
+            self._refresh_gen += 1
             self.on_token_refresh and self.on_token_refresh(
                 self.access_token,
                 self.refresh_token,
@@ -183,6 +198,11 @@ class MembaseClient:
 
         url = f"{self.api_url}{path}"
         self._log("%s %s", method, path)
+        # Snapshot the refresh generation of the token we're about to sign with,
+        # BEFORE sending. If this request 401s and another thread refreshed in
+        # the meantime, the generation will have moved and the refresh fns skip
+        # so we reuse that fresh token instead of refreshing a second time.
+        seen_gen = self._refresh_gen
         response = self._http.request(
             method=method,
             url=url,
@@ -193,15 +213,10 @@ class MembaseClient:
         )
         can_remint = bool(self.service_client_id and self.service_client_secret)
         if response.status_code == 401 and (self.refresh_token or can_remint):
-            # The token this request was actually signed with — passed so a
-            # concurrent refresh by another thread is detected (don't refresh
-            # twice). Read from the sent header, not self.access_token, which
-            # another thread may already have rotated.
-            seen_token = headers["Authorization"].removeprefix("Bearer ")
             if self.refresh_token:
-                self._refresh_access_token(seen_token)
+                self._refresh_access_token(seen_gen)
             else:
-                self._remint_service_token(seen_token)
+                self._remint_service_token(seen_gen)
             headers["Authorization"] = f"Bearer {self.access_token}"
             response = self._http.request(
                 method=method,

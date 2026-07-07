@@ -1,7 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { toolResponse } from "../update-check";
-import { looksSensitive } from "../utils";
+import { rejectIfSensitive, toolResponse } from "../update-check";
 
 export function registerAddWikiTool(
   api: OpenClawPluginApi,
@@ -47,11 +46,8 @@ export function registerAddWikiTool(
       },
     ) {
       try {
-        if (looksSensitive(params.content) || looksSensitive(params.title)) {
-          return await toolResponse(
-            "Refusing to store content that looks like a secret.",
-          );
-        }
+        const rejection = await rejectIfSensitive(params.content, params.title);
+        if (rejection) return rejection;
         const doc = await client.createWikiDocument(
           params.title,
           params.content,

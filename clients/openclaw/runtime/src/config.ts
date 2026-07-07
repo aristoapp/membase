@@ -1,12 +1,7 @@
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { writeJsonAtomic } from "@membase/capture-core";
 import type { MembasePluginConfig, OpenClawPluginApi } from "./types";
 
 const DEFAULT_API_URL = "https://api.membase.so";
@@ -126,36 +121,20 @@ export function readTokenFile(
 }
 
 export function writeTokenFile(tokenFile: string, tokens: TokenPair): void {
-  const dir = dirname(tokenFile);
-  // 0o700: only the owner can list/access the credentials directory
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  // Existing directories keep prior permissions; tighten them best-effort.
+  // Existing dirs keep prior permissions; writeJsonAtomic only enforces 0o700
+  // on create, so tighten an already-present credentials dir best-effort here.
   try {
-    chmodSync(dir, 0o700);
+    chmodSync(dirname(tokenFile), 0o700);
   } catch {
-    // Ignore platform-specific permission limitations (e.g. Windows ACLs).
+    // Ignore platform-specific permission limitations (e.g. Windows ACLs), or a
+    // missing dir — writeJsonAtomic recreates it with the right mode.
   }
-  // Per-process tmp name: with a fixed `${tokenFile}.tmp`, a background token
-  // refresh and a foreground login/logout can race — one renames the tmp away
-  // and the other's rename throws ENOENT (see capture-core writeTextAtomic).
-  const tempPath = `${tokenFile}.tmp.${process.pid}`;
-  const payload = JSON.stringify(
-    {
-      accessToken: str(tokens.accessToken, ""),
-      refreshToken: str(tokens.refreshToken, ""),
-    },
-    null,
-    2,
-  );
-  // 0o600: only the owner can read/write the token file
-  writeFileSync(tempPath, `${payload}\n`, { encoding: "utf-8", mode: 0o600 });
-  renameSync(tempPath, tokenFile);
-  // Best-effort hardening in case the target existed with broader perms.
-  try {
-    chmodSync(tokenFile, 0o600);
-  } catch {
-    // Ignore platform-specific permission limitations.
-  }
+  // Shared atomic write: mkdir 0o700, per-process tmp (avoids the login/refresh
+  // rename race), 0o600 file, rename, tmp cleanup on failure.
+  writeJsonAtomic(tokenFile, {
+    accessToken: str(tokens.accessToken, ""),
+    refreshToken: str(tokens.refreshToken, ""),
+  });
 }
 
 export function parseConfig(
