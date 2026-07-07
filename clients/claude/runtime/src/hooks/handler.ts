@@ -32,12 +32,13 @@ import type { HookInput } from "../types.js";
 import {
   buildSessionStartContext,
   handoffRecallQuery,
-  isHandoffMemory,
+  pickLatestHandoff,
 } from "./session-start.js";
 import { buildSessionCaptureCandidate, summarizeToolCall } from "./summary.js";
 import type { EpisodeBundle } from "../types.js";
 
 const SESSION_FETCH_TIMEOUT_MS = 1_800;
+const HANDOFF_RECALL_LIMIT = 20;
 const ASYNC_FLUSH_TIMEOUT_MS = 4_000;
 const ASYNC_FLUSH_LIMIT = 3;
 
@@ -238,17 +239,18 @@ async function prefetchHandoff(
   client: MembaseClient,
   projectSlug?: string,
 ): Promise<string> {
+  // The recall query is generic, so ordinary memories can outrank the real
+  // handoff and relevance order is not recency — fetch a window and pick the
+  // latest by time client-side (policy: inject exactly the latest one).
   const bundles = await withTimeout(
     client.searchMemory({
       query: handoffRecallQuery(),
-      limit: 1,
+      limit: HANDOFF_RECALL_LIMIT,
       project: projectSlug,
     }),
     SESSION_FETCH_TIMEOUT_MS,
   ).catch(() => undefined);
-  const latest = bundles?.find((bundle) =>
-    isHandoffMemory(bundle.episode.name ?? ""),
-  );
+  const latest = bundles ? pickLatestHandoff(bundles) : undefined;
   if (!latest) return "";
   return `<membase-handoff>\n${latest.episode.name}\n</membase-handoff>`;
 }
