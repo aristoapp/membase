@@ -152,7 +152,7 @@ cross-client continuation is shared by **asking the client to recall** the
 | Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
 | Claude Code | Deviates | same-client continuation uses cloud search prefetch at SessionStart, not a local file. Normalizing to a local file would drop the search-quota dependency and the relevance-top-1 weakness — open decision |
 | OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
-| Hermes | Not implemented | |
+| Hermes | Deviates | `membase_handoff` tool is cloud-only in both directions (same semantics as OpenClaw); no session-start injection — recall is explicit via the tool |
 
 Storage policy (decided 2026-07-06, superseding append-only): the cloud
 keeps exactly **ONE handoff per project** via replace-on-store — storing a
