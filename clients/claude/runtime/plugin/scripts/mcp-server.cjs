@@ -6889,7 +6889,7 @@ var require_dist = __commonJS({
 // src/mcp/server.ts
 var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
-var import_node_path6 = require("node:path");
+var import_node_path7 = require("node:path");
 
 // ../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/util.js
 var util;
@@ -31225,19 +31225,19 @@ function createCaptureSpool(options) {
 // ../../../packages/capture-core/src/token-store.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-function writeJsonAtomic(path, value, mode = 384) {
+function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
+  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
   (0, import_node_fs2.renameSync)(tmp, path);
   try {
     (0, import_node_fs2.chmodSync)(path, mode);
   } catch {
   }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
 }
 function createTokenStore(options) {
   const filename = options.filename ?? "credentials.json";
@@ -31319,6 +31319,7 @@ async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
   );
   return results.filter((r) => r.status === "fulfilled").length;
 }
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
 
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
@@ -31627,8 +31628,171 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
   });
 }
 
+// src/project/index.ts
+var import_node_fs3 = require("node:fs");
+var import_node_path3 = require("node:path");
+function normalizeProjectSlug(raw) {
+  return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+}
+function findGitRoot(cwd) {
+  let current = cwd;
+  while (current && current !== (0, import_node_path3.parse)(current).root) {
+    if ((0, import_node_fs3.existsSync)((0, import_node_path3.join)(current, ".git"))) return current;
+    current = (0, import_node_path3.dirname)(current);
+  }
+  return null;
+}
+function remoteSlug(gitRoot) {
+  try {
+    const gitConfig = (0, import_node_fs3.readFileSync)((0, import_node_path3.join)(gitRoot, ".git", "config"), "utf-8");
+    const match = gitConfig.match(/url\s*=\s*(.+)\n/);
+    if (!match?.[1]) return null;
+    const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
+    return normalizeProjectSlug(value);
+  } catch {
+    return null;
+  }
+}
+function resolveProjectSlug(cwd, config2) {
+  if (config2.projectMode === "off") return void 0;
+  if (config2.projectSlug) return normalizeProjectSlug(config2.projectSlug);
+  if (config2.projectMode === "manual") return void 0;
+  if (!cwd) return void 0;
+  const gitRoot = findGitRoot(cwd);
+  if (gitRoot)
+    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path3.basename)(gitRoot));
+  return normalizeProjectSlug((0, import_node_path3.basename)(cwd));
+}
+
+// src/handoff/file.ts
+var import_node_path5 = require("node:path");
+
+// src/config/index.ts
+var import_node_fs4 = require("node:fs");
+var import_node_os = require("node:os");
+var import_node_path4 = require("node:path");
+function getDataDir() {
+  const dir = (
+    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
+    // point this at their own state dir — or a shared one for a single
+    // machine-wide login — without Claude-specific env names.
+    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path4.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
+  );
+  return dir.startsWith("~/") ? (0, import_node_path4.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
+}
+function ensureDataDir() {
+  const dir = getDataDir();
+  (0, import_node_fs4.mkdirSync)(dir, { recursive: true, mode: 448 });
+  try {
+    (0, import_node_fs4.chmodSync)(dir, 448);
+  } catch {
+  }
+  return dir;
+}
+function configPath() {
+  return (0, import_node_path4.join)(ensureDataDir(), "config.json");
+}
+var tokenStore = createTokenStore({ dir: ensureDataDir });
+function readJsonObject(path) {
+  try {
+    return JSON.parse((0, import_node_fs4.readFileSync)(path, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+function pluginOption(name) {
+  return process.env[`CLAUDE_PLUGIN_OPTION_${name}`] ?? process.env[`CLAUDE_PLUGIN_OPTION_${name.toUpperCase()}`];
+}
+function boolFromOption(name, fallback) {
+  const value = pluginOption(name);
+  if (value === void 0) return fallback;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+function strFromOption(name) {
+  const value = pluginOption(name);
+  return value?.trim() ? value.trim() : void 0;
+}
+function numberFromOption(name) {
+  const value = pluginOption(name);
+  if (!value) return void 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : void 0;
+}
+function normalizeCaptureMode(value) {
+  return value === "summary" ? "summary" : "off";
+}
+function normalizeProjectMode(value) {
+  if (value === "manual" || value === "off") return value;
+  return "auto_git";
+}
+function normalizeSessionStartContext(value) {
+  if (value === "off" || value === "profile") return value;
+  return "minimal";
+}
+function clampRecallChars(value) {
+  const raw = typeof value === "number" ? value : DEFAULT_MAX_RECALL_CHARS;
+  return Math.max(MIN_RECALL_CHARS, Math.min(MAX_RECALL_CHARS, raw));
+}
+function loadConfig() {
+  const disk = readJsonObject(configPath());
+  const apiUrl = strFromOption("apiUrl") || (typeof disk.apiUrl === "string" ? disk.apiUrl : "") || DEFAULT_API_URL;
+  const maxRecallChars = numberFromOption("maxRecallChars") ?? (typeof disk.maxRecallChars === "number" ? disk.maxRecallChars : DEFAULT_MAX_RECALL_CHARS);
+  return {
+    apiUrl: apiUrl.replace(/\/$/, ""),
+    autoRecall: boolFromOption(
+      "autoRecall",
+      typeof disk.autoRecall === "boolean" ? disk.autoRecall : true
+    ),
+    autoWikiRecall: boolFromOption(
+      "autoWikiRecall",
+      typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
+    ),
+    // Disk wins: hooks pass a captureMode option on every run, so env can
+    // only be the default — otherwise it would override an explicit opt-out.
+    captureMode: normalizeCaptureMode(
+      disk.captureMode ?? strFromOption("captureMode")
+    ),
+    maxRecallChars: clampRecallChars(maxRecallChars),
+    sessionStartContext: normalizeSessionStartContext(
+      strFromOption("sessionStartContext") ?? disk.sessionStartContext
+    ),
+    projectMode: normalizeProjectMode(
+      strFromOption("projectMode") ?? disk.projectMode
+    ),
+    projectSlug: typeof disk.projectSlug === "string" && disk.projectSlug.trim() ? disk.projectSlug.trim() : void 0,
+    debug: boolFromOption(
+      "debug",
+      typeof disk.debug === "boolean" ? disk.debug : false
+    )
+  };
+}
+function saveConfig(next) {
+  const merged = { ...loadConfig(), ...next };
+  writeJsonAtomic(configPath(), merged);
+  return merged;
+}
+function readTokens() {
+  return tokenStore.read();
+}
+function writeTokens(tokens) {
+  tokenStore.write(tokens);
+}
+function clearTokens() {
+  tokenStore.clear();
+}
+
+// src/handoff/file.ts
+function handoffFilePath(projectSlug) {
+  return (0, import_node_path5.join)(getDataDir(), "handoff", `${projectSlug || "unscoped"}.md`);
+}
+function writeHandoffFile(summary, projectSlug) {
+  ensureDataDir();
+  writeTextAtomic(handoffFilePath(projectSlug), summary);
+}
+
 // src/handoff/store.ts
 var REPLACE_SEARCH_WINDOW = 20;
+var FILE_FIRST_CLIENTS = /* @__PURE__ */ new Set(["claude-code"]);
 async function replaceHandoff(client, args) {
   const project = args.project?.trim() || void 0;
   const previous = await client.searchMemory({
@@ -31645,6 +31809,15 @@ async function replaceHandoff(client, args) {
     metadata: args.metadata,
     project
   });
+  if (FILE_FIRST_CLIENTS.has(MEMORY_SOURCE)) {
+    try {
+      writeHandoffFile(
+        args.summary,
+        project ? normalizeProjectSlug(project) : void 0
+      );
+    } catch {
+    }
+  }
   const replaced = await sweepReplacedHandoffs(
     previous,
     (uuid3) => client.deleteEpisode(uuid3),
@@ -31834,120 +32007,6 @@ ${authorizeUrl}`);
   }
 }
 
-// src/config/index.ts
-var import_node_fs3 = require("node:fs");
-var import_node_os = require("node:os");
-var import_node_path3 = require("node:path");
-function getDataDir() {
-  const dir = (
-    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
-    // point this at their own state dir — or a shared one for a single
-    // machine-wide login — without Claude-specific env names.
-    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
-  );
-  return dir.startsWith("~/") ? (0, import_node_path3.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
-}
-function ensureDataDir() {
-  const dir = getDataDir();
-  (0, import_node_fs3.mkdirSync)(dir, { recursive: true, mode: 448 });
-  try {
-    (0, import_node_fs3.chmodSync)(dir, 448);
-  } catch {
-  }
-  return dir;
-}
-function configPath() {
-  return (0, import_node_path3.join)(ensureDataDir(), "config.json");
-}
-var tokenStore = createTokenStore({ dir: ensureDataDir });
-function readJsonObject(path) {
-  try {
-    return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-function pluginOption(name) {
-  return process.env[`CLAUDE_PLUGIN_OPTION_${name}`] ?? process.env[`CLAUDE_PLUGIN_OPTION_${name.toUpperCase()}`];
-}
-function boolFromOption(name, fallback) {
-  const value = pluginOption(name);
-  if (value === void 0) return fallback;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-function strFromOption(name) {
-  const value = pluginOption(name);
-  return value?.trim() ? value.trim() : void 0;
-}
-function numberFromOption(name) {
-  const value = pluginOption(name);
-  if (!value) return void 0;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : void 0;
-}
-function normalizeCaptureMode(value) {
-  return value === "summary" ? "summary" : "off";
-}
-function normalizeProjectMode(value) {
-  if (value === "manual" || value === "off") return value;
-  return "auto_git";
-}
-function normalizeSessionStartContext(value) {
-  if (value === "off" || value === "profile") return value;
-  return "minimal";
-}
-function clampRecallChars(value) {
-  const raw = typeof value === "number" ? value : DEFAULT_MAX_RECALL_CHARS;
-  return Math.max(MIN_RECALL_CHARS, Math.min(MAX_RECALL_CHARS, raw));
-}
-function loadConfig() {
-  const disk = readJsonObject(configPath());
-  const apiUrl = strFromOption("apiUrl") || (typeof disk.apiUrl === "string" ? disk.apiUrl : "") || DEFAULT_API_URL;
-  const maxRecallChars = numberFromOption("maxRecallChars") ?? (typeof disk.maxRecallChars === "number" ? disk.maxRecallChars : DEFAULT_MAX_RECALL_CHARS);
-  return {
-    apiUrl: apiUrl.replace(/\/$/, ""),
-    autoRecall: boolFromOption(
-      "autoRecall",
-      typeof disk.autoRecall === "boolean" ? disk.autoRecall : true
-    ),
-    autoWikiRecall: boolFromOption(
-      "autoWikiRecall",
-      typeof disk.autoWikiRecall === "boolean" ? disk.autoWikiRecall : false
-    ),
-    // Disk wins: hooks pass a captureMode option on every run, so env can
-    // only be the default — otherwise it would override an explicit opt-out.
-    captureMode: normalizeCaptureMode(
-      disk.captureMode ?? strFromOption("captureMode")
-    ),
-    maxRecallChars: clampRecallChars(maxRecallChars),
-    sessionStartContext: normalizeSessionStartContext(
-      strFromOption("sessionStartContext") ?? disk.sessionStartContext
-    ),
-    projectMode: normalizeProjectMode(
-      strFromOption("projectMode") ?? disk.projectMode
-    ),
-    projectSlug: typeof disk.projectSlug === "string" && disk.projectSlug.trim() ? disk.projectSlug.trim() : void 0,
-    debug: boolFromOption(
-      "debug",
-      typeof disk.debug === "boolean" ? disk.debug : false
-    )
-  };
-}
-function saveConfig(next) {
-  const merged = { ...loadConfig(), ...next };
-  writeJsonAtomic(configPath(), merged);
-  return merged;
-}
-function readTokens() {
-  return tokenStore.read();
-}
-function writeTokens(tokens) {
-  tokenStore.write(tokens);
-}
-function clearTokens() {
-  tokenStore.clear();
-}
-
 // src/sanitize/index.ts
 var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
 function sanitizeMembaseText(raw) {
@@ -32021,53 +32080,17 @@ function profileResourceFields(profile) {
   };
 }
 
-// src/project/index.ts
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
-function normalizeProjectSlug(raw) {
-  return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-}
-function findGitRoot(cwd) {
-  let current = cwd;
-  while (current && current !== (0, import_node_path4.parse)(current).root) {
-    if ((0, import_node_fs4.existsSync)((0, import_node_path4.join)(current, ".git"))) return current;
-    current = (0, import_node_path4.dirname)(current);
-  }
-  return null;
-}
-function remoteSlug(gitRoot) {
-  try {
-    const gitConfig = (0, import_node_fs4.readFileSync)((0, import_node_path4.join)(gitRoot, ".git", "config"), "utf-8");
-    const match = gitConfig.match(/url\s*=\s*(.+)\n/);
-    if (!match?.[1]) return null;
-    const value = match[1].trim().replace(/^git@[^:]+:/, "").replace(/^https?:\/\/[^/]+\//, "").replace(/\.git$/, "");
-    return normalizeProjectSlug(value);
-  } catch {
-    return null;
-  }
-}
-function resolveProjectSlug(cwd, config2) {
-  if (config2.projectMode === "off") return void 0;
-  if (config2.projectSlug) return normalizeProjectSlug(config2.projectSlug);
-  if (config2.projectMode === "manual") return void 0;
-  if (!cwd) return void 0;
-  const gitRoot = findGitRoot(cwd);
-  if (gitRoot)
-    return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path4.basename)(gitRoot));
-  return normalizeProjectSlug((0, import_node_path4.basename)(cwd));
-}
-
 // src/update-check.ts
 var import_node_fs5 = require("node:fs");
 var import_promises = require("node:fs/promises");
-var import_node_path5 = require("node:path");
+var import_node_path6 = require("node:path");
 var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
 var MARKETPLACE_NAME = "membase-plugins";
 var PLUGIN_NAME2 = "membase";
 var FETCH_TIMEOUT_MS = 3e3;
 var CACHE_TTL_MS = 1e3 * 60 * 60 * 24;
 function updateCheckStatePath() {
-  return (0, import_node_path5.join)(getDataDir(), "update-check.json");
+  return (0, import_node_path6.join)(getDataDir(), "update-check.json");
 }
 function isNewerVersion(remote, local) {
   const parse4 = (value) => (value.split("-", 1)[0] || value).split(".").map((part) => {
@@ -32247,8 +32270,8 @@ async function jsonSuccess(payload) {
 }
 function duplicateMcpConfigs() {
   const candidates = [
-    (0, import_node_path6.join)((0, import_node_os2.homedir)(), ".claude.json"),
-    (0, import_node_path6.join)(process.cwd(), ".mcp.json")
+    (0, import_node_path7.join)((0, import_node_os2.homedir)(), ".claude.json"),
+    (0, import_node_path7.join)(process.cwd(), ".mcp.json")
   ];
   const matches = [];
   for (const path of candidates) {

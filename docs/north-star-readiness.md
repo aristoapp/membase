@@ -150,9 +150,14 @@ cross-client continuation is shared by **asking the client to recall** the
 | --- | --- | --- |
 | Cursor | Matches definition | skill writes `.cursor/rules/membase-handoff.mdc`; Rules auto-load injects it (PR #24) |
 | Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
-| Claude Code | Deviates | same-client continuation uses cloud search prefetch at SessionStart, not a local file. Normalizing to a local file would drop the search-quota dependency and the relevance-top-1 weakness — open decision |
+| Claude Code | Matches definition | `store_handoff` writes a per-project local file under the plugin data dir; SessionStart injects file-first with cloud search as the cross-client fallback |
 | OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
 | Hermes | Not implemented | |
+
+Injection framing (2026-07-06): every injection carries its age
+(`stored_at`/`age_days`); handoffs older than 7 days are announced in one
+line instead of injected — a stale baton is noise, but stays reachable on
+request.
 
 Storage policy (decided 2026-07-06, superseding append-only): the cloud
 keeps exactly **ONE handoff per project** via replace-on-store — storing a
