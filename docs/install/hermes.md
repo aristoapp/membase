@@ -68,6 +68,26 @@ first use; no token is stored in the config file. The native Python package
 remains the primary runtime; treat `manifests/hermes/plugin.yaml` as native
 plugin metadata and `manifests/hermes/mcp.json` as the remote MCP example.
 
+## Session Handoff
+
+The provider registers `membase_handoff` (mode `store` | `recall`) alongside
+the other memory tools, mirroring the OpenClaw runtime tool:
+
+- `store` writes a `[HANDOFF]`-tagged summary to the cloud and enforces the
+  cloud policy of exactly one handoff per project: old `[HANDOFF]`-named
+  episodes are searched before the ingest and deleted afterwards via
+  `DELETE /memory/episodes/{uuid}` (name-tag match only, unscoped stores skip
+  `(project)`-marked names, per-episode failures non-fatal), and the response
+  reports how many were replaced. The stored summary is echoed back to the
+  user.
+- `recall` fetches the most recent handoff (latest by event/capture time, not
+  relevance rank). If the requested project has no handoff, it falls back to
+  an unscoped search and prefixes the result with an explicit "showing the
+  most recent handoff from another scope" notice.
+
+Hermes has no session-start injection; recall is explicit via the tool,
+matching OpenClaw.
+
 ## Local Verification
 
 ```bash

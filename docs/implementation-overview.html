@@ -982,9 +982,11 @@
 
         <h3 style="margin-top: 20px;">클라이언트마다 완전히 다른 모양인 이유</h3>
         <p>
-          같은 기능인데도 클라이언트 네 곳의 구현이 서로 다릅니다 —
+          같은 기능인데도 클라이언트마다 구현이 서로 다릅니다 —
           8.3절에서 설명한 "훅 등록 모델 차이"가 그대로 handoff에도
-          적용됩니다. (Hermes는 미구현.)
+          적용됩니다. (Hermes는 OpenClaw와 동일한 <code>membase_handoff</code>
+          도구를 Python provider에 등록 — 세션 시작 주입이 없어 조회도
+          도구 호출로만 이뤄집니다.)
         </p>
         <table>
           <tr><th>클라이언트</th><th>저장</th><th>조회</th><th>왜 이 모양인가</th></tr>
