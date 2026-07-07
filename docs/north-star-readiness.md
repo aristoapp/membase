@@ -90,7 +90,21 @@ Only then, in order (each its own reviewed change):
 
 The north star is wider than repo consolidation: the deprecation gate above is
 one axis, and these three product pillars are the other. The old repos are not
-truly replaced until every client has them.
+truly replaced until every client has them — where "has them" means the form
+appropriate to that client's architecture. A long-lived in-process host
+(OpenClaw/Hermes) keeps unsent captures in RAM, not a disk spool, so the
+disk-spool-shaped forms of Pillars 2–3 don't apply *as built* — but that RAM-only
+path is a crash-loss window, so it's a tracked enhancement, not a settled n/a.
+
+**Status (2026-07-07, verified against code):** Pillar 1 (hook capture) is Done
+on all five (Cursor/Codex shipped via PRs C/D). Pillar 2 (handoff) is Done —
+file-based on the three spawned-process clients (Claude/Cursor/Codex),
+cloud-only-by-choice on OpenClaw/Hermes (continuation still works via cloud
+recall). Pillar 3 (dreaming) is Done on the three disk-spool clients; on
+OpenClaw/Hermes it is not applicable *today* because their capture never
+reaches disk — but that same fact is a **data-loss window** on crash/restart,
+so giving them a disk-persist layer is the tracked next step rather than a
+closed "n/a". See each pillar's table.
 
 **Engineering principle (applies to all three):** use officially documented
 platform features (hooks, rules, custom prompts, provider slots). Do not
@@ -107,12 +121,13 @@ platform's official hook mechanism.
 | Claude Code | Done | `hooks.json` — per-session tool observations → scratch → ONE session digest → disk spool → flush (plugin login supplies hook auth) |
 | OpenClaw | Done | `api.on("agent_end")` capture inside the long-lived gateway process |
 | Hermes | Done | provider `on_session_end` slot |
-| Cursor | Decided (2026-07-07), to build | Two connection modes, below |
-| Codex | Decided (2026-07-07), to build | Two connection modes, below |
+| Cursor | Done | `~/.cursor/hooks.json` → `cursor-hook.mjs` translates payloads and delegates to the shared hook bundle; two connection modes, below (PR D `40e341e`, schema fix #34) |
+| Codex | Done | plugin-manifest `hooks.json` → shared `hook.cjs` (`SessionStart`/`UserPromptSubmit`/`PostToolUse`/`Stop`); two connection modes, below (PR C `2df1e9b`, hardening #36) |
 
-Decision for Cursor/Codex — **two connection modes**, both official-features-only.
+Design for Cursor/Codex — **two connection modes**, both official-features-only
+(decided 2026-07-07, **shipped**: PRs C/D above).
 **Auto-capture is the default: the stdio bundle is the recommended install**,
-so out of the box every client behaves like Claude Code (decided 2026-07-07).
+so out of the box every client behaves like Claude Code.
 
 - **stdio bundle mode (default install).** Ship the bundled stdio MCP server
   (the same approach Claude Code uses) via Cursor `mcp.json` / Codex
@@ -169,8 +184,8 @@ cross-client continuation is shared by **asking the client to recall** the
 | Cursor | Matches definition | skill writes `.cursor/rules/membase-handoff.mdc`; Rules auto-load injects it (PR #24) |
 | Codex | Matches definition | `/handoff` prompt writes `.codex/membase-handoff.md`; SessionStart hook injects it (PR #24) |
 | Claude Code | Matches definition | `store_handoff` writes a per-project local file under the plugin data dir; SessionStart injects file-first with cloud search as the cross-client fallback |
-| OpenClaw | Deviates | `membase_handoff` tool is cloud-only in both directions; the gateway is a long-lived local process, so a local file is possible — open decision |
-| Hermes | Deviates | `membase_handoff` tool is cloud-only in both directions (same semantics as OpenClaw); no session-start injection — recall is explicit via the tool |
+| OpenClaw | Cloud-only (accepted) | `membase_handoff` tool stores/recalls via the cloud in both directions; no local file. The long-lived gateway *could* keep a local file — left as an open enhancement, not a gap, since cloud recall already covers continuation |
+| Hermes | Cloud-only (accepted) | `membase_handoff` tool, same cloud-only semantics as OpenClaw; recall is explicit via the tool (no session-start injection). In-process host, so the local-file form is n/a by the same architecture split as Pillar 3 |
 
 Injection framing (2026-07-06): every injection carries its age
 (`stored_at`/`age_days`); handoffs older than 7 days are announced in one
@@ -192,11 +207,29 @@ clients never leaves fresh captures behind.
 
 Definition: upload local work that is **missing from the cloud** — sweep local
 artifacts (handoff files, spool leftovers, session notes) and `add_memory`
-what Membase lacks. Not implemented on any client.
+what Membase lacks.
 
-Design direction: an AI-invoked skill/command, because the AI's MCP tools are
-already authenticated — no hook auth needed. Concretely, dreaming is the
-named flush-and-sweep of the Pillar 1 spool (plus other local artifacts). In
-the default stdio bundle mode hooks flush continuously and dreaming is the
-catch-up/sweep for anything left behind; in HTTP fallback mode it IS the
-upload half of capture.
+An AI-invoked skill/command, because the AI's MCP tools are already
+authenticated — no hook auth needed. Concretely, dreaming is the named
+flush-and-sweep of the Pillar 1 disk spool (plus other local artifacts). In the
+default stdio bundle mode hooks flush continuously and dreaming is the
+catch-up/sweep for anything left behind; in HTTP fallback mode it IS the upload
+half of capture.
+
+| Client | Status | Notes |
+| --- | --- | --- |
+| Claude Code | Done | `/membase:dream` command — flush `pending.jsonl`, then optional consolidation sweep (PR E `cf62efe`, protocol fix #35) |
+| Cursor | Done | `skills/dream/SKILL.md` — same flush-then-sweep over the shared spool |
+| Codex | Done | `runtime/prompts/dream.md` — same |
+| OpenClaw | Not applicable *today*, but has a loss window | Capture buffers in-memory (`messageBuffers` Map) and flushes in-session; on flush failure messages are **retained in RAM for retry** — a gateway restart/crash loses them. There is no disk backlog for a dream sweep to find, but that is because the failure path never reaches disk, not because nothing can be lost. |
+| Hermes | Not applicable *today*, but has a loss window | Capture uses a bounded in-process `queue.Queue`; a full queue **drops the batch**, and a process exit loses anything unsent. Same shape as OpenClaw: no disk backlog to sweep, but also no disk durability to protect. |
+
+The split is architectural: the three spawned-process clients
+(Claude/Cursor/Codex) persist failed captures to a **disk spool**, so a crash
+loses nothing and dreaming later uploads the backlog. The two long-lived
+in-process hosts keep unsent captures in **RAM only**, so there is nothing on
+disk for a dream sweep to act on — but a crash/restart drops them. Dreaming (the
+sweep) is therefore complete for every client that has a disk spool; giving
+OpenClaw/Hermes the same disk-persist layer (closing the loss window, then
+adding a sweep) is the natural next step, tracked as a post-launch enhancement,
+not a shipped-and-forgotten "n/a".
