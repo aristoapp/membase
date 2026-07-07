@@ -9,7 +9,7 @@ import {
 } from "./index";
 
 function bundle(name: string, valid_at?: string) {
-  return { episode: { uuid: `u-${name.slice(0, 12)}`, name, valid_at } };
+  return { episode: { uuid: `u-${name}`, name, valid_at } };
 }
 
 describe("handoff helpers", () => {
