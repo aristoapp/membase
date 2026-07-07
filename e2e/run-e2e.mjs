@@ -148,7 +148,7 @@ for (const client of CLIENTS) {
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
           await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
           await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
-          await evalNegative(ctx, url); // Tier 3 (rejection behavior)
+          await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
       }
@@ -946,7 +946,7 @@ function toolErrored(r) {
 // Proves the endpoint rejects what it should: unauthenticated/invalid tokens
 // (transport-level 401) and malformed tool calls (tool-level isError). A server
 // that silently accepts these is a real security/contract regression.
-async function evalNegative(entry, url) {
+async function evalNegative(entry, url, roles) {
   // Auth negatives — the endpoint must be OAuth-gated.
   const noTok = await initialize(url, { token: undefined });
   const noTokGated = noTok.status === 401 && /bearer/i.test(noTok.wwwAuth ?? "");
@@ -984,24 +984,48 @@ async function evalNegative(entry, url) {
     (textOf(unknown.payload) || errText(unknown) || "no error").slice(0, 80)
   ));
 
-  // Malformed session — a made-up mcp-session-id must not be treated as valid
-  // (either rejected outright, or at minimum not allowed to execute a tool).
+  // Unknown mcp-session-id + a VALID bearer token: confirmed by design (not a
+  // gap) that the server auto-reinitializes a fresh session bound to the
+  // token's own userId rather than rejecting outright — many MCP clients
+  // handle a stale-session 404 poorly, so this recovers transparently
+  // instead. session-id is a connection-continuity id, not a second
+  // credential; Bearer auth is the actual security boundary. What DOES matter
+  // is that the forged id can't smuggle in someone else's identity/data — so
+  // this checks the write actually lands under THIS token's own account
+  // (searchable via this token), not that the call is rejected.
+  const sessionSentinel = `e2e-negative-session-${Date.now()}`;
   const badSession = await callTool(url, {
     token: TOKEN, sessionId: "e2e-forged-session-id-00000000", id: 63,
-    name: "add_memory", args: { content: "[e2e-negative] should not be stored under a forged session" }
+    name: "add_memory", args: { content: `[e2e-negative] forged-session write ${sessionSentinel}` }
   });
-  const sessionRejected = badSession.status === 401 || badSession.status === 404 || toolErrored(badSession);
+  const badSessionAccepted = !badSession.payload?.error && badSession.status < 400;
   entry.checks.push(check(
-    "negative: forged mcp-session-id → rejected",
-    sessionRejected,
-    sessionRejected ? `HTTP ${badSession.status}${toolErrored(badSession) ? ", tool isError" : ""}` : `HTTP ${badSession.status}, call appeared to succeed`
+    "negative: unknown mcp-session-id + valid token auto-reinitializes (not rejected — by design)",
+    badSessionAccepted,
+    badSessionAccepted ? `HTTP ${badSession.status}` : errText(badSession) || `HTTP ${badSession.status}`
   ));
+  if (badSessionAccepted && roles?.search) {
+    let landedUnderThisToken = false;
+    for (const delay of [0, 3000, 8000]) {
+      if (delay) await new Promise((res) => setTimeout(res, delay));
+      const s = await callTool(url, {
+        token: TOKEN, sessionId: entry.sessionId, id: 64,
+        name: roles.search.name, args: argsFor(roles.search, { primary: sessionSentinel })
+      });
+      if ((s.raw ?? "").includes(sessionSentinel)) { landedUnderThisToken = true; break; }
+    }
+    entry.checks.push(check(
+      "negative: forged-session write lands under the token's own account (no identity smuggling)",
+      landedUnderThisToken,
+      landedUnderThisToken ? "found under this token's own search" : "not found — write may be lost or misattributed"
+    ));
+  }
 
   // Oversized content — 200KB of text is well beyond any real memory/note and
   // should be rejected as a validation error, not silently truncated/stored
   // (silent truncation would be a data-loss bug, not caught elsewhere).
   const oversized = "e2e-oversized-payload-".repeat(10000); // ~230KB
-  const big = await callTool(url, { token: TOKEN, sessionId, id: 64, name: "add_memory", args: { content: oversized } });
+  const big = await callTool(url, { token: TOKEN, sessionId, id: 67, name: "add_memory", args: { content: oversized } });
   const bigRejected = toolErrored(big) || big.status === 413 || big.status >= 400;
   entry.checks.push(check(
     "negative: oversized (~230KB) add_memory content → rejected",
@@ -1012,15 +1036,15 @@ async function evalNegative(entry, url) {
   // Concurrent tools/call on one session — responses must not cross-wire
   // (each JSON-RPC id must come back matched to its own request).
   const [concA, concB] = await Promise.all([
-    callTool(url, { token: TOKEN, sessionId, id: 65, name: "get_current_date", args: {} }),
-    callTool(url, { token: TOKEN, sessionId, id: 66, name: "get_current_date", args: {} })
+    callTool(url, { token: TOKEN, sessionId, id: 68, name: "get_current_date", args: {} }),
+    callTool(url, { token: TOKEN, sessionId, id: 69, name: "get_current_date", args: {} })
   ]);
-  const idsMatch = concA.payload?.id === 65 && concB.payload?.id === 66;
+  const idsMatch = concA.payload?.id === 68 && concB.payload?.id === 69;
   const bothOk = !concA.payload?.error && !concB.payload?.error;
   entry.checks.push(check(
     "negative: concurrent tools/call on one session don't cross-wire responses",
     idsMatch && bothOk,
-    idsMatch ? "response ids matched requests" : `id mismatch: got ${concA.payload?.id}/${concB.payload?.id}, expected 65/66`
+    idsMatch ? "response ids matched requests" : `id mismatch: got ${concA.payload?.id}/${concB.payload?.id}, expected 68/69`
   ));
 }
 
