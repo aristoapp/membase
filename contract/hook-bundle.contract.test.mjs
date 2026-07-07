@@ -9,6 +9,8 @@ import {
   runEntry,
   readSpool,
   readSpoolRaw,
+  readScratch,
+  scratchExists,
   startStubApi,
   writeConfig,
   writeCredentials,
@@ -17,6 +19,7 @@ import {
 } from "./helpers.mjs";
 
 const codexPostToolUse = JSON.stringify({
+  session_id: "s-tool",
   tool_name: "apply_patch",
   tool_input: { command: "*** Update File: x.ts" },
 });
@@ -40,7 +43,7 @@ test("C-HOOK-1 SessionStart with no credentials + non-empty spool announces pend
   assert.match(ctx, /add_memory/, "must instruct storing via add_memory");
 });
 
-test("C-HOOK-2 PostToolUse with Codex-shaped apply_patch payload spools a summary naming the file, no network", async (t) => {
+test("C-HOOK-2 PostToolUse writes the tool observation to the per-session scratch, NOT the upload spool, no network", async (t) => {
   const dir = await makeDataDir(t);
   const api = await startStubApi(t);
   // apiUrl configured but NO credentials — nothing may leave the machine.
@@ -53,10 +56,12 @@ test("C-HOOK-2 PostToolUse with Codex-shaped apply_patch payload spools a summar
     },
   });
   assert.equal(run.code, 0);
-  const records = readSpool(dir);
-  assert.equal(records.length, 1, "exactly one summary record expected");
-  const flat = JSON.stringify(records[0]);
-  assert.ok(flat.includes("x.ts"), `summary must name the touched file: ${flat}`);
+  // Dreaming v2: a single tool call is NOT a memory. It lands in scratch;
+  // the spool stays empty until a session digest is built at session end.
+  assert.equal(readSpoolRaw(dir), "", "no per-tool record may reach the upload spool");
+  const scratch = readScratch(dir, "s-tool");
+  const flat = JSON.stringify(scratch);
+  assert.ok(flat.includes("x.ts"), `scratch must record the touched file: ${flat}`);
   await sleep(300); // give any stray async request time to land
   assert.equal(
     api.requests.length,
@@ -65,25 +70,76 @@ test("C-HOOK-2 PostToolUse with Codex-shaped apply_patch payload spools a summar
   );
 });
 
-test("C-HOOK-3 MEMBASE_CLIENT_SOURCE=codex attributes the spooled summary to Codex, not Claude Code", async (t) => {
+test("C-HOOK-2b SessionEnd folds the session scratch into ONE digest in the spool, attributed to the client", async (t) => {
   const dir = await makeDataDir(t);
-  const run = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
-    input: codexPostToolUse,
-    env: {
-      MEMBASE_DATA_DIR: dir,
-      MEMBASE_CLIENT_SOURCE: "codex",
-      CLAUDE_PLUGIN_OPTION_captureMode: "summary",
-    },
+  await writeConfig(dir, { captureMode: "summary" });
+  // Two tool calls in one session → scratch accumulates both.
+  for (const patch of ["*** Update File: a.ts", "*** Update File: b.ts"]) {
+    const run = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
+      input: JSON.stringify({
+        session_id: "s-digest",
+        tool_name: "apply_patch",
+        tool_input: { command: patch },
+      }),
+      env: {
+        MEMBASE_DATA_DIR: dir,
+        MEMBASE_CLIENT_SOURCE: "codex",
+        CLAUDE_PLUGIN_OPTION_captureMode: "summary",
+      },
+    });
+    assert.equal(run.code, 0);
+  }
+  assert.equal(readSpoolRaw(dir), "", "still nothing in the spool mid-session");
+
+  // SessionEnd (no credentials → digest is enqueued but not uploaded).
+  const end = await runEntry(CLAUDE_HOOK, ["SessionEnd"], {
+    input: JSON.stringify({ hook_event_name: "SessionEnd", session_id: "s-digest" }),
+    env: { MEMBASE_DATA_DIR: dir, MEMBASE_CLIENT_SOURCE: "codex" },
   });
-  assert.equal(run.code, 0);
-  const [record] = readSpool(dir);
-  assert.ok(record, "a summary record must be spooled");
+  assert.equal(end.code, 0);
+  const records = readSpool(dir);
+  assert.equal(records.length, 1, "exactly ONE digest per session");
+  const [record] = records;
+  assert.equal(record.capture_kind, "session_summary");
   const visible = `${record.content}\n${record.display_summary ?? ""}`;
-  assert.match(visible, /codex/i, `summary must identify Codex: ${visible}`);
+  assert.ok(visible.includes("a.ts") && visible.includes("b.ts"), `digest must name both files: ${visible}`);
+  assert.match(visible, /codex/i, `digest must identify Codex: ${visible}`);
+  assert.ok(!/claude code/i.test(visible), `digest must not claim Claude Code: ${visible}`);
+  assert.ok(!scratchExists(dir, "s-digest"), "scratch must be consumed after the digest");
+});
+
+test("C-HOOK-2c SessionStart sweeps an idle prior-session scratch into a digest (Codex has no end event)", async (t) => {
+  const dir = await makeDataDir(t);
+  await writeConfig(dir, { captureMode: "summary" });
+  // A prior session's tool call, never followed by an end event.
+  const tool = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
+    input: JSON.stringify({
+      session_id: "s-prior",
+      tool_name: "apply_patch",
+      tool_input: { command: "*** Update File: swept.ts" },
+    }),
+    env: { MEMBASE_DATA_DIR: dir, CLAUDE_PLUGIN_OPTION_captureMode: "summary" },
+  });
+  assert.equal(tool.code, 0);
+  // Age the scratch past the idle threshold so the next start sweeps it.
+  const { utimesSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const priorPath = join(dir, "scratch", "s-prior.jsonl");
+  const past = (Date.now() - 31 * 60 * 1000) / 1000;
+  utimesSync(priorPath, past, past);
+
+  const start = await runEntry(CLAUDE_HOOK, ["SessionStart"], {
+    input: JSON.stringify({ hook_event_name: "SessionStart", session_id: "s-new" }),
+    env: { MEMBASE_DATA_DIR: dir },
+  });
+  assert.equal(start.code, 0);
+  const records = readSpool(dir);
+  assert.equal(records.length, 1, "the idle session's digest must be enqueued");
   assert.ok(
-    !/claude code/i.test(visible),
-    `summary must not claim Claude Code: ${visible}`,
+    JSON.stringify(records[0]).includes("swept.ts"),
+    "swept digest must name the prior session's file",
   );
+  assert.ok(!scratchExists(dir, "s-prior"), "swept scratch must be consumed");
 });
 
 test("C-HOOK-3 with MEMBASE_CLIENT_SOURCE unset, upload requests identify claude-code", async (t) => {
@@ -104,7 +160,7 @@ test("C-HOOK-3 with MEMBASE_CLIENT_SOURCE unset, upload requests identify claude
   assert.equal(ingests[0].json?.source, "claude-code");
 });
 
-test("C-HOOK-4 config captureMode:'off' beats env captureMode=summary — nothing spooled", async (t) => {
+test("C-HOOK-4 config captureMode:'off' beats env captureMode=summary — nothing scratched or spooled", async (t) => {
   const dir = await makeDataDir(t);
   await writeConfig(dir, { captureMode: "off" });
   const run = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
@@ -119,6 +175,11 @@ test("C-HOOK-4 config captureMode:'off' beats env captureMode=summary — nothin
     readSpoolRaw(dir),
     "",
     "explicit user off on disk must win over the env default",
+  );
+  assert.equal(
+    readScratch(dir, "s-tool").length,
+    0,
+    "captureMode off must not write to scratch either",
   );
 });
 

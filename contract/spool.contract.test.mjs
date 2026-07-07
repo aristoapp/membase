@@ -14,6 +14,7 @@ import {
   runEntry,
   readSpool,
   readSpoolRaw,
+  readScratch,
   startStubApi,
   writeConfig,
   writeCredentials,
@@ -34,11 +35,12 @@ async function makeSpool(core, dir, sanitize) {
   });
 }
 
-test("C-SPOOL-1 pending.jsonl is JSON-Lines of SpoolRecord-shaped objects (entry point + capture-core)", async (t) => {
-  // via public hook entry point
+test("C-SPOOL-1 pending.jsonl is JSON-Lines of SpoolRecord-shaped objects (session digest + capture-core)", async (t) => {
+  // via public hook entry point: a tool call + SessionEnd produces one digest.
   const dir = await makeDataDir(t);
-  const run = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
+  await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
     input: JSON.stringify({
+      session_id: "s-spool1",
       tool_name: "apply_patch",
       tool_input: { command: "*** Update File: contract-spool-one.ts" },
     }),
@@ -47,7 +49,11 @@ test("C-SPOOL-1 pending.jsonl is JSON-Lines of SpoolRecord-shaped objects (entry
       CLAUDE_PLUGIN_OPTION_captureMode: "summary",
     },
   });
-  assert.equal(run.code, 0);
+  const end = await runEntry(CLAUDE_HOOK, ["SessionEnd"], {
+    input: JSON.stringify({ hook_event_name: "SessionEnd", session_id: "s-spool1" }),
+    env: { MEMBASE_DATA_DIR: dir, CLAUDE_PLUGIN_OPTION_captureMode: "summary" },
+  });
+  assert.equal(end.code, 0);
 
   // via capture-core
   const core = await loadCaptureCore();
@@ -69,10 +75,11 @@ test("C-SPOOL-1 pending.jsonl is JSON-Lines of SpoolRecord-shaped objects (entry
   }
 });
 
-test("C-SPOOL-2 secret value never reaches the spool file (hook entry point)", async (t) => {
+test("C-SPOOL-2 secret value never reaches disk (hook entry point → scratch)", async (t) => {
   const dir = await makeDataDir(t);
   const run = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
     input: JSON.stringify({
+      session_id: "s-secret",
       tool_name: "Bash",
       tool_input: {
         command: "export API_KEY=dummyvalue123 && ./deploy.sh --env prod",
@@ -84,9 +91,15 @@ test("C-SPOOL-2 secret value never reaches the spool file (hook entry point)", a
     },
   });
   assert.equal(run.code, 0);
+  // Tool observations now land in scratch (not the spool) mid-session; a
+  // secret-bearing command must not survive to either.
   assert.ok(
     !readSpoolRaw(dir).includes("dummyvalue123"),
-    "secret value must never appear anywhere in the spool file",
+    "secret value must never appear in the spool file",
+  );
+  assert.ok(
+    !JSON.stringify(readScratch(dir, "s-secret")).includes("dummyvalue123"),
+    "secret value must never appear in the scratch file",
   );
 });
 

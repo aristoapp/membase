@@ -7,6 +7,7 @@ import {
   runEntry,
   readSpool,
   readSpoolRaw,
+  readScratch,
 } from "./helpers.mjs";
 
 test("C-CUR-1 sessionStart stdout is empty or exactly one {additional_context: string} object", async (t) => {
@@ -34,7 +35,7 @@ test("C-CUR-1 sessionStart stdout is empty or exactly one {additional_context: s
   }
 });
 
-test("C-CUR-2 afterFileEdit spools a record referencing the file; stdout empty", async (t) => {
+test("C-CUR-2 afterFileEdit records the edited file to the session scratch; stdout empty", async (t) => {
   const dir = await makeDataDir(t);
   const run = await runEntry(CURSOR_HOOK, ["afterFileEdit"], {
     input: JSON.stringify({
@@ -46,15 +47,17 @@ test("C-CUR-2 afterFileEdit spools a record referencing the file; stdout empty",
   });
   assert.equal(run.code, 0);
   assert.equal(run.stdout.trim(), "", "afterFileEdit must print nothing");
-  const records = readSpool(dir);
-  assert.equal(records.length, 1);
+  // Dreaming v2: a per-tool observation lands in the session scratch, not the
+  // upload spool (conversation_id maps to session_id).
+  assert.equal(readSpoolRaw(dir), "", "afterFileEdit must not touch the upload spool");
+  const scratch = readScratch(dir, "conv-2");
   assert.ok(
-    JSON.stringify(records[0]).includes("widget.ts"),
-    `record must reference the edited file: ${JSON.stringify(records[0]).slice(0, 200)}`,
+    JSON.stringify(scratch).includes("widget.ts"),
+    `scratch must reference the edited file: ${JSON.stringify(scratch).slice(0, 200)}`,
   );
 });
 
-test("C-CUR-3 afterShellExecution spools 'pnpm build' but filters trivial 'ls'", async (t) => {
+test("C-CUR-3 afterShellExecution scratches 'pnpm build' but filters trivial 'ls'", async (t) => {
   const dir = await makeDataDir(t);
   const base = {
     conversation_id: "conv-3",
@@ -66,11 +69,14 @@ test("C-CUR-3 afterShellExecution spools 'pnpm build' but filters trivial 'ls'",
   });
   assert.equal(run.code, 0);
   assert.equal(run.stdout.trim(), "");
-  const afterBuild = readSpool(dir);
-  assert.equal(afterBuild.length, 1, "'pnpm build' must be summarized");
+  // Scratch lines: a meta header + one observation per meaningful call.
+  const observations = (sid) =>
+    readScratch(dir, sid).filter((line) => line.meta !== true);
+  const afterBuild = observations("conv-3");
+  assert.equal(afterBuild.length, 1, "'pnpm build' must be scratched");
   assert.ok(
     JSON.stringify(afterBuild[0]).includes("pnpm build"),
-    "summary must carry the command",
+    "scratch entry must carry the command",
   );
 
   run = await runEntry(CURSOR_HOOK, ["afterShellExecution"], {
@@ -79,9 +85,9 @@ test("C-CUR-3 afterShellExecution spools 'pnpm build' but filters trivial 'ls'",
   });
   assert.equal(run.code, 0);
   assert.equal(
-    readSpool(dir).length,
+    observations("conv-3").length,
     1,
-    "trivial read-only 'ls' must spool nothing — capture is summaries, not a keylog",
+    "trivial read-only 'ls' must scratch nothing — capture is summaries, not a keylog",
   );
 });
 

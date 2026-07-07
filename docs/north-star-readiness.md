@@ -104,7 +104,7 @@ platform's official hook mechanism.
 
 | Client | Status | Mechanism |
 | --- | --- | --- |
-| Claude Code | Done | `hooks.json` — tool/compact summaries → disk spool → flush (plugin login supplies hook auth) |
+| Claude Code | Done | `hooks.json` — per-session tool observations → scratch → ONE session digest → disk spool → flush (plugin login supplies hook auth) |
 | OpenClaw | Done | `api.on("agent_end")` capture inside the long-lived gateway process |
 | Hermes | Done | provider `on_session_end` slot |
 | Cursor | Decided (2026-07-07), to build | Two connection modes, below |
@@ -128,13 +128,31 @@ so out of the box every client behaves like Claude Code (decided 2026-07-07).
   hooks only *collect*: official events (Cursor `afterFileEdit`/`stop` via
   `~/.cursor/hooks.json`; Codex `PostToolUse`/`Stop` via plugin-manifest
   hooks writing under the official `PLUGIN_DATA` dir) append redacted
-  summaries to a local spool. Upload rides the already-authenticated in-app
+  observations to the per-session scratch, folded into one session digest on
+  the spool at session end (see "Session-digest capture" below). Upload rides
+  the already-authenticated in-app
   AI: the session-start hook injects "N pending captures — flush them" and
   the AI calls `add_memory`; handoff and dreaming also flush first.
   Auto-capture still works, with cloud sync lagging by at most one session.
 - Both modes share one spool contract in `capture-core`: jsonl line format,
   secret redaction **before** the line is written, truncate after successful
   upload — so "missing from cloud" is defined as "still in the spool".
+
+**Session-digest capture ("dreaming v2", decided 2026-07-07).** Tool
+observations are NOT uploaded per tool call or per batch — that produced dozens
+of contentless "used N tool(s)" memories per session. Instead each meaningful
+tool call (file edits, important commands, sub-agent tasks — never prompts or
+assistant messages) is appended to a per-session **scratch** file
+(`<dataDir>/scratch/<session_id>.jsonl`), and the whole session is folded into
+**exactly one** `session_summary` record in the spool when the session ends.
+Lifecycle: `SessionEnd` reads the scratch, enqueues the digest, and deletes the
+scratch only after a durable enqueue (a failed enqueue keeps it for retry). For
+a client with no end event (Codex) or a crash, the next `SessionStart` sweeps
+any scratch idle >30 min into a digest; a scratch idle >7 days is discarded
+undigested. The digest's client attribution, cwd, project, and local-timezone
+date come from the SESSION's own persisted scratch, not the process that runs
+the sweep. An explicit `captureMode: off` consumes (deletes) the scratch without
+uploading. Enforced by contract C-HOOK-2/2b/2c and C-SPOOL-1/2.
 - **claude-mem-style resident worker: rejected.** The stdio bundle reaches
   real-time capture without a daemon's process-lifecycle burden (PID files,
   spawn locks, supervisor, ports), and a worker would still need its own
