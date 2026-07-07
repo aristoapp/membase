@@ -277,19 +277,19 @@ function createCaptureSpool(options) {
 // ../../../packages/capture-core/src/token-store.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-function writeJsonAtomic(path, value, mode = 384) {
+function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
+  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
   (0, import_node_fs2.renameSync)(tmp, path);
   try {
     (0, import_node_fs2.chmodSync)(path, mode);
   } catch {
   }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
 }
 function createTokenStore(options) {
   const filename = options.filename ?? "credentials.json";
@@ -329,6 +329,9 @@ function createTokenStore(options) {
   }
   return { path, read, write, clear };
 }
+
+// ../../../packages/capture-core/src/handoff.ts
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
 
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;

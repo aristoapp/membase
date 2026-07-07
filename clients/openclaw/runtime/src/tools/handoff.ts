@@ -11,11 +11,6 @@ import {
   sweepReplacedHandoffs,
 } from "../utils";
 
-// The recall query is generic ("session handoff summary"), so ordinary
-// memories can outrank the real handoff; fetch a wider window and filter/sort
-// client-side rather than trusting the top few relevance hits.
-const RECALL_LIMIT = HANDOFF_RECALL_LIMIT;
-
 export function registerHandoffTool(
   api: OpenClawPluginApi,
   client: MembaseClient,
@@ -62,7 +57,7 @@ export function registerHandoffTool(
         const recallSearch = (project?: string) =>
           client.search(
             handoffRecallQuery(),
-            RECALL_LIMIT,
+            HANDOFF_RECALL_LIMIT,
             undefined,
             undefined,
             undefined,

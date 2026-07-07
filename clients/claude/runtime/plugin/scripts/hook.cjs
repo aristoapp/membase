@@ -271,19 +271,19 @@ function createCaptureSpool(options) {
 // ../../../packages/capture-core/src/token-store.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
-function writeJsonAtomic(path, value, mode = 384) {
+function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, `${JSON.stringify(value, null, 2)}
-`, {
-    encoding: "utf-8",
-    mode
-  });
+  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
   (0, import_node_fs2.renameSync)(tmp, path);
   try {
     (0, import_node_fs2.chmodSync)(path, mode);
   } catch {
   }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
 }
 function createTokenStore(options) {
   const filename = options.filename ?? "credentials.json";
@@ -350,6 +350,31 @@ function pickLatestHandoff(bundles) {
     if (latestTime === null) return b;
     return bTime > latestTime ? b : latest;
   });
+}
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+function isHandoffFresh(storedAtMs, nowMs) {
+  const now = nowMs ?? Date.now();
+  return Math.max(0, now - storedAtMs) <= HANDOFF_STALE_MS;
+}
+function neutralizeInjection(text) {
+  return text.replace(
+    /<\/?(membase-handoff|system-reminder)\b/gi,
+    (m) => `${m[0]}\u200B${m.slice(1)}`
+  );
+}
+function buildHandoffInjection(args) {
+  const now = args.nowMs ?? Date.now();
+  const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 864e5);
+  const storedAt = new Date(args.storedAtMs).toISOString();
+  return `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">
+${neutralizeInjection(args.text)}
+</membase-handoff>
+Use this only if the user is continuing the work it describes; it may already be finished.`;
+}
+function buildStaleHandoffNotice(args) {
+  const now = args.nowMs ?? Date.now();
+  const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 864e5);
+  return `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]", or read the local handoff file).`;
 }
 
 // ../../../packages/capture-core/src/index.ts
@@ -966,6 +991,44 @@ function pendingSpoolPath() {
   return (0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl");
 }
 
+// src/handoff/file.ts
+var import_node_fs5 = require("node:fs");
+var import_node_os2 = require("node:os");
+var import_node_path6 = require("node:path");
+function handoffFilePath(projectSlug) {
+  return (0, import_node_path6.join)(getDataDir(), "handoff", `${projectSlug || "unscoped"}.md`);
+}
+function readAt(path) {
+  try {
+    const text = (0, import_node_fs5.readFileSync)(path, "utf-8").trim();
+    if (!text) return null;
+    return { text, storedAtMs: (0, import_node_fs5.statSync)(path).mtimeMs };
+  } catch {
+    return null;
+  }
+}
+function codexCandidates(cwd) {
+  if (process.env.MEMBASE_HANDOFF_FILE) return [process.env.MEMBASE_HANDOFF_FILE];
+  const home = process.env.HOME || (0, import_node_os2.homedir)();
+  return [
+    (0, import_node_path6.join)(cwd ?? process.cwd(), ".codex", "membase-handoff.md"),
+    (0, import_node_path6.join)(home, ".codex", "membase-handoff.md")
+  ];
+}
+function readLocalHandoff(args) {
+  const candidates = args.clientSource === "codex" ? codexCandidates(args.cwd) : [handoffFilePath(args.projectSlug)];
+  let newestStale = null;
+  for (const candidate of candidates) {
+    const found = readAt(candidate);
+    if (!found) continue;
+    if (isHandoffFresh(found.storedAtMs)) return found;
+    if (!newestStale || found.storedAtMs > newestStale.storedAtMs) {
+      newestStale = found;
+    }
+  }
+  return newestStale;
+}
+
 // src/profile/index.ts
 function asProfileValue(value) {
   return typeof value === "string" && value.trim() ? value : null;
@@ -1172,18 +1235,25 @@ async function handleSessionStart(input) {
   const config = loadConfig();
   const tokens = readTokens();
   if (!tokens) {
+    const localHandoff = await resolveHandoffInjection(
+      input,
+      resolveProjectSlug(input.cwd, config),
+      void 0
+    );
+    const lines = [];
     if (config.sessionStartContext !== "off") {
-      const lines = [
+      lines.push(
         MEMORY_SOURCE === "claude-code" ? "Membase is installed but not connected. Run /membase:login to enable memory." : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory."
-      ];
+      );
       const pending = pendingSpoolCount();
       if (pending > 0) {
         lines.push(
           `Membase spool has ${pending} pending local capture(s) at ${pendingSpoolPath()}. Rename \`pending.jsonl\` to \`flush-<timestamp>.jsonl\` first (atomic \u2014 claims the batch; new captures keep going to a fresh pending.jsonl and a second flusher finds nothing). Upload each record's content via add_memory (keep its project). Records that look like secrets: do NOT upload, do NOT delete \u2014 report them to the user. Delete the renamed file only after all non-secret records are stored.`
         );
       }
-      outputAdditionalContext(lines.join("\n"), "SessionStart");
     }
+    if (localHandoff) lines.push(localHandoff);
+    if (lines.length) outputAdditionalContext(lines.join("\n"), "SessionStart");
     return;
   }
   const client = createClient(config.apiUrl, tokens, writeTokens, {
@@ -1194,7 +1264,11 @@ async function handleSessionStart(input) {
     flushSpool(client, 1),
     SESSION_FETCH_TIMEOUT_MS + 200
   ).catch(() => void 0);
-  if (config.sessionStartContext === "off") return;
+  const handoff = await resolveHandoffInjection(input, projectSlug, client);
+  if (config.sessionStartContext === "off") {
+    if (handoff) outputAdditionalContext(handoff, "SessionStart");
+    return;
+  }
   const profile = await withTimeout(
     client.getProfile(),
     SESSION_FETCH_TIMEOUT_MS
@@ -1204,13 +1278,18 @@ async function handleSessionStart(input) {
     projectSlug,
     profile
   });
-  const handoff = await prefetchHandoff(client, projectSlug);
   const combined = [context, handoff].filter(Boolean).join("\n\n");
   if (combined) {
     outputAdditionalContext(combined, "SessionStart");
   }
 }
-async function prefetchHandoff(client, projectSlug) {
+function parseStoredAt(raw) {
+  if (!raw) return null;
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw);
+  const t = Date.parse(hasZone || !raw.includes("T") ? raw : `${raw}Z`);
+  return Number.isNaN(t) ? null : t;
+}
+async function fetchCloudHandoff(client, projectSlug) {
   const bundles = await withTimeout(
     client.searchMemory({
       query: handoffRecallQuery(),
@@ -1220,11 +1299,28 @@ async function prefetchHandoff(client, projectSlug) {
     SESSION_FETCH_TIMEOUT_MS
   ).catch(() => void 0);
   const latest = bundles ? pickLatestHandoff(bundles) : void 0;
-  if (!latest) return "";
-  const text = latest.episode.summary ?? latest.episode.name;
-  return `<membase-handoff>
-${text}
-</membase-handoff>`;
+  if (!latest) return null;
+  const text = latest.episode.summary ?? latest.episode.name ?? "";
+  if (!text) return null;
+  const storedAtMs = parseStoredAt(latest.episode.valid_at ?? latest.episode.created_at) ?? Date.now();
+  return { text, storedAtMs };
+}
+async function resolveHandoffInjection(input, projectSlug, client) {
+  if (MEMORY_SOURCE === "cursor") return "";
+  const local = readLocalHandoff({
+    clientSource: MEMORY_SOURCE,
+    cwd: input.cwd,
+    projectSlug
+  });
+  if (local && isHandoffFresh(local.storedAtMs)) {
+    return buildHandoffInjection(local);
+  }
+  const cloud = client ? await fetchCloudHandoff(client, projectSlug) : null;
+  if (cloud && isHandoffFresh(cloud.storedAtMs)) {
+    return buildHandoffInjection(cloud);
+  }
+  const stale = cloud && (!local || cloud.storedAtMs > local.storedAtMs) ? cloud : local;
+  return stale ? buildStaleHandoffNotice(stale) : "";
 }
 async function handleUserPromptSubmit(input) {
   const config = loadConfig();
@@ -1317,10 +1413,19 @@ async function spoolSessionSummary(input, captureKind) {
     metadata: captureMetadata(input, project)
   });
 }
+function parseHookInput(raw) {
+  if (!raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return {};
+}
 async function main() {
   const explicitEvent = process.argv[2];
   const raw = await readStdin();
-  const input = raw.trim() ? JSON.parse(raw) : {};
+  const input = parseHookInput(raw);
   input.hook_event_name = explicitEvent || input.hook_event_name;
   const event = input.hook_event_name;
   if (event === "SessionStart") await handleSessionStart(input);
