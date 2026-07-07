@@ -137,6 +137,7 @@ for (const client of CLIENTS) {
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
           await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
           await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
+          await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
           await evalNegative(ctx, url); // Tier 3 (rejection behavior)
         }
         lifecycleByUrl.set(url, shared);
@@ -552,6 +553,134 @@ async function evalHandoff(entry) {
     recalled
       ? `tag survived into episode.name/summary after ~${ttr}s`
       : `no [HANDOFF] episode with sentinel found within ${QUALITY_MAX_RECALL_MS / 1000}s — tag likely not on name/summary`,
+  ));
+}
+
+// ---------- Tier 3: handoff replace-on-store (REST ingest/search/delete) ----------
+// North-star pillar 2 policy (exactly ONE handoff per project — replace-on-
+// store, see packages/capture-core/src/handoff.ts's sweepReplacedHandoffs):
+// storing a new [HANDOFF] must search for the prior one, then DELETE it. This
+// is the one piece of that contract evalHandoff (above) never exercises — it
+// only proves store+recall, never that a second store deletes the first.
+// That gap existed because the MCP tool surface has no delete tool (see
+// evalNegative/evalLiveDeep's "forget" warnings) — but the runtime's real
+// delete path is a REST call, `DELETE /memory/episodes/{episode_uuid}`
+// (apps/api/src/api/routes/memory.py), the same one Claude/OpenClaw/Hermes's
+// deleteEpisode/deleteMemory call. This test drives that exact contract:
+// ingest A -> search finds A's episode.uuid -> DELETE that uuid -> ingest B
+// (replacement) -> search confirms A is gone and B is present. Scoped to a
+// unique project tag so it never collides with evalHandoff's untagged run or
+// real handoffs on the test account.
+async function evalHandoffReplace(entry) {
+  const restBase = REST_API_BASE.replace(/\/$/, "");
+  const authedFetch = (path, init) =>
+    fetch(`${restBase}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${TOKEN}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+
+  const stamp = Date.now();
+  const project = `e2e-handoff-replace-${stamp}`;
+  const sentinelA = `e2e-handoff-replace-a-${stamp}`;
+  const sentinelB = `e2e-handoff-replace-b-${stamp}`;
+
+  const ingest = async (sentinel) => {
+    const body = {
+      content: `${HANDOFF_TAG} Replace-on-store test ${sentinel}. (safe to delete)`,
+      display_summary: `${HANDOFF_TAG} Replace-on-store test ${sentinel}. (safe to delete)`,
+      source: "openclaw",
+      channel: "api",
+      project,
+    };
+    const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+    return res.status < 400;
+  };
+
+  // find the episode bundle for a given sentinel, polling to the recall SLO.
+  const findEpisode = async (sentinel) => {
+    const t0 = now();
+    while (true) {
+      try {
+        const res = await authedFetch(
+          `/memory/search?query=${encodeURIComponent(HANDOFF_TAG)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`
+        );
+        if (res.status < 400) {
+          const data = await res.json();
+          const episodes = data?.episodes ?? [];
+          const hit = episodes.find((b) => {
+            const name = b?.episode?.name ?? "";
+            const sum = b?.episode?.summary ?? "";
+            return name.includes(sentinel) || sum.includes(sentinel);
+          });
+          if (hit) return hit;
+        }
+      } catch {
+        // transient; keep polling to the deadline
+      }
+      if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) return null;
+      await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+    }
+  };
+
+  const storedA = await ingest(sentinelA);
+  entry.checks.push(check("handoff replace: first ingest (A) accepted", storedA, storedA ? "stored" : "ingest rejected"));
+  if (!storedA) return;
+
+  const episodeA = await findEpisode(sentinelA);
+  entry.checks.push(check(
+    `handoff replace: recall finds A's episode within ${QUALITY_MAX_RECALL_MS / 1000}s`,
+    Boolean(episodeA),
+    episodeA ? `uuid=${short(episodeA.episode?.uuid ?? "")}` : "not found within SLO"
+  ));
+  if (!episodeA?.episode?.uuid) return;
+
+  // Replicate the runtime's replace-on-store: ingest the replacement (B)
+  // FIRST, then delete the prior handoff (A) — matching sweepReplacedHandoffs'
+  // "ingest -> sweep old" ordering (store.ts:replaceHandoff), not delete-first.
+  const storedB = await ingest(sentinelB);
+  entry.checks.push(check("handoff replace: second ingest (B, the replacement) accepted", storedB, storedB ? "stored" : "ingest rejected"));
+  if (!storedB) return;
+
+  let deleteOk = false;
+  let deleteDetail = "";
+  try {
+    const del = await authedFetch(`/memory/episodes/${encodeURIComponent(episodeA.episode.uuid)}`, { method: "DELETE" });
+    deleteOk = del.status === 204;
+    deleteDetail = deleteOk ? "204 No Content" : `HTTP ${del.status}`;
+  } catch (err) {
+    deleteDetail = String(err?.message ?? err);
+  }
+  entry.checks.push(check("handoff replace: DELETE /memory/episodes/{uuid} on the old handoff succeeds", deleteOk, deleteDetail));
+  if (!deleteOk) return;
+
+  // Confirm the swap: A gone, B present. Poll since delete-then-reindex is
+  // also async; failure to disappear within the SLO is a real regression
+  // (replace-on-store's whole point is exactly one handoff per project).
+  const t0 = now();
+  let aGone = false;
+  let bPresent = false;
+  while (true) {
+    const stillA = await findEpisode(sentinelA);
+    const stillB = await findEpisode(sentinelB);
+    aGone = !stillA;
+    bPresent = Boolean(stillB);
+    if (aGone && bPresent) break;
+    if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
+    await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
+  }
+  entry.checks.push(check(
+    "handoff replace: old handoff (A) no longer searchable after delete",
+    aGone,
+    aGone ? "gone" : "STALE: A still searchable after delete — replace-on-store is leaking old handoffs"
+  ));
+  entry.checks.push(check(
+    "handoff replace: replacement (B) remains searchable",
+    bPresent,
+    bPresent ? "present" : "B not found — search regressed independent of the delete"
   ));
 }
 
