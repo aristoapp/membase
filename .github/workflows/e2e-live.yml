@@ -5,6 +5,11 @@ on:
     - cron: "17 1 * * *" # daily 01:17 UTC
   workflow_dispatch:
 
+# Least privilege: the default token only needs to read the repo. The fallback
+# path writes a repo secret via GH_SECRETS_PAT (a separate PAT), not this token.
+permissions:
+  contents: read
+
 jobs:
   e2e-live:
     name: remember/search/context lifecycle

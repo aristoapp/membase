@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import queue
 import threading
 from dataclasses import dataclass
@@ -52,9 +53,14 @@ class MirrorStore:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Serialize + write under the lock so two concurrent saves can't
+        # interleave; write to a per-process temp then atomically rename so a
+        # crash mid-write never truncates the index.
         with self._lock:
             payload = json.dumps(self._index, indent=2)
-        self.path.write_text(f"{payload}\n", encoding="utf-8")
+            tmp = self.path.with_name(f"{self.path.name}.tmp.{os.getpid()}")
+            tmp.write_text(f"{payload}\n", encoding="utf-8")
+            os.replace(tmp, self.path)
 
     def has_content(self, content: str) -> bool:
         digest = content_hash(content)

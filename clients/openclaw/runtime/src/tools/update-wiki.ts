@@ -1,6 +1,7 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
 import { toolResponse } from "../update-check";
+import { looksSensitive } from "../utils";
 
 export function registerUpdateWikiTool(
   api: OpenClawPluginApi,
@@ -51,6 +52,15 @@ export function registerUpdateWikiTool(
         ) {
           return await toolResponse(
             "At least one update field is required (title/content/collection).",
+          );
+        }
+        if (
+          (typeof params.content === "string" &&
+            looksSensitive(params.content)) ||
+          (typeof params.title === "string" && looksSensitive(params.title))
+        ) {
+          return await toolResponse(
+            "Refusing to store content that looks like a secret.",
           );
         }
 

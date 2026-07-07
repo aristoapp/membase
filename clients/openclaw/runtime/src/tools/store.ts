@@ -1,6 +1,7 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
 import { toolResponse } from "../update-check";
+import { looksSensitive } from "../utils";
 
 const MAX_CONTENT_LENGTH = 50_000;
 
@@ -70,6 +71,11 @@ export function registerStoreTool(
         if (params.content.length > MAX_CONTENT_LENGTH) {
           return await toolResponse(
             `Content too long (${params.content.length} chars). Maximum is ${MAX_CONTENT_LENGTH}.`,
+          );
+        }
+        if (looksSensitive(params.content)) {
+          return await toolResponse(
+            "Refusing to store content that looks like a secret.",
           );
         }
 

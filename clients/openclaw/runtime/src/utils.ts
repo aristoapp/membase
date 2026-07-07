@@ -128,6 +128,7 @@ export {
   buildHandoffMemory,
   buildHandoffDisplaySummary,
   isHandoffMemory,
+  looksSensitive,
   pickLatestHandoff,
   selectReplaceableHandoffs,
   sweepReplacedHandoffs,

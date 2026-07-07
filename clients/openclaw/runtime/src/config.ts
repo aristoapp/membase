@@ -135,7 +135,10 @@ export function writeTokenFile(tokenFile: string, tokens: TokenPair): void {
   } catch {
     // Ignore platform-specific permission limitations (e.g. Windows ACLs).
   }
-  const tempPath = `${tokenFile}.tmp`;
+  // Per-process tmp name: with a fixed `${tokenFile}.tmp`, a background token
+  // refresh and a foreground login/logout can race — one renames the tmp away
+  // and the other's rename throws ENOENT (see capture-core writeTextAtomic).
+  const tempPath = `${tokenFile}.tmp.${process.pid}`;
   const payload = JSON.stringify(
     {
       accessToken: str(tokens.accessToken, ""),

@@ -7,6 +7,7 @@ import {
   buildHandoffDisplaySummary,
   buildHandoffMemory,
   handoffRecallQuery,
+  looksSensitive,
   pickLatestHandoff,
   sweepReplacedHandoffs,
 } from "../utils";
@@ -70,6 +71,11 @@ export function registerHandoffTool(
           if (!params.summary?.trim()) {
             return await toolResponse(
               "Store failed: summary is required for mode='store'.",
+            );
+          }
+          if (looksSensitive(params.summary)) {
+            return await toolResponse(
+              "Refusing to store content that looks like a secret.",
             );
           }
           // Cloud policy: exactly ONE handoff per project — capture old
