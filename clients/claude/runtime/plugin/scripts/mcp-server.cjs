@@ -31302,10 +31302,22 @@ function isHandoffMemory(text) {
   return text.trimStart().startsWith(HANDOFF_TAG);
 }
 var HANDOFF_REPLACE_LIMIT = 10;
-function selectReplaceableHandoffs(bundles, max = HANDOFF_REPLACE_LIMIT) {
-  return bundles.filter(
-    (b) => isHandoffMemory(b.episode.name ?? "") || isHandoffMemory(b.episode.summary ?? "")
-  ).slice(0, max);
+var SCOPED_HANDOFF_RE = /^\s*\[HANDOFF\]\s*\(/;
+function selectReplaceableHandoffs(bundles, opts) {
+  const max = opts.max ?? HANDOFF_REPLACE_LIMIT;
+  return bundles.filter((b) => {
+    const name = b.episode.name ?? "";
+    if (!isHandoffMemory(name)) return false;
+    if (!opts.projectScoped && SCOPED_HANDOFF_RE.test(name)) return false;
+    return true;
+  }).slice(0, max);
+}
+async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
+  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => Boolean(uuid3));
+  const results = await Promise.allSettled(
+    targets.map((uuid3) => deleteEpisode(uuid3))
+  );
+  return results.filter((r) => r.status === "fulfilled").length;
 }
 
 // ../../../packages/capture-core/src/index.ts
@@ -31618,27 +31630,26 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
 // src/handoff/store.ts
 var REPLACE_SEARCH_WINDOW = 20;
 async function replaceHandoff(client, args) {
+  const project = args.project?.trim() || void 0;
   const previous = await client.searchMemory({
     query: handoffRecallQuery(),
     limit: REPLACE_SEARCH_WINDOW,
-    project: args.project
+    project
   }).catch(() => []);
   const result = await client.ingestMemory({
-    content: buildHandoffMemory(args),
-    display_summary: buildHandoffDisplaySummary(args),
+    content: buildHandoffMemory({ summary: args.summary, project }),
+    display_summary: buildHandoffDisplaySummary({
+      summary: args.summary,
+      project
+    }),
     metadata: args.metadata,
-    project: args.project
+    project
   });
-  let replaced = 0;
-  for (const bundle of selectReplaceableHandoffs(previous)) {
-    const uuid3 = bundle.episode.uuid;
-    if (!uuid3) continue;
-    try {
-      await client.deleteEpisode(uuid3);
-      replaced += 1;
-    } catch {
-    }
-  }
+  const replaced = await sweepReplacedHandoffs(
+    previous,
+    (uuid3) => client.deleteEpisode(uuid3),
+    { projectScoped: Boolean(project) }
+  );
   return { status: result.status, replaced };
 }
 

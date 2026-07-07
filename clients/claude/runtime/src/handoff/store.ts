@@ -2,7 +2,7 @@ import {
   buildHandoffDisplaySummary,
   buildHandoffMemory,
   handoffRecallQuery,
-  selectReplaceableHandoffs,
+  sweepReplacedHandoffs,
 } from "@membase/capture-core";
 import type { MembaseClient } from "../api/client.js";
 
@@ -10,11 +10,11 @@ const REPLACE_SEARCH_WINDOW = 20;
 
 /**
  * Store a handoff and enforce the cloud policy: exactly ONE handoff per
- * project. Old [HANDOFF] episodes (same project scope, via the scoped
- * search) are captured BEFORE the ingest so the fresh one is never in the
- * deletion set, and deleted after it succeeds. Deletion failures are
- * non-fatal — worst case the store degrades to append and the next
- * successful store sweeps the leftovers.
+ * project (unscoped handoffs form their own bucket). Old [HANDOFF]
+ * episodes are captured BEFORE the ingest so the fresh one is never in the
+ * deletion set, and swept after it succeeds — the ingest is enqueued
+ * asynchronously, so the durability window is the same as any stored
+ * memory (see sweepReplacedHandoffs).
  */
 export async function replaceHandoff(
   client: MembaseClient,
@@ -24,29 +24,27 @@ export async function replaceHandoff(
     metadata?: Record<string, unknown>;
   },
 ): Promise<{ status: string; replaced: number }> {
+  const project = args.project?.trim() || undefined;
   const previous = await client
     .searchMemory({
       query: handoffRecallQuery(),
       limit: REPLACE_SEARCH_WINDOW,
-      project: args.project,
+      project,
     })
     .catch(() => []);
   const result = await client.ingestMemory({
-    content: buildHandoffMemory(args),
-    display_summary: buildHandoffDisplaySummary(args),
+    content: buildHandoffMemory({ summary: args.summary, project }),
+    display_summary: buildHandoffDisplaySummary({
+      summary: args.summary,
+      project,
+    }),
     metadata: args.metadata,
-    project: args.project,
+    project,
   });
-  let replaced = 0;
-  for (const bundle of selectReplaceableHandoffs(previous)) {
-    const uuid = bundle.episode.uuid;
-    if (!uuid) continue;
-    try {
-      await client.deleteEpisode(uuid);
-      replaced += 1;
-    } catch {
-      // non-fatal: leftover is swept by the next successful store
-    }
-  }
+  const replaced = await sweepReplacedHandoffs(
+    previous,
+    (uuid) => client.deleteEpisode(uuid),
+    { projectScoped: Boolean(project) },
+  );
   return { status: result.status, replaced };
 }

@@ -13,7 +13,7 @@ keys, passwords, or raw source files.
    it via `search_memory`. Cloud policy is ONE handoff per project; this
    client cannot delete on the remote server, so an older copy may linger
    briefly — it is swept the next time a delete-capable client (Claude Code,
-   OpenClaw) stores a handoff.
+   OpenClaw) stores a handoff for the SAME project.
 3. Write the SAME summary to `.codex/membase-handoff.md` in the workspace
    root (or `~/.codex/membase-handoff.md` when not in a project), overwriting
    any existing file — only the latest handoff lives there. Do this even if

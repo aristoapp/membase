@@ -46,6 +46,8 @@ jobs:
       - run: pnpm openclaw:runtime-test
 
       - run: pnpm claude:runtime-test
+ - name: Contract tests (blind behavior suite)
+   run: pnpm contract:test
 
       - run: pnpm codex:runtime-test
 
