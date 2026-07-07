@@ -15,12 +15,31 @@ function objectValue(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export function summarizeToolCall(
+export function buildSessionCaptureCandidate(
+  raw: string,
+  captureKind: "compact_summary",
+): string {
+  if (captureKind === "compact_summary") return sanitizeMembaseText(raw);
+  return "";
+}
+
+// One structured observation drawn from a single tool call — the raw material
+// for a session digest. Filters to meaningful tools only (allowed list,
+// important-vs-passive Bash, secret rejection) and yields fields to aggregate
+// across a session, never per-call text.
+export interface ToolObservation {
+  /** File paths touched (Edit/Write path, or apply_patch's file list). */
+  files: string[];
+  /** Meaningful shell commands (already truncated + secret-filtered). */
+  commands: string[];
+  /** Sub-agent task launches (Task/Agent). */
+  tasks: number;
+}
+
+export function extractToolObservation(
   tool: Record<string, unknown>,
-): string | null {
+): ToolObservation | null {
   const name = String(tool.name ?? tool.tool_name ?? tool.type ?? "");
-  // apply_patch is Codex's canonical file-edit tool (hook input reports it
-  // even for Edit/Write matcher aliases).
   const allowed = [
     "Edit",
     "Write",
@@ -30,51 +49,43 @@ export function summarizeToolCall(
     "Agent",
     "apply_patch",
   ];
-  if (!allowed.includes(name)) {
-    return null;
-  }
+  if (!allowed.includes(name)) return null;
   const input = objectValue(tool.tool_input ?? tool.input);
+
+  if (name === "Task" || name === "Agent") {
+    return { files: [], commands: [], tasks: 1 };
+  }
+
+  if (name === "Bash") {
+    const command =
+      typeof input.command === "string"
+        ? truncateText(input.command, 160)
+        : undefined;
+    if (!command || looksSensitive(command)) return null;
+    if (PASSIVE_BASH_RE.test(command) || !IMPORTANT_BASH_RE.test(command)) {
+      return null;
+    }
+    return { files: [], commands: [command], tasks: 0 };
+  }
+
+  if (name === "apply_patch") {
+    const patch = typeof input.command === "string" ? input.command : "";
+    if (looksSensitive(patch)) return null;
+    const files = Array.from(
+      patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
+      (match) => match[1] ?? "",
+    ).filter(Boolean);
+    if (files.length === 0) return null;
+    return { files, commands: [], tasks: 0 };
+  }
+
+  // Edit / Write / MultiEdit — a single file path.
   const path =
     typeof input.file_path === "string"
       ? input.file_path
       : typeof input.path === "string"
         ? input.path
         : undefined;
-  const command =
-    name === "Bash" && typeof input.command === "string"
-      ? truncateText(input.command, 160)
-      : undefined;
-  if (name === "Bash") {
-    if (!command || looksSensitive(command)) return null;
-    if (PASSIVE_BASH_RE.test(command) || !IMPORTANT_BASH_RE.test(command)) {
-      return null;
-    }
-  }
-  let patchFiles: string[] = [];
-  if (name === "apply_patch") {
-    const patch = typeof input.command === "string" ? input.command : "";
-    if (looksSensitive(patch)) return null;
-    patchFiles = Array.from(
-      patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm),
-      (match) => match[1] ?? "",
-    )
-      .filter(Boolean)
-      .slice(0, 5);
-  }
-  return [
-    `${name} tool used`,
-    path ? `path: ${path}` : "",
-    command ? `command: ${command}` : "",
-    patchFiles.length ? `files: ${patchFiles.join(", ")}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-export function buildSessionCaptureCandidate(
-  raw: string,
-  captureKind: "compact_summary",
-): string {
-  if (captureKind === "compact_summary") return sanitizeMembaseText(raw);
-  return "";
+  if (!path) return null;
+  return { files: [path], commands: [], tasks: 0 };
 }

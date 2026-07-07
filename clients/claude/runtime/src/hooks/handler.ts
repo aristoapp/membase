@@ -7,7 +7,6 @@ import {
   PREFETCH_MEMORY_LIMIT,
   PREFETCH_PROJECT_MEMORY_LIMIT,
   PREFETCH_WIKI_LIMIT,
-  CLIENT_LABEL,
   MEMORY_SOURCE,
   PLUGIN_NAME,
   PLUGIN_VERSION,
@@ -41,7 +40,17 @@ import {
   handoffRecallQuery,
   pickLatestHandoff,
 } from "./session-start.js";
-import { buildSessionCaptureCandidate, summarizeToolCall } from "./summary.js";
+import {
+  buildSessionCaptureCandidate,
+  extractToolObservation,
+} from "./summary.js";
+import { buildSessionDigest } from "./digest.js";
+import {
+  appendObservation,
+  sweepIdleSessions,
+  takeSession,
+  type ScratchSession,
+} from "../scratch/index.js";
 import type { EpisodeBundle } from "../types.js";
 
 const SESSION_FETCH_TIMEOUT_MS = 1_800;
@@ -190,6 +199,14 @@ async function fetchRecallMemoryGroup(
 
 async function handleSessionStart(input: HookInput): Promise<void> {
   const config = loadConfig();
+  // Dreaming v2 sweep: enqueue digests for sessions that ended without an end
+  // event (Codex) or crashed. Runs before the spool count/flush below so a
+  // swept digest is part of this session-start's flush (logged in) or announced
+  // backlog (HTTP mode). Enqueue only — sending is the flush/announce that
+  // follows.
+  if (config.captureMode === "summary") {
+    enqueueSweptSessionDigests(input);
+  }
   const tokens = readTokens();
   if (!tokens) {
     // No client here (not logged in) — local file only, no cloud fallback.
@@ -408,34 +425,75 @@ async function handleUserPromptSubmit(input: HookInput): Promise<void> {
   outputAdditionalContext(context);
 }
 
-async function spoolToolBatch(input: HookInput): Promise<void> {
+// Dreaming v2: tool observations are NOT uploaded per batch (that produced
+// dozens of contentless "used N tool(s)" memories per session). Instead each
+// meaningful tool call is appended to the per-session scratch, and one digest
+// is uploaded at session end (or the next SessionStart sweep). Same filter and
+// privacy boundary — only tool metadata, never prompts or messages.
+async function scratchToolBatch(input: HookInput): Promise<void> {
   const config = loadConfig();
   if (config.captureMode !== "summary") return;
   const project = resolveProjectSlug(input.cwd, config);
   const calls = Array.isArray(input.tool_calls) ? input.tool_calls : [];
-  const summaries = calls
-    .map((call) => summarizeToolCall(call))
-    .filter((summary): summary is string => Boolean(summary));
-  if (summaries.length === 0) return;
-  const content = `${CLIENT_LABEL} tool summary:\n\n${summaries.join("\n\n")}`;
-  if (looksSensitive(content)) return;
-  enqueueCapture({
-    capture_kind: "tool_summary",
-    content,
-    display_summary: `${CLIENT_LABEL} used ${summaries.length} project tool(s).`,
-    project,
-    sessionId: input.session_id,
-    metadata: captureMetadata(input, project),
-  });
+  for (const call of calls) {
+    const observation = extractToolObservation(call);
+    if (!observation) continue;
+    appendObservation({
+      sessionId: input.session_id,
+      observation,
+      project,
+      clientSource: MEMORY_SOURCE,
+    });
+  }
 }
 
 /**
  * Codex-style per-call event (PostToolUse delivers ONE tool call at the top
- * level instead of a tool_calls array): reuse the batch summary/spool path.
+ * level instead of a tool_calls array): reuse the batch scratch path.
  */
-async function spoolSingleTool(input: HookInput): Promise<void> {
+async function scratchSingleTool(input: HookInput): Promise<void> {
   if (typeof input.tool_name !== "string") return;
-  await spoolToolBatch({ ...input, tool_calls: [input] });
+  await scratchToolBatch({ ...input, tool_calls: [input] });
+}
+
+// Fold a consumed scratch session into one digest and enqueue it to the real
+// upload spool. Silent when the session did nothing meaningful.
+function enqueueSessionDigest(
+  session: ScratchSession,
+  input: HookInput,
+): void {
+  const digest = buildSessionDigest({
+    observations: session.observations,
+    project: session.project,
+    dateLabel: new Date().toISOString().slice(0, 10),
+  });
+  if (!digest) return;
+  if (looksSensitive(digest.content)) return;
+  enqueueCapture({
+    capture_kind: "session_summary",
+    content: digest.content,
+    display_summary: digest.display_summary,
+    project: session.project,
+    sessionId: session.sessionId,
+    metadata: captureMetadata(input, session.project),
+  });
+}
+
+// Session-end path: take THIS session's scratch and enqueue its digest.
+function enqueueEndedSessionDigest(input: HookInput): void {
+  const session = takeSession(input.session_id);
+  if (session) enqueueSessionDigest(session, input);
+}
+
+// SessionStart sweep: enqueue digests for any sessions that ended without an
+// end event (Codex) or crashed — the ones whose scratch has gone idle. The
+// current session's own scratch is excluded so a resumed session is untouched.
+function enqueueSweptSessionDigests(input: HookInput): void {
+  for (const session of sweepIdleSessions({
+    currentSessionId: input.session_id,
+  })) {
+    enqueueSessionDigest(session, input);
+  }
 }
 
 async function spoolSessionSummary(
@@ -481,8 +539,12 @@ async function main(): Promise<void> {
   const event = input.hook_event_name;
   if (event === "SessionStart") await handleSessionStart(input);
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
-  if (event === "PostToolBatch") await spoolToolBatch(input);
-  if (event === "PostToolUse") await spoolSingleTool(input);
+  if (event === "PostToolBatch") await scratchToolBatch(input);
+  if (event === "PostToolUse") await scratchSingleTool(input);
+  // SessionEnd: fold this session's scratch into a digest BEFORE flushing, so
+  // it uploads in the same batch. Stop fires every turn — flush only, never a
+  // digest (that would upload N partial digests per session).
+  if (event === "SessionEnd") enqueueEndedSessionDigest(input);
   if (event === "Stop" || event === "SessionEnd") {
     const config = loadConfig();
     const tokens = readTokens();

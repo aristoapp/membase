@@ -125,7 +125,12 @@ manually: `search_memory` with query `[HANDOFF]` plus the `project` filter.
 ## Auto-Capture (Memory Hooks)
 
 Auto-capture (north-star pillar 1): conversations upload memory passively.
-Two modes, both official-features-only:
+Capture is per-SESSION, not per-tool: meaningful tool calls (file edits,
+important commands, sub-agent tasks) accumulate in a local per-session scratch
+during the session, and are folded into ONE session digest that uploads on
+`sessionEnd`. If a session ends without that event (or crashes), the next
+session's start sweeps its digest up instead. User prompts and assistant
+messages are never captured. Two modes, both official-features-only:
 
 1. Install the hook adapter: merge `clients/cursor/runtime/hooks.json` into
    `~/.cursor/hooks.json`, replacing `REPO_ROOT` with this repository's

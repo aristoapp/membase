@@ -88,22 +88,28 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   captures and instructions to store them via add_memory. Source:
   install docs "the session-start hook injects 'N pending captures — flush
   them'".
-- C-HOOK-2 — `hook.cjs PostToolUse` with a Codex-shaped payload
-  (`{tool_name:"apply_patch", tool_input:{command:"*** Update File: x.ts"}}`)
-  appends a summary record to the spool that names the touched file — and
-  does NOT upload anything (no network with no credentials). Source: install
-  codex.md "PostToolUse (including apply_patch file edits)".
+- C-HOOK-2 — Dreaming v2: `hook.cjs PostToolUse` with a Codex-shaped payload
+  (`{session_id, tool_name:"apply_patch", tool_input:{command:"*** Update
+  File: x.ts"}}`) records the observation to the per-session SCRATCH
+  (`<dataDir>/scratch/<session_id>.jsonl`) naming the touched file — and adds
+  NOTHING to the upload spool (a single tool call is not a memory), with no
+  network. C-HOOK-2b: `SessionEnd` folds the whole session's scratch into
+  exactly ONE `session_summary` record in the spool, attributed to the client
+  source, then deletes the scratch. C-HOOK-2c: for a client with no end event
+  (Codex) or a crash, the next `SessionStart` sweeps any scratch idle >30min
+  into a digest. Source: dreaming v2 definition (session-level summaries, no
+  per-tool uploads).
 - C-HOOK-3 — Attribution follows `MEMBASE_CLIENT_SOURCE`: with `codex`, the
-  spooled summary's text/display identifies Codex, not Claude Code; with the
-  env unset, requests/records identify claude-code. Source: PR #27
+  session digest's text/display identifies Codex, not Claude Code; with the
+  env unset, upload requests identify claude-code. Source: PR #27
   description-level promise recorded in docs/runtime-parity-decisions.md D3
   addendum ("MEMBASE_CLIENT_SOURCE ... source attribution").
 - C-HOOK-4 — Capture opt-out is user-controlled: with
   `CLAUDE_PLUGIN_OPTION_captureMode=summary` in env BUT
   `{"captureMode":"off"}` in `<dataDir>/config.json`, PostToolUse adds
-  NOTHING to the spool. Env acts only as a default when disk has no value.
-  Source: north-star "auto-capture default" decision + #25 ("default on when
-  no config exists" — an explicit user off must win).
+  NOTHING to the scratch or the spool. Env acts only as a default when disk
+  has no value. Source: north-star "auto-capture default" decision + #25
+  ("default on when no config exists" — an explicit user off must win).
 - C-HOOK-5 — With credentials pointing at a stub API: `Stop` flushes pending
   records as authenticated POSTs whose JSON body carries
   `source` = the client source; `SessionStart` flushes at most 1. On 401 the
@@ -126,10 +132,11 @@ Cursor hooks output schema `{"additional_context": ...}` per cursor.com/docs)
   one JSON object of shape `{"additional_context": "<string>"}` — NEVER the
   Claude `hookSpecificOutput` shape.
 - C-CUR-2 — `cursor-hook.mjs afterFileEdit` with
-  `{conversation_id, workspace_roots:[dir], file_path}` appends a spool
-  record referencing the file; stdout is empty.
+  `{conversation_id, workspace_roots:[dir], file_path}` records the edited
+  file to the session scratch (`scratch/<conversation_id>.jsonl`), not the
+  upload spool (dreaming v2); stdout is empty.
 - C-CUR-3 — `cursor-hook.mjs afterShellExecution` with `{command: "pnpm build"}`
-  spools a Bash-style summary; trivial/read-only commands (e.g. `ls`) spool
+  scratches a Bash observation; trivial/read-only commands (e.g. `ls`) scratch
   nothing. Source: install docs promise that capture is "summaries", not a
   keylog — noise filtering is part of the summary contract.
 - C-CUR-4 — Events outside the documented set (anything unknown) are silent
