@@ -38,7 +38,10 @@ export function buildSessionDigest(args: {
   observations: ToolObservation[];
   project?: string;
   dateLabel: string;
+  /** Label of the client that did the work; defaults to this process's. */
+  clientLabel?: string;
 }): SessionDigest | null {
+  const clientLabel = args.clientLabel ?? CLIENT_LABEL;
   // Drop sensitive entries PER FILE/COMMAND, not the whole digest: a single
   // `.env`-adjacent path would otherwise make looksSensitive(content) true and
   // discard an entire session's unrelated work. The remaining entries still
@@ -62,7 +65,7 @@ export function buildSessionDigest(args: {
   const projectPart = args.project ? `, project: ${args.project}` : "";
 
   const lines: string[] = [
-    `${CLIENT_LABEL} session digest (${args.dateLabel}${projectPart}):`,
+    `${clientLabel} session digest (${args.dateLabel}${projectPart}):`,
   ];
   if (shownFiles.length) {
     const extra = files.length > shownFiles.length
@@ -84,7 +87,7 @@ export function buildSessionDigest(args: {
   if (files.length) parts.push(`${files.length} file(s)`);
   if (commands.length) parts.push(`${commands.length} command(s)`);
   if (tasks) parts.push(`${tasks} task(s)`);
-  const summaryBody = `${CLIENT_LABEL} session: ${parts.join(", ")}${
+  const summaryBody = `${clientLabel} session: ${parts.join(", ")}${
     args.project ? ` — ${args.project}` : ""
   }`;
 

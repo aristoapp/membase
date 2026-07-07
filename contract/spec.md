@@ -27,7 +27,11 @@ credentials file per C-TOK-1's shape to `<dataDir>/credentials.json`.
   `createCaptureSpool`, `createTokenStore`, `redactSecrets`, `looksSensitive`,
   `MembaseTransport`.
 - Files under the data dir: `spool/pending.jsonl`, `credentials.json`,
-  `config.json` — their shapes are contract surface (C-SPOOL-1, C-TOK-1).
+  `config.json` — their shapes are contract surface (C-SPOOL-1, C-TOK-1). The
+  per-session scratch (`scratch/<session_id>.jsonl`, JSON-Lines: an optional
+  meta header line then one observation object per meaningful tool call) is
+  contract surface for C-HOOK-2/C-CUR-2/C-CUR-3/C-SPOOL-2 — a staging file, not
+  a memory; nothing here is ever uploaded on its own.
 
 ## Wire schemas the stub API must speak (source: public API client behavior,
 pinned here so tests and server cannot drift silently)
@@ -97,8 +101,8 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   exactly ONE `session_summary` record in the spool, attributed to the client
   source, then deletes the scratch. C-HOOK-2c: for a client with no end event
   (Codex) or a crash, the next `SessionStart` sweeps any scratch idle >30min
-  into a digest. Source: dreaming v2 definition (session-level summaries, no
-  per-tool uploads).
+  into a digest. Source: docs/north-star-readiness.md Pillar 1 "Session-digest
+  capture (dreaming v2)" decision.
 - C-HOOK-3 — Attribution follows `MEMBASE_CLIENT_SOURCE`: with `codex`, the
   session digest's text/display identifies Codex, not Claude Code; with the
   env unset, upload requests identify claude-code. Source: PR #27

@@ -556,6 +556,10 @@ var CLIENT_LABELS = {
   codex: "Codex",
   cursor: "Cursor"
 };
+function clientLabelFor(source) {
+  if (!source) return CLIENT_LABEL;
+  return CLIENT_LABELS[source] ?? source;
+}
 var CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
 var DEFAULT_RECALL_TIMEOUT_MS = 3e3;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
@@ -1140,6 +1144,7 @@ function uniq(values) {
   return out;
 }
 function buildSessionDigest(args) {
+  const clientLabel = args.clientLabel ?? CLIENT_LABEL;
   const files = uniq(
     args.observations.flatMap((o) => o.files).filter((f) => !looksSensitive2(f))
   );
@@ -1154,7 +1159,7 @@ function buildSessionDigest(args) {
   const shownCommands = commands.slice(0, MAX_COMMANDS);
   const projectPart = args.project ? `, project: ${args.project}` : "";
   const lines = [
-    `${CLIENT_LABEL} session digest (${args.dateLabel}${projectPart}):`
+    `${clientLabel} session digest (${args.dateLabel}${projectPart}):`
   ];
   if (shownFiles.length) {
     const extra = files.length > shownFiles.length ? ` (+${files.length - shownFiles.length} more)` : "";
@@ -1171,7 +1176,7 @@ function buildSessionDigest(args) {
   if (files.length) parts.push(`${files.length} file(s)`);
   if (commands.length) parts.push(`${commands.length} command(s)`);
   if (tasks) parts.push(`${tasks} task(s)`);
-  const summaryBody = `${CLIENT_LABEL} session: ${parts.join(", ")}${args.project ? ` \u2014 ${args.project}` : ""}`;
+  const summaryBody = `${clientLabel} session: ${parts.join(", ")}${args.project ? ` \u2014 ${args.project}` : ""}`;
   return {
     content: lines.join("\n"),
     display_summary: truncateText2(summaryBody, 180)
@@ -1183,27 +1188,37 @@ var import_node_fs6 = require("node:fs");
 var import_node_path7 = require("node:path");
 var SCRATCH_IDLE_MS = 30 * 60 * 1e3;
 var SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
+var SCRATCH_MAX_OBSERVATIONS = 2e3;
+var ensuredScratchDir;
 function scratchDir() {
   const dir = (0, import_node_path7.join)(ensureDataDir(), "scratch");
+  if (ensuredScratchDir === dir) return dir;
   (0, import_node_fs6.mkdirSync)(dir, { recursive: true, mode: 448 });
   try {
     (0, import_node_fs6.chmodSync)(dir, 448);
   } catch {
   }
+  ensuredScratchDir = dir;
   return dir;
 }
-function scratchPath(sessionId) {
+function scratchFileName(sessionId) {
   const safe = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 128);
-  return (0, import_node_path7.join)(scratchDir(), `${safe || "unknown"}.jsonl`);
+  return `${safe || "unknown"}.jsonl`;
+}
+function scratchPath(sessionId) {
+  return (0, import_node_path7.join)(scratchDir(), scratchFileName(sessionId));
 }
 function appendObservation(args) {
   const sessionId = args.sessionId ?? "unknown";
   const path = scratchPath(sessionId);
   try {
     const lines = [];
-    if (!(0, import_node_fs6.existsSync)(path)) {
+    const fresh = !(0, import_node_fs6.existsSync)(path);
+    if (!fresh && overCap(path)) return;
+    if (fresh || metaChanged(path, args.project, args.cwd)) {
       const meta = {
         meta: true,
+        session_id: sessionId,
         project: args.project,
         client_source: args.clientSource,
         cwd: args.cwd,
@@ -1212,8 +1227,10 @@ function appendObservation(args) {
       lines.push(JSON.stringify(meta));
     }
     const safe = {
-      files: args.observation.files.map((f) => sanitizeMembaseText(f)),
-      commands: args.observation.commands.map((c) => sanitizeMembaseText(c)),
+      files: args.observation.files.map((f) => flatten(sanitizeMembaseText(f))),
+      commands: args.observation.commands.map(
+        (c) => flatten(sanitizeMembaseText(c))
+      ),
       tasks: args.observation.tasks
     };
     lines.push(JSON.stringify(safe));
@@ -1229,19 +1246,47 @@ function appendObservation(args) {
   } catch {
   }
 }
+var SCRATCH_MAX_BYTES = SCRATCH_MAX_OBSERVATIONS * 512;
+function overCap(path) {
+  try {
+    return (0, import_node_fs6.statSync)(path).size >= SCRATCH_MAX_BYTES;
+  } catch {
+    return false;
+  }
+}
+function flatten(value) {
+  return value.replace(/[\r\n]+/g, " ");
+}
+function metaChanged(path, project, cwd) {
+  try {
+    const { meta } = parseScratchFile(path);
+    if (!meta) return false;
+    return meta.project !== project || meta.cwd !== cwd;
+  } catch {
+    return false;
+  }
+}
 function stringArray(value) {
   return Array.isArray(value) ? value.filter((v) => typeof v === "string") : [];
 }
+function validMeta(parsed) {
+  if (typeof parsed.started_at !== "string") return null;
+  return parsed;
+}
 function parseScratchFile(path) {
   const raw = (0, import_node_fs6.readFileSync)(path, "utf-8").trim();
-  let meta = null;
+  let firstMeta = null;
+  let latestMeta = null;
   const observations = [];
-  if (!raw) return { meta, observations };
+  if (!raw) return { meta: null, observations };
   for (const line of raw.split(/\r?\n/)) {
     try {
       const parsed = JSON.parse(line);
       if (parsed.meta === true) {
-        if (!meta) meta = parsed;
+        const m = validMeta(parsed);
+        if (!m) continue;
+        if (!firstMeta) firstMeta = m;
+        latestMeta = m;
         continue;
       }
       observations.push({
@@ -1252,7 +1297,24 @@ function parseScratchFile(path) {
     } catch {
     }
   }
+  const meta = firstMeta && latestMeta ? {
+    ...latestMeta,
+    started_at: firstMeta.started_at,
+    session_id: firstMeta.session_id,
+    client_source: firstMeta.client_source
+  } : firstMeta;
   return { meta, observations };
+}
+function toSession(path, fallbackId, parsed) {
+  return {
+    sessionId: parsed.meta?.session_id ?? fallbackId,
+    path,
+    project: parsed.meta?.project,
+    clientSource: parsed.meta?.client_source,
+    cwd: parsed.meta?.cwd,
+    startedAt: parsed.meta?.started_at,
+    observations: parsed.observations
+  };
 }
 function touchSession(sessionId) {
   const path = scratchPath(sessionId ?? "unknown");
@@ -1263,31 +1325,27 @@ function touchSession(sessionId) {
   } catch {
   }
 }
-function takeSession(sessionId) {
-  const path = scratchPath(sessionId ?? "unknown");
+function readSession(sessionId) {
+  const id = sessionId ?? "unknown";
+  const path = scratchPath(id);
   if (!(0, import_node_fs6.existsSync)(path)) return null;
   try {
-    const { meta, observations } = parseScratchFile(path);
-    (0, import_node_fs6.rmSync)(path, { force: true });
-    return {
-      sessionId: sessionId ?? "unknown",
-      project: meta?.project,
-      cwd: meta?.cwd,
-      startedAt: meta?.started_at,
-      observations
-    };
+    return toSession(path, id, parseScratchFile(path));
   } catch {
-    try {
-      (0, import_node_fs6.rmSync)(path, { force: true });
-    } catch {
-    }
+    discardScratch(path);
     return null;
+  }
+}
+function discardScratch(path) {
+  try {
+    (0, import_node_fs6.rmSync)(path, { force: true });
+  } catch {
   }
 }
 function sweepIdleSessions(args) {
   const now = args.now ?? Date.now();
   const dir = scratchDir();
-  const currentPath = args.currentSessionId ? scratchPath(args.currentSessionId) : void 0;
+  const currentName = args.currentSessionId ? scratchFileName(args.currentSessionId) : void 0;
   const out = [];
   let names;
   try {
@@ -1297,21 +1355,18 @@ function sweepIdleSessions(args) {
   }
   for (const name of names) {
     if (!name.endsWith(".jsonl")) continue;
+    if (currentName && name === currentName) continue;
     const path = (0, import_node_path7.join)(dir, name);
-    if (currentPath && path === currentPath) continue;
     try {
       const ageMs = now - (0, import_node_fs6.statSync)(path).mtimeMs;
       if (ageMs < SCRATCH_IDLE_MS) continue;
-      const { meta, observations } = parseScratchFile(path);
-      (0, import_node_fs6.rmSync)(path, { force: true });
-      if (ageMs > SCRATCH_MAX_AGE_MS) continue;
-      out.push({
-        sessionId: name.replace(/\.jsonl$/, ""),
-        project: meta?.project,
-        cwd: meta?.cwd,
-        startedAt: meta?.started_at,
-        observations
-      });
+      if (ageMs > SCRATCH_MAX_AGE_MS) {
+        discardScratch(path);
+        continue;
+      }
+      out.push(
+        toSession(path, name.replace(/\.jsonl$/, ""), parseScratchFile(path))
+      );
     } catch {
     }
   }
@@ -1381,15 +1436,23 @@ function withTimeout(promise, ms) {
     })
   ]);
 }
-function captureMetadata(input, projectSlug) {
+function buildCaptureMetadata(args) {
   return {
     plugin: PLUGIN_NAME,
     plugin_version: PLUGIN_VERSION,
-    claude_session_id: input.session_id ?? null,
-    cwd: input.cwd ?? process.cwd(),
-    project_slug: projectSlug ?? null,
-    hook_event: input.hook_event_name ?? null
+    claude_session_id: args.sessionId ?? null,
+    cwd: args.cwd ?? process.cwd(),
+    project_slug: args.projectSlug ?? null,
+    hook_event: args.hookEvent ?? null
   };
+}
+function captureMetadata(input, projectSlug) {
+  return buildCaptureMetadata({
+    sessionId: input.session_id,
+    cwd: input.cwd,
+    projectSlug,
+    hookEvent: input.hook_event_name
+  });
 }
 function memoryKey(bundle) {
   return bundle.episode.uuid || bundle.episode.name || bundle.episode.summary || JSON.stringify(bundle.episode);
@@ -1587,43 +1650,51 @@ async function scratchSingleTool(input) {
   if (typeof input.tool_name !== "string") return;
   await scratchToolBatch({ ...input, tool_calls: [input] });
 }
+function localDateLabel(startedAt) {
+  const when = startedAt ? new Date(startedAt) : /* @__PURE__ */ new Date();
+  const date = Number.isNaN(when.getTime()) ? /* @__PURE__ */ new Date() : when;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 function enqueueSessionDigest(session) {
-  const dateLabel = (session.startedAt ?? (/* @__PURE__ */ new Date()).toISOString()).slice(
-    0,
-    10
-  );
   const digest = buildSessionDigest({
     observations: session.observations,
     project: session.project,
-    dateLabel
+    dateLabel: localDateLabel(session.startedAt),
+    clientLabel: clientLabelFor(session.clientSource)
   });
-  if (!digest) return;
-  enqueueCapture({
+  if (!digest) return true;
+  const record = enqueueCapture({
     capture_kind: "session_summary",
     content: digest.content,
     display_summary: digest.display_summary,
     project: session.project,
     sessionId: session.sessionId,
-    metadata: {
-      plugin: PLUGIN_NAME,
-      plugin_version: PLUGIN_VERSION,
-      claude_session_id: session.sessionId,
-      cwd: session.cwd ?? process.cwd(),
-      project_slug: session.project ?? null,
-      hook_event: "session_digest"
-    }
+    metadata: buildCaptureMetadata({
+      sessionId: session.sessionId,
+      cwd: session.cwd,
+      projectSlug: session.project,
+      hookEvent: "session_digest"
+    })
   });
+  return record !== null;
 }
 function enqueueEndedSessionDigest(input) {
-  if (loadConfig().captureMode !== "summary") return;
-  const session = takeSession(input.session_id);
-  if (session) enqueueSessionDigest(session);
+  const session = readSession(input.session_id);
+  if (!session) return;
+  if (loadConfig().captureMode !== "summary") {
+    discardScratch(session.path);
+    return;
+  }
+  if (enqueueSessionDigest(session)) discardScratch(session.path);
 }
 function enqueueSweptSessionDigests(input) {
   for (const session of sweepIdleSessions({
     currentSessionId: input.session_id
   })) {
-    enqueueSessionDigest(session);
+    if (enqueueSessionDigest(session)) discardScratch(session.path);
   }
 }
 async function spoolSessionSummary(input, captureKind) {
@@ -1661,7 +1732,9 @@ async function main() {
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
   if (event === "PostToolUse") await scratchSingleTool(input);
-  if (event === "Stop") touchSession(input.session_id);
+  if (event === "Stop" || event === "UserPromptSubmit") {
+    touchSession(input.session_id);
+  }
   if (event === "SessionEnd") enqueueEndedSessionDigest(input);
   if (event === "Stop" || event === "SessionEnd") {
     const config = loadConfig();

@@ -7,6 +7,11 @@
 // data dir as the spool but in a separate `scratch/` subdir so it never
 // pollutes pending.jsonl.
 //
+// Consume is a two-step handshake: readSession/sweepIdleSessions return a
+// session WITHOUT deleting its file; the caller deletes it via discardScratch
+// only AFTER the digest is durably in the spool. A failed enqueue therefore
+// leaves the scratch on disk for the next sweep instead of losing the session.
+//
 // No lock file: entries are appended (append is atomic for small writes) and a
 // session only ever writes its own file. Cross-process contention is only
 // possible during a sweep, guarded by the idle threshold below.
@@ -39,16 +44,31 @@ export const SCRATCH_IDLE_MS = 30 * 60 * 1000; // 30 minutes
 // only in summary mode) — acceptable, not worth an unconditional prune pass.
 export const SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// A single session's scratch never grows past this many observation lines. A
+// pathological 10k-tool run would otherwise accumulate megabytes that every
+// takeSession/sweep must read whole; the digest only ever shows the first
+// MAX_FILES/MAX_COMMANDS anyway, so older lines past the cap add nothing.
+// ponytail: fixed ceiling; a windowed ring buffer is overkill for a digest.
+export const SCRATCH_MAX_OBSERVATIONS = 2000;
+
 interface ScratchMeta {
   meta: true;
+  session_id?: string;
   project?: string;
   client_source?: string;
   cwd?: string;
   started_at: string;
 }
 
+// mkdir+chmod is idempotent but a syscall pair; memoize per process so the hot
+// path (appendObservation per tool call, touchSession per Stop) ensures the dir
+// once instead of on every path computation. Keyed on the resolved dir so a
+// change to MEMBASE_DATA_DIR (tests, or a re-pointed process) re-ensures rather
+// than returning a stale path.
+let ensuredScratchDir: string | undefined;
 function scratchDir(): string {
   const dir = join(ensureDataDir(), "scratch");
+  if (ensuredScratchDir === dir) return dir;
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // mkdirSync's mode only applies on creation; a dir made earlier (looser
   // umask, older version) keeps its perms. chmod so the 0o700 intent holds.
@@ -57,21 +77,31 @@ function scratchDir(): string {
   } catch {
     // best-effort: a chmod failure (e.g. non-owner) must not break capture.
   }
+  ensuredScratchDir = dir;
   return dir;
+}
+
+// Filename portion for a session id — no dir ensure, so callers that only need
+// the path (touchSession, sweep's current-session exclusion) don't mkdir.
+function scratchFileName(sessionId: string): string {
+  const safe = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 128);
+  return `${safe || "unknown"}.jsonl`;
 }
 
 // session_id comes from the host; keep the filename to a safe charset so a
 // hostile/odd id can't escape the scratch dir.
 function scratchPath(sessionId: string): string {
-  const safe = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 128);
-  return join(scratchDir(), `${safe || "unknown"}.jsonl`);
+  return join(scratchDir(), scratchFileName(sessionId));
 }
 
 /**
  * Append one tool observation for a session. Writes a meta header line the
  * first time it sees a session file so a later sweep knows the project/client
- * without re-deriving them. Observations carry only tool metadata (paths,
- * commands) — already secret-filtered by extractToolObservation and
+ * without re-deriving them. If a later call resolves a DIFFERENT project/cwd
+ * (the session cd'd or changed config), a fresh meta line is appended and the
+ * newest project/cwd wins at read time — so mid-session moves aren't frozen to
+ * the first observation's project. Observations carry only tool metadata
+ * (paths, commands) — already secret-filtered by extractToolObservation and
  * re-sanitized here as defense in depth.
  */
 export function appendObservation(args: {
@@ -85,9 +115,16 @@ export function appendObservation(args: {
   const path = scratchPath(sessionId);
   try {
     const lines: string[] = [];
-    if (!existsSync(path)) {
+    const fresh = !existsSync(path);
+    // Bound a pathological session's file: once it's past the observation cap
+    // (roughly measured by byte size — each line is small), stop appending. The
+    // digest only ever shows MAX_FILES/MAX_COMMANDS, so later lines add nothing
+    // but disk that every read must load.
+    if (!fresh && overCap(path)) return;
+    if (fresh || metaChanged(path, args.project, args.cwd)) {
       const meta: ScratchMeta = {
         meta: true,
+        session_id: sessionId,
         project: args.project,
         client_source: args.clientSource,
         cwd: args.cwd,
@@ -95,10 +132,13 @@ export function appendObservation(args: {
       };
       lines.push(JSON.stringify(meta));
     }
-    // Sanitize command strings once more before they touch disk.
+    // Sanitize command strings once more before they touch disk, and strip
+    // interior newlines so a path/command can't inject extra digest lines.
     const safe: ToolObservation = {
-      files: args.observation.files.map((f) => sanitizeMembaseText(f)),
-      commands: args.observation.commands.map((c) => sanitizeMembaseText(c)),
+      files: args.observation.files.map((f) => flatten(sanitizeMembaseText(f))),
+      commands: args.observation.commands.map((c) =>
+        flatten(sanitizeMembaseText(c)),
+      ),
       tasks: args.observation.tasks,
     };
     lines.push(JSON.stringify(safe));
@@ -120,9 +160,54 @@ export function appendObservation(args: {
   }
 }
 
+// A generous byte ceiling standing in for SCRATCH_MAX_OBSERVATIONS: each
+// observation line is small (a path or a truncated command), so this many bytes
+// is well past the cap while staying a single cheap stat instead of a line
+// count on every append.
+const SCRATCH_MAX_BYTES = SCRATCH_MAX_OBSERVATIONS * 512;
+function overCap(path: string): boolean {
+  try {
+    return statSync(path).size >= SCRATCH_MAX_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+// Collapse any interior newline/CR to a space: a file_path is host-supplied and
+// unix permits newlines in paths, which would otherwise survive sanitize's
+// line-preserving normalize and inject fabricated lines into the digest.
+function flatten(value: string): string {
+  return value.replace(/[\r\n]+/g, " ");
+}
+
+// True when the session's latest meta records a project/cwd different from the
+// one this call resolved — so a moved session appends a refreshed header rather
+// than staying pinned to its first project. Best-effort: any read error means
+// "assume unchanged" (don't spam headers on a transient failure).
+// ponytail: re-parses the file per append (O(n²) over a session), but the file
+// is bounded by overCap and real sessions rarely change project — a per-process
+// cache of the last-seen project/cwd is the upgrade if profiling ever flags it.
+function metaChanged(
+  path: string,
+  project?: string,
+  cwd?: string,
+): boolean {
+  try {
+    const { meta } = parseScratchFile(path);
+    if (!meta) return false;
+    return meta.project !== project || meta.cwd !== cwd;
+  } catch {
+    return false;
+  }
+}
+
 export interface ScratchSession {
   sessionId: string;
+  /** On-disk file backing this session — pass to discardScratch after enqueue. */
+  path: string;
   project?: string;
+  /** Client that DID the work — so a cross-client sweep attributes correctly. */
+  clientSource?: string;
   /** Working dir the session ran in — so a swept digest isn't mis-attributed. */
   cwd?: string;
   /** ISO time the session first wrote scratch — dates the digest correctly. */
@@ -139,22 +224,35 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+// A meta line is only usable if its started_at is actually a string — a corrupt
+// or foreign-writer line with a numeric started_at would otherwise throw at
+// dateLabel time. Drop the bad meta (treat as no header) rather than crash.
+function validMeta(parsed: Record<string, unknown>): ScratchMeta | null {
+  if (typeof parsed.started_at !== "string") return null;
+  return parsed as unknown as ScratchMeta;
+}
+
 function parseScratchFile(path: string): {
   meta: ScratchMeta | null;
   observations: ToolObservation[];
 } {
   const raw = readFileSync(path, "utf-8").trim();
-  let meta: ScratchMeta | null = null;
+  let firstMeta: ScratchMeta | null = null;
+  let latestMeta: ScratchMeta | null = null;
   const observations: ToolObservation[] = [];
-  if (!raw) return { meta, observations };
+  if (!raw) return { meta: null, observations };
   for (const line of raw.split(/\r?\n/)) {
     try {
       const parsed = JSON.parse(line) as Record<string, unknown>;
       if (parsed.meta === true) {
-        // Concurrent first-writes (PostToolBatch is async) can each prepend a
-        // meta header. Keep the FIRST one so started_at/dateLabel is the true
-        // session start, deterministically — never the later racer's clock.
-        if (!meta) meta = parsed as unknown as ScratchMeta;
+        const m = validMeta(parsed);
+        if (!m) continue;
+        // Keep the FIRST valid meta for started_at (the true session start,
+        // never a later racer's clock), but let a LATER meta override
+        // project/cwd — a session that cd'd appends a refreshed header and the
+        // digest should reflect where the work actually ended up.
+        if (!firstMeta) firstMeta = m;
+        latestMeta = m;
         continue;
       }
       observations.push({
@@ -166,15 +264,41 @@ function parseScratchFile(path: string): {
       // skip an unparseable line rather than dropping the whole session
     }
   }
+  const meta =
+    firstMeta && latestMeta
+      ? {
+          ...latestMeta,
+          started_at: firstMeta.started_at,
+          session_id: firstMeta.session_id,
+          client_source: firstMeta.client_source,
+        }
+      : firstMeta;
   return { meta, observations };
+}
+
+function toSession(
+  path: string,
+  fallbackId: string,
+  parsed: { meta: ScratchMeta | null; observations: ToolObservation[] },
+): ScratchSession {
+  return {
+    sessionId: parsed.meta?.session_id ?? fallbackId,
+    path,
+    project: parsed.meta?.project,
+    clientSource: parsed.meta?.client_source,
+    cwd: parsed.meta?.cwd,
+    startedAt: parsed.meta?.started_at,
+    observations: parsed.observations,
+  };
 }
 
 /**
  * Mark a session as alive by bumping its scratch mtime — the sweep's idle test
  * is mtime-based, so a live session that is merely quiet (a >30min human pause,
  * no tool calls) is not mistaken for a crashed one and swept out from under
- * itself. Called on every Stop (fires each turn). No-op if the session has no
- * scratch yet (nothing meaningful captured), so it never creates an empty file.
+ * itself. Called on every Stop AND UserPromptSubmit so a pause between turns
+ * still refreshes liveness. No-op if the session has no scratch yet (nothing
+ * meaningful captured), so it never creates an empty file.
  */
 export function touchSession(sessionId?: string): void {
   const path = scratchPath(sessionId ?? "unknown");
@@ -188,37 +312,40 @@ export function touchSession(sessionId?: string): void {
 }
 
 /**
- * Read and CONSUME (delete) a single session's scratch — the session-end path.
- * Returns null when there's no scratch for that session. The file is deleted
- * even if it holds no observations, so an empty session leaves nothing behind.
+ * Read a single session's scratch WITHOUT deleting it — the session-end path.
+ * Returns null when there's no scratch for that session. The caller enqueues
+ * the digest and then calls discardScratch(session.path) so a failed enqueue
+ * leaves the file for the next sweep instead of losing the session.
  */
-export function takeSession(sessionId?: string): ScratchSession | null {
-  const path = scratchPath(sessionId ?? "unknown");
+export function readSession(sessionId?: string): ScratchSession | null {
+  const id = sessionId ?? "unknown";
+  const path = scratchPath(id);
   if (!existsSync(path)) return null;
   try {
-    const { meta, observations } = parseScratchFile(path);
-    rmSync(path, { force: true });
-    return {
-      sessionId: sessionId ?? "unknown",
-      project: meta?.project,
-      cwd: meta?.cwd,
-      startedAt: meta?.started_at,
-      observations,
-    };
+    return toSession(path, id, parseScratchFile(path));
   } catch {
     // Unreadable: remove it so it can't wedge future sweeps.
-    try {
-      rmSync(path, { force: true });
-    } catch {}
+    discardScratch(path);
     return null;
   }
 }
 
+/** Delete a consumed scratch file. Call only after its digest is durably spooled. */
+export function discardScratch(path: string): void {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // best-effort: a stale file just gets re-swept next time.
+  }
+}
+
 /**
- * Read and CONSUME every scratch file idle for longer than SCRATCH_IDLE_MS —
- * the SessionStart sweep. These are sessions that ended without an end event
- * (Codex) or crashed. The CURRENT session's own file (if it exists yet) is
- * excluded so a resumed session is never swept mid-flight.
+ * Read every scratch file idle for longer than SCRATCH_IDLE_MS WITHOUT deleting
+ * the still-valid ones — the SessionStart sweep. These are sessions that ended
+ * without an end event (Codex) or crashed. Files too old to trust (>MAX_AGE) or
+ * unreadable are deleted here (they are never enqueued); the returned ones are
+ * deleted by the caller via discardScratch after their digest is spooled. The
+ * CURRENT session's own file is excluded so a resumed session is never swept.
  */
 export function sweepIdleSessions(args: {
   currentSessionId?: string;
@@ -226,8 +353,8 @@ export function sweepIdleSessions(args: {
 }): ScratchSession[] {
   const now = args.now ?? Date.now();
   const dir = scratchDir();
-  const currentPath = args.currentSessionId
-    ? scratchPath(args.currentSessionId)
+  const currentName = args.currentSessionId
+    ? scratchFileName(args.currentSessionId)
     : undefined;
   const out: ScratchSession[] = [];
   let names: string[];
@@ -238,23 +365,21 @@ export function sweepIdleSessions(args: {
   }
   for (const name of names) {
     if (!name.endsWith(".jsonl")) continue;
+    if (currentName && name === currentName) continue;
     const path = join(dir, name);
-    if (currentPath && path === currentPath) continue;
     try {
       const ageMs = now - statSync(path).mtimeMs;
       if (ageMs < SCRATCH_IDLE_MS) continue;
-      const { meta, observations } = parseScratchFile(path);
-      rmSync(path, { force: true });
-      // A file too old to trust (crash-orphan that never digested) is deleted
-      // but not returned — don't resurrect week-old work as a "new" memory.
-      if (ageMs > SCRATCH_MAX_AGE_MS) continue;
-      out.push({
-        sessionId: name.replace(/\.jsonl$/, ""),
-        project: meta?.project,
-        cwd: meta?.cwd,
-        startedAt: meta?.started_at,
-        observations,
-      });
+      // Age is known from stat before any read: a file too old to trust
+      // (crash-orphan that never digested) is deleted without wasting a full
+      // read/parse — don't resurrect week-old work as a "new" memory.
+      if (ageMs > SCRATCH_MAX_AGE_MS) {
+        discardScratch(path);
+        continue;
+      }
+      out.push(
+        toSession(path, name.replace(/\.jsonl$/, ""), parseScratchFile(path)),
+      );
     } catch {
       // best-effort: skip a file we can't read/stat this pass
     }

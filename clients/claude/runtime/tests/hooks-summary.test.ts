@@ -161,4 +161,15 @@ describe("buildSessionDigest", () => {
     expect(digest?.content).toContain("(+5 more)");
     expect(digest?.display_summary).toContain("25 file(s)");
   });
+
+  it("attributes to the session's own client label when provided", () => {
+    const digest = buildSessionDigest({
+      observations: [obs({ files: ["a.ts"] })],
+      dateLabel: "2026-07-07",
+      clientLabel: "Codex",
+    });
+    // A swept Codex session digested by a Claude Code process still reads Codex.
+    expect(digest?.content).toContain("Codex session digest");
+    expect(digest?.display_summary).toContain("Codex session:");
+  });
 });

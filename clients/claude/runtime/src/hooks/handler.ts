@@ -10,6 +10,7 @@ import {
   MEMORY_SOURCE,
   PLUGIN_NAME,
   PLUGIN_VERSION,
+  clientLabelFor,
 } from "../constants.js";
 import { buildRecallContext } from "../format/index.js";
 import type { RecallMemoryGroup } from "../format/index.js";
@@ -47,8 +48,9 @@ import {
 import { buildSessionDigest } from "./digest.js";
 import {
   appendObservation,
+  discardScratch,
+  readSession,
   sweepIdleSessions,
-  takeSession,
   touchSession,
   type ScratchSession,
 } from "../scratch/index.js";
@@ -132,15 +134,33 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-function captureMetadata(input: HookInput, projectSlug?: string) {
+// One capture-metadata shape for every kind. Built from primitive fields so
+// the session-digest path (whose session/cwd/day come from the persisted
+// scratch, not the current hook input) reuses it rather than hand-rolling a
+// parallel object that would silently drift.
+function buildCaptureMetadata(args: {
+  sessionId?: string;
+  cwd?: string;
+  projectSlug?: string;
+  hookEvent?: string;
+}) {
   return {
     plugin: PLUGIN_NAME,
     plugin_version: PLUGIN_VERSION,
-    claude_session_id: input.session_id ?? null,
-    cwd: input.cwd ?? process.cwd(),
-    project_slug: projectSlug ?? null,
-    hook_event: input.hook_event_name ?? null,
+    claude_session_id: args.sessionId ?? null,
+    cwd: args.cwd ?? process.cwd(),
+    project_slug: args.projectSlug ?? null,
+    hook_event: args.hookEvent ?? null,
   };
+}
+
+function captureMetadata(input: HookInput, projectSlug?: string) {
+  return buildCaptureMetadata({
+    sessionId: input.session_id,
+    cwd: input.cwd,
+    projectSlug,
+    hookEvent: input.hook_event_name,
+  });
 }
 
 interface RawRecallMemoryGroup {
@@ -463,54 +483,79 @@ async function scratchSingleTool(input: HookInput): Promise<void> {
 // date come from the SESSION itself (persisted in its scratch), never the
 // current hook input — a swept/ended digest must describe the work's own
 // session/cwd/day, not the session that happened to trigger the sweep.
-function enqueueSessionDigest(session: ScratchSession): void {
-  const dateLabel = (session.startedAt ?? new Date().toISOString()).slice(
-    0,
-    10,
-  );
+// Day the session ran, in the HOST's local timezone — a session worked in the
+// evening (e.g. Asia/Seoul, or a negative-UTC offset) must date to that local
+// day, not the UTC day the ISO started_at happens to fall on.
+function localDateLabel(startedAt?: string): string {
+  const when = startedAt ? new Date(startedAt) : new Date();
+  const date = Number.isNaN(when.getTime()) ? new Date() : when;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Fold a scratch session into one digest and enqueue it to the real upload
+// spool. Returns true when a digest was enqueued (or the session had nothing
+// meaningful — either way its scratch is safe to discard), false only when the
+// enqueue itself failed (lock timeout etc.), so the caller keeps the scratch
+// for a later retry instead of losing the session. Attribution, cwd, and date
+// come from the SESSION itself (persisted in its scratch), never the current
+// hook input — a swept digest describes the work's own client/day/dir.
+function enqueueSessionDigest(session: ScratchSession): boolean {
   const digest = buildSessionDigest({
     observations: session.observations,
     project: session.project,
-    dateLabel,
+    dateLabel: localDateLabel(session.startedAt),
+    clientLabel: clientLabelFor(session.clientSource),
   });
-  if (!digest) return;
+  // Nothing meaningful to record: no memory, but the scratch is fully consumed.
+  if (!digest) return true;
   // No whole-content looksSensitive gate here: buildSessionDigest already drops
   // sensitive files/commands per item, so a lone `.env`-adjacent path no longer
   // discards the whole session.
-  enqueueCapture({
+  const record = enqueueCapture({
     capture_kind: "session_summary",
     content: digest.content,
     display_summary: digest.display_summary,
     project: session.project,
     sessionId: session.sessionId,
-    metadata: {
-      plugin: PLUGIN_NAME,
-      plugin_version: PLUGIN_VERSION,
-      claude_session_id: session.sessionId,
-      cwd: session.cwd ?? process.cwd(),
-      project_slug: session.project ?? null,
-      hook_event: "session_digest",
-    },
+    metadata: buildCaptureMetadata({
+      sessionId: session.sessionId,
+      cwd: session.cwd,
+      projectSlug: session.project,
+      hookEvent: "session_digest",
+    }),
   });
+  // null = enqueue failed durably; keep the scratch so the next sweep retries.
+  return record !== null;
 }
 
-// Session-end / stop path: take THIS session's scratch and enqueue its digest.
-// Guarded on captureMode so an explicit opt-out mid-session is honored (matches
-// the scratch-write and sweep paths — disk `off` must win).
+// Session-end / stop path: read THIS session's scratch, enqueue its digest, and
+// delete the scratch ONLY after a durable enqueue. Gated on captureMode so an
+// explicit opt-out mid-session is honored — but the scratch is still consumed
+// (deleted) in off-mode so an opt-out never leaves a plaintext record of edited
+// paths/commands on disk, and can never be uploaded by a later re-enable.
 function enqueueEndedSessionDigest(input: HookInput): void {
-  if (loadConfig().captureMode !== "summary") return;
-  const session = takeSession(input.session_id);
-  if (session) enqueueSessionDigest(session);
+  const session = readSession(input.session_id);
+  if (!session) return;
+  if (loadConfig().captureMode !== "summary") {
+    // Opt-out: consume the scratch without uploading.
+    discardScratch(session.path);
+    return;
+  }
+  if (enqueueSessionDigest(session)) discardScratch(session.path);
 }
 
 // SessionStart sweep: enqueue digests for any sessions that ended without an
 // end event (Codex) or crashed — the ones whose scratch has gone idle. The
 // current session's own scratch is excluded so a resumed session is untouched.
+// Each scratch is deleted only after its digest is durably spooled.
 function enqueueSweptSessionDigests(input: HookInput): void {
   for (const session of sweepIdleSessions({
     currentSessionId: input.session_id,
   })) {
-    enqueueSessionDigest(session);
+    if (enqueueSessionDigest(session)) discardScratch(session.path);
   }
 }
 
@@ -559,10 +604,14 @@ async function main(): Promise<void> {
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
   if (event === "PostToolUse") await scratchSingleTool(input);
-  // Stop fires every turn: keep this session's scratch marked alive so a long
-  // human pause (>30min, no tool calls) isn't mistaken for a crash and swept by
-  // another window's SessionStart. Digest still only on SessionEnd, not Stop.
-  if (event === "Stop") touchSession(input.session_id);
+  // Keep this session's scratch marked alive so a long human pause isn't
+  // mistaken for a crash and swept by another window's SessionStart. Stop fires
+  // at the END of a turn, so a pause AFTER the last Stop would still age out —
+  // UserPromptSubmit (the start of the next turn, after any pause) refreshes the
+  // mtime too, closing that window. Digest still only on SessionEnd, not here.
+  if (event === "Stop" || event === "UserPromptSubmit") {
+    touchSession(input.session_id);
+  }
   // SessionEnd: fold this session's scratch into a digest BEFORE flushing, so
   // it uploads in the same batch. Stop fires every turn — flush only, never a
   // digest (that would upload N partial digests per session).

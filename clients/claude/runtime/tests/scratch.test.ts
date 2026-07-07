@@ -10,8 +10,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   appendObservation,
+  discardScratch,
+  readSession,
   sweepIdleSessions,
-  takeSession,
   touchSession,
   SCRATCH_IDLE_MS,
 } from "../src/scratch/index.js";
@@ -31,8 +32,10 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+const scratchFile = (sid: string) => join(dir, "scratch", `${sid}.jsonl`);
+
 describe("scratch store", () => {
-  it("appends observations and takeSession consumes them", () => {
+  it("appends observations; readSession reads WITHOUT deleting until discard", () => {
     appendObservation({
       sessionId: "s1",
       observation: { files: ["a.ts"], commands: [], tasks: 0 },
@@ -44,28 +47,80 @@ describe("scratch store", () => {
       project: "proj",
     });
 
-    const session = takeSession("s1");
+    const session = readSession("s1");
     expect(session?.project).toBe("proj");
     expect(session?.observations.length).toBe(2);
-    // consumed: a second take finds nothing
-    expect(takeSession("s1")).toBeNull();
+    // Not consumed by the read alone — the file survives a failed enqueue.
+    expect(readSession("s1")?.observations.length).toBe(2);
+    // Only discardScratch (after a durable enqueue) deletes it.
+    discardScratch(session!.path);
+    expect(readSession("s1")).toBeNull();
   });
 
-  it("takeSession returns null for an unknown session", () => {
-    expect(takeSession("nope")).toBeNull();
+  it("readSession returns null for an unknown session", () => {
+    expect(readSession("nope")).toBeNull();
   });
 
-  it("takeSession surfaces the session's own cwd and startedAt from meta", () => {
+  it("surfaces the session's own cwd, client_source, and startedAt from meta", () => {
     appendObservation({
       sessionId: "s-meta",
       observation: { files: ["a.ts"], commands: [], tasks: 0 },
       project: "proj",
+      clientSource: "codex",
       cwd: "/work/projX",
     });
-    const session = takeSession("s-meta");
+    const session = readSession("s-meta");
     expect(session?.cwd).toBe("/work/projX");
+    expect(session?.clientSource).toBe("codex");
     // startedAt is a parseable ISO timestamp (used to date the digest).
     expect(Number.isNaN(Date.parse(session?.startedAt ?? ""))).toBe(false);
+  });
+
+  it("carries the raw session id through a sweep (not just the filename)", () => {
+    appendObservation({
+      sessionId: "org/conv:42",
+      observation: { files: ["x.ts"], commands: [], tasks: 0 },
+    });
+    const p = scratchFile("org_conv_42"); // sanitized filename
+    const past = (Date.now() - SCRATCH_IDLE_MS - 60_000) / 1000;
+    utimesSync(p, past, past);
+    const [swept] = sweepIdleSessions({ currentSessionId: "other" });
+    // sessionId comes from persisted meta, not the mangled filename.
+    expect(swept?.sessionId).toBe("org/conv:42");
+  });
+
+  it("a later differing project/cwd refreshes the header and wins at read time", () => {
+    appendObservation({
+      sessionId: "moved",
+      observation: { files: ["a.ts"], commands: [], tasks: 0 },
+      project: "repo-a",
+      cwd: "/work/a",
+    });
+    appendObservation({
+      sessionId: "moved",
+      observation: { files: ["b.ts"], commands: [], tasks: 0 },
+      project: "repo-b",
+      cwd: "/work/b",
+    });
+    const session = readSession("moved");
+    // Latest project/cwd wins; both files are still present.
+    expect(session?.project).toBe("repo-b");
+    expect(session?.cwd).toBe("/work/b");
+    expect(session?.observations.length).toBe(2);
+  });
+
+  it("strips interior newlines from a file path so it can't inject digest lines", () => {
+    appendObservation({
+      sessionId: "inj",
+      observation: {
+        files: ["src/a.ts\nSub-agent tasks: 999"],
+        commands: [],
+        tasks: 0,
+      },
+    });
+    const session = readSession("inj");
+    const file = session?.observations[0]?.files[0] ?? "";
+    expect(file.includes("\n")).toBe(false);
   });
 
   it("sweep only collects idle sessions and excludes the current one", () => {
@@ -77,16 +132,18 @@ describe("scratch store", () => {
       sessionId: "current",
       observation: { files: ["y.ts"], commands: [], tasks: 0 },
     });
-    // Age "old" past the idle threshold.
-    const oldPath = join(dir, "scratch", "old.jsonl");
+    const oldPath = scratchFile("old");
     const past = (Date.now() - SCRATCH_IDLE_MS - 60_000) / 1000;
     utimesSync(oldPath, past, past);
 
     const swept = sweepIdleSessions({ currentSessionId: "current" });
     expect(swept.map((s) => s.sessionId)).toEqual(["old"]);
-    // "current" untouched, "old" consumed
+    // Sweep no longer deletes on its own — the caller discards after enqueue.
+    expect(() => statSync(oldPath)).not.toThrow();
+    discardScratch(swept[0]!.path);
     expect(() => statSync(oldPath)).toThrow();
-    expect(takeSession("current")?.observations.length).toBe(1);
+    // "current" untouched.
+    expect(readSession("current")?.observations.length).toBe(1);
   });
 
   it("does not sweep a fresh session", () => {
@@ -97,35 +154,43 @@ describe("scratch store", () => {
     expect(sweepIdleSessions({ currentSessionId: "other" })).toEqual([]);
   });
 
+  it("deletes (but never returns) a scratch older than the max age", () => {
+    appendObservation({
+      sessionId: "ancient",
+      observation: { files: ["z.ts"], commands: [], tasks: 0 },
+    });
+    const p = scratchFile("ancient");
+    const past = (Date.now() - 8 * 24 * 60 * 60 * 1000) / 1000; // 8 days
+    utimesSync(p, past, past);
+    expect(sweepIdleSessions({ currentSessionId: "other" })).toEqual([]);
+    // A too-old crash orphan is cleaned up immediately (never enqueued).
+    expect(() => statSync(p)).toThrow();
+  });
+
   it("touchSession keeps a quiet-but-alive session from being swept", () => {
     appendObservation({
       sessionId: "alive",
       observation: { files: ["a.ts"], commands: [], tasks: 0 },
     });
-    // Session went quiet long enough to look idle...
-    const p = join(dir, "scratch", "alive.jsonl");
+    const p = scratchFile("alive");
     const past = (Date.now() - SCRATCH_IDLE_MS - 60_000) / 1000;
     utimesSync(p, past, past);
-    // ...but its Stop touched it, so another window's sweep must not take it.
     touchSession("alive");
     expect(sweepIdleSessions({ currentSessionId: "other" })).toEqual([]);
-    // Still fully intact.
-    expect(takeSession("alive")?.observations.length).toBe(1);
+    expect(readSession("alive")?.observations.length).toBe(1);
   });
 
   it("touchSession never creates a file for a session with no scratch", () => {
     touchSession("no-scratch-yet");
-    expect(() => statSync(join(dir, "scratch", "no-scratch-yet.jsonl"))).toThrow();
+    expect(() => statSync(scratchFile("no-scratch-yet"))).toThrow();
   });
 
-  it("keeps the FIRST meta header when concurrent writes wrote two", () => {
-    // Simulate the async-hook race: two meta headers, earliest start first.
-    // Append once first so the scratch/ dir exists before we hand-write the file.
+  it("keeps the FIRST meta's started_at when concurrent writes wrote two", () => {
     appendObservation({
       sessionId: "seed",
       observation: { files: ["seed.ts"], commands: [], tasks: 0 },
     });
-    const p = join(dir, "scratch", "dup.jsonl");
+    const p = scratchFile("dup");
     const early = "2026-07-07T01:00:00.000Z";
     const late = "2026-07-07T02:00:00.000Z";
     writeFileSync(
@@ -136,6 +201,25 @@ describe("scratch store", () => {
         JSON.stringify({ meta: true, started_at: late, project: "p" }),
       ].join("\n") + "\n",
     );
-    expect(takeSession("dup")?.startedAt).toBe(early);
+    expect(readSession("dup")?.startedAt).toBe(early);
+  });
+
+  it("ignores a meta line whose started_at is not a string (no crash)", () => {
+    appendObservation({
+      sessionId: "seed",
+      observation: { files: ["seed.ts"], commands: [], tasks: 0 },
+    });
+    const p = scratchFile("corrupt");
+    writeFileSync(
+      p,
+      [
+        JSON.stringify({ meta: true, started_at: 1751846400000, project: "p" }),
+        JSON.stringify({ files: ["a.ts"], commands: [], tasks: 0 }),
+      ].join("\n") + "\n",
+    );
+    const session = readSession("corrupt");
+    // Bad meta dropped: no started_at, but observations survive and nothing throws.
+    expect(session?.startedAt).toBeUndefined();
+    expect(session?.observations.length).toBe(1);
   });
 });
