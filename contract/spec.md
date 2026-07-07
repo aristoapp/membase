@@ -23,8 +23,6 @@ credentials file per C-TOK-1's shape to `<dataDir>/credentials.json`.
 - `clients/cursor/runtime/cursor-hook.mjs <event>` — same stdin/stdout
   discipline; env additionally `MEMBASE_HOOK_BUNDLE` (path override for the
   delegated bundle).
-- `clients/codex/runtime/session-start.mjs` — stdin: one JSON object; env
-  `MEMBASE_HANDOFF_FILE`.
 - `@membase/capture-core` package exports (import from the built package):
   `createCaptureSpool`, `createTokenStore`, `redactSecrets`, `looksSensitive`,
   `MembaseTransport`.
@@ -138,15 +136,17 @@ Cursor hooks output schema `{"additional_context": ...}` per cursor.com/docs)
   no-ops with exit 0.
 
 ## Codex handoff recall (source: docs/install/codex.md Session Handoff;
-Codex hooks output schema per developers.openai.com/codex/hooks)
+served by the shared hook bundle with MEMBASE_CLIENT_SOURCE=codex)
 
-- C-CDX-1 — With `MEMBASE_HANDOFF_FILE` pointing at a non-empty file,
-  `session-start.mjs` prints `{"hookSpecificOutput": {"hookEventName":
-  "SessionStart", "additionalContext": <contains the file text>}}`.
-- C-CDX-2 — Missing/empty handoff file → no stdout, exit 0.
-- C-CDX-3 — Invoked via a symlinked path, behavior is identical (dotfiles
-  setups symlink hook scripts). Source: install docs instruct absolute
-  REPO_ROOT paths; symlinked repo roots are ordinary.
+- C-CDX-1 — `hook.cjs SessionStart` with `MEMBASE_CLIENT_SOURCE=codex`,
+  `MEMBASE_HANDOFF_FILE` pointing at a non-empty FRESH file (mtime now),
+  and no credentials: the single-JSON stdout's additionalContext contains
+  the file text inside a `<membase-handoff stored_at=...>` block.
+- C-CDX-2 — Missing/empty handoff file → no handoff block in the output
+  (the not-logged-in line may still appear); exit 0.
+- C-CDX-3 — STALE file (mtime older than 7 days): the output announces a
+  stale handoff exists but does NOT inject the file body. Source:
+  north-star pillar 2 injection policy (age/TTL framing).
 
 ## Handoff tag round-trip (source: docs/implementation-overview §7.5 "[HANDOFF]
 접두사 관례가 전부"; skills/prompts describe the literal tag)

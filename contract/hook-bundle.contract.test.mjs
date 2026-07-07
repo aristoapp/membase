@@ -5,7 +5,6 @@ import { randomBytes } from "node:crypto";
 import {
   CLAUDE_HOOK,
   CURSOR_HOOK,
-  CODEX_SESSION_START,
   makeDataDir,
   runEntry,
   readSpool,
@@ -203,7 +202,6 @@ const DEADLINE_MS = 5000;
 const entryPoints = [
   ["hook.cjs SessionStart", CLAUDE_HOOK, ["SessionStart"]],
   ["cursor-hook.mjs sessionStart", CURSOR_HOOK, ["sessionStart"]],
-  ["session-start.mjs", CODEX_SESSION_START, []],
 ];
 const garbageInputs = [
   ["invalid JSON", "this is {{{ not json at all"],

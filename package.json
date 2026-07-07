@@ -15,7 +15,6 @@
     "claude:native-artifacts": "node scripts/check-claude-native-artifacts.mjs",
     "claude:runtime-typecheck": "pnpm --filter @membase/claude-membase-runtime typecheck",
     "claude:runtime-test": "cd clients/claude/runtime && bun test",
-    "codex:runtime-test": "node --test clients/codex/runtime/session-start.test.mjs",
     "cursor:runtime-test": "node --test clients/cursor/runtime/cursor-hook.test.mjs",
     "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --clean",
     "e2e": "node e2e/run-e2e.mjs",
@@ -45,7 +44,7 @@
     "version-parity": "node scripts/check-version-parity.mjs",
     "capture-core:typecheck": "pnpm --filter @membase/capture-core typecheck",
     "capture-core:test": "cd packages/capture-core && bun test",
-    "contract:test": "pnpm --filter @membase/capture-core typecheck && node --test contract/*.contract.test.mjs"
+    "contract:test": "pnpm --filter @membase/capture-core build && node --test contract/*.contract.test.mjs"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

@@ -168,3 +168,71 @@ export async function sweepReplacedHandoffs<
   );
   return results.filter((r) => r.status === "fulfilled").length;
 }
+
+/**
+ * Handoffs older than this are announced, not injected in full.
+ * NOTE: Cursor's Rules can't compute age, so its template restates this as
+ * prose ("older than about a week") — keep the two in sync:
+ * clients/cursor/skills/handoff/SKILL.md.
+ */
+export const HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** True when a handoff stored at `storedAtMs` is still within the TTL. */
+export function isHandoffFresh(storedAtMs: number, nowMs?: number): boolean {
+  const now = nowMs ?? Date.now();
+  return Math.max(0, now - storedAtMs) <= HANDOFF_STALE_MS;
+}
+
+// Untrusted handoff text is interpolated into a <membase-handoff> block and,
+// for the Codex/cwd file, can even come from a checked-in repo file — so it
+// must not be able to close the block early or forge a hook control tag.
+// Neutralize the block delimiter and the harness's system-reminder tag by
+// inserting a zero-width space; the text stays readable, the tags inert.
+function neutralizeInjection(text: string): string {
+  return text.replace(
+    /<\/?(membase-handoff|system-reminder)\b/gi,
+    (m) => `${m[0]}​${m.slice(1)}`,
+  );
+}
+
+/**
+ * A fresh handoff injected in full, with its age so the model can judge
+ * relevance. One format for every client and both sources (local file /
+ * cloud). Callers decide staleness sequencing via isHandoffFresh + the stale
+ * notice below, so this always emits the full block.
+ */
+export function buildHandoffInjection(args: {
+  text: string;
+  storedAtMs: number;
+  nowMs?: number;
+}): string {
+  const now = args.nowMs ?? Date.now();
+  const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
+  const storedAt = new Date(args.storedAtMs).toISOString();
+  return (
+    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n` +
+    `${neutralizeInjection(args.text)}\n` +
+    "</membase-handoff>\n" +
+    "Use this only if the user is continuing the work it describes; it may " +
+    "already be finished."
+  );
+}
+
+/**
+ * The one-line notice for a stale handoff — an old baton is more likely noise
+ * than context, but stays reachable on request. Emitted only after the cloud
+ * fallback also came up empty, so it never suppresses a fresher handoff.
+ */
+export function buildStaleHandoffNotice(args: {
+  storedAtMs: number;
+  nowMs?: number;
+}): string {
+  const now = args.nowMs ?? Date.now();
+  const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
+  return (
+    `A Membase handoff from ${ageDays} day(s) ago exists for this ` +
+    "project but was not injected (stale). If the user wants to continue " +
+    "that work, recall it (search_memory for \"[HANDOFF]\", or read the " +
+    "local handoff file)."
+  );
+}

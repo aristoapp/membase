@@ -19,42 +19,20 @@ export const CURSOR_HOOK = join(
   REPO_ROOT,
   "clients/cursor/runtime/cursor-hook.mjs",
 );
-export const CODEX_SESSION_START = join(
-  REPO_ROOT,
-  "clients/codex/runtime/session-start.mjs",
-);
-
 const CAPTURE_CORE_DIST = join(
   REPO_ROOT,
   "packages/capture-core/dist/index.js",
 );
 
 /**
- * Import @membase/capture-core from built output. The package has no build
- * script (`exports` points at raw .ts with non-erasable syntax), so build the
- * dist ourselves with the workspace tsc when missing. This compiles — it does
- * not require reading — the sources.
+ * Import @membase/capture-core from built output. `pnpm contract:test`
+ * prebuilds it; failing loudly here beats silently compiling a stale or
+ * broken tree (the old fallback also emitted test files into dist).
  */
 export async function loadCaptureCore() {
   if (!existsSync(CAPTURE_CORE_DIST)) {
-    execFileSync(
-      join(REPO_ROOT, "node_modules/.bin/tsc"),
-      [
-        "-p",
-        join(REPO_ROOT, "packages/capture-core/tsconfig.json"),
-        "--noEmit",
-        "false",
-        "--outDir",
-        join(REPO_ROOT, "packages/capture-core/dist"),
-        "--rootDir",
-        join(REPO_ROOT, "packages/capture-core/src"),
-        "--declaration",
-        "false",
-        "--sourceMap",
-        "false",
-        "--rewriteRelativeImportExtensions",
-      ],
-      { stdio: "inherit" },
+    throw new Error(
+      "capture-core dist missing — run via `pnpm contract:test` (it prebuilds)",
     );
   }
   return import(pathToFileURL(CAPTURE_CORE_DIST).href);

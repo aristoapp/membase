@@ -39,23 +39,30 @@ export interface TokenStore {
   clear(): void;
 }
 
+export function writeTextAtomic(
+  path: string,
+  text: string,
+  mode = 0o600,
+): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  // Per-process tmp name: with a fixed `${path}.tmp`, two concurrent writers
+  // race (one renames the tmp away, the other's rename throws ENOENT). The
+  // rename is atomic, so a reader never sees a torn or truncated file and a
+  // crash mid-write leaves the previous content intact.
+  const tmp = `${path}.tmp.${process.pid}`;
+  writeFileSync(tmp, text, { encoding: "utf-8", mode });
+  renameSync(tmp, path);
+  try {
+    chmodSync(path, mode);
+  } catch {}
+}
+
 export function writeJsonAtomic(
   path: string,
   value: unknown,
   mode = 0o600,
 ): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  // Per-process tmp name: with a fixed `${path}.tmp`, two concurrent writers
-  // race (one renames the tmp away, the other's rename throws ENOENT).
-  const tmp = `${path}.tmp.${process.pid}`;
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, {
-    encoding: "utf-8",
-    mode,
-  });
-  renameSync(tmp, path);
-  try {
-    chmodSync(path, mode);
-  } catch {}
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}\n`, mode);
 }
 
 export function createTokenStore(options: TokenStoreOptions): TokenStore {

@@ -17,7 +17,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --pretty false",
-    "test:runtime": "node --test runtime/session-start.test.mjs"
+    "typecheck": "tsc -p tsconfig.json --pretty false"
   }
 }

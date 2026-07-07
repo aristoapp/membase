@@ -41,12 +41,13 @@ description: Membase handoff from the previous session
 alwaysApply: true
 ---
 
-# Previous session handoff (written <ISO date>)
+# Previous session handoff (stored_at: <ISO date>)
 
 <summary>
 
-Once this work is resumed and superseded, this file is stale — the next
-handoff overwrites it.
+Use this only if the user is continuing the work it describes; if it is
+older than about a week or clearly finished, ignore it unless asked. The
+next handoff overwrites this file.
 ```
 
 ## Picking up work from another client
