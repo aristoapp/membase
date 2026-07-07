@@ -58,14 +58,29 @@ export function mapCursorInput(event, input) {
   return mapped;
 }
 
+// Never hang the host: resolve with whatever arrived after a short deadline
+// if the stream errors or is left open (fail-open contract).
 function readStdin() {
   return new Promise((resolvePromise) => {
     let data = "";
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        process.stdin.destroy();
+      } catch {}
+      resolvePromise(data);
+    };
+    const timer = setTimeout(done, 2000);
+    timer.unref?.();
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
-      data += chunk;
+      if (data.length < 1_048_576) data += chunk;
     });
-    process.stdin.on("end", () => resolvePromise(data));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
   });
 }
 
