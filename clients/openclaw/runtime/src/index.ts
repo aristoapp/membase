@@ -291,8 +291,16 @@ export default {
       // Startup drain (ADR 0005): upload any captures a previous run spooled to
       // disk on flush failure, so a gateway restart recovers them without
       // waiting for a manual `membase dream`. Background + best-effort.
+      //
+      // isAuthenticated() only checks that a token exists locally, not that it
+      // still works. On every restart with an expired/revoked token that would
+      // fire a full backlog upload that 401s on each record — refresh churn +
+      // inflated attempt counts before the user does anything. Probe once with a
+      // cheap authed call first; only drain if it succeeds.
       if (client.isAuthenticated()) {
-        flushCaptureSpool(client)
+        client
+          .getProfile()
+          .then(() => flushCaptureSpool(client))
           .then(({ flushed }) => {
             if (flushed > 0) {
               api.logger.info(

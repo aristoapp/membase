@@ -114,4 +114,19 @@ describe("dream flush", () => {
     expect(result.remaining).toBe(1);
     expect(getCaptureSpool().pendingSpoolCount()).toBe(1);
   });
+
+  test("a 200 with {status:'error'} body is NOT marked sent", async () => {
+    // The gateway judges success by HTTP status, but if it ever returns 200
+    // with an explicit error body, the record must stay spooled (not silently
+    // deleted as sent).
+    spoolFailedCapture("a message the server 200s but reports an error for");
+    const client = stubClient({
+      onIngest: async () => ({ status: "error" }),
+    });
+
+    const result = await flushCaptureSpool(client);
+    expect(result.flushed).toBe(0);
+    expect(result.remaining).toBe(1);
+    expect(getCaptureSpool().pendingSpoolCount()).toBe(1);
+  });
 });

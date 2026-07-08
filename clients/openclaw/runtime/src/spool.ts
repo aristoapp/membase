@@ -54,9 +54,15 @@ export async function flushCaptureSpool(
   limit = 50,
 ): Promise<{ flushed: number; remaining: number }> {
   return getCaptureSpool().flushSpool(async (record) => {
-    // ingest throws on failure; a normal return counts as success. Return void
-    // (not the {status} object) to match flushSpool's void|boolean contract.
-    await client.ingest(record.content, { project: record.project });
+    // ingest throws on non-ok HTTP (transport rejects any !response.ok), and an
+    // explicit `{status:"error"}` body is also a failure — either way the record
+    // must stay spooled, not be marked sent. Any other resolved status (incl. a
+    // gateway that returns just an id) counts as success. Return void on success
+    // to match flushSpool's void|boolean contract; false on the error body.
+    const result = await client.ingest(record.content, {
+      project: record.project,
+    });
+    if (result?.status === "error") return false;
   }, limit);
 }
 
