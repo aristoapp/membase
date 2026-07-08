@@ -15,6 +15,21 @@ export const DEFAULT_TOKEN_FILE_PATH = join(
   "openclaw-membase.json",
 );
 
+// State dir for the failure-path capture spool (ADR 0005). Sibling of the
+// token dir under ~/.openclaw so it survives plugin updates (not in
+// extensions/). MEMBASE_DATA_DIR overrides it, matching the other clients.
+export function membaseStateDir(): string {
+  const override = process.env.MEMBASE_DATA_DIR?.trim();
+  if (override) {
+    // Expand a leading ~/ so an override like `~/foo` doesn't create a literal
+    // `~` directory — matches the Claude client's config handling.
+    return override.startsWith("~/")
+      ? join(homedir(), override.slice(2))
+      : override;
+  }
+  return join(homedir(), ".openclaw", "membase");
+}
+
 // Returns true if a path is inside extensions/ — that directory is fully replaced
 // whenever openclaw plugins update/reinstall, so token files stored there will be lost.
 export function isInsideExtensionsDir(tokenFile: string): boolean {
