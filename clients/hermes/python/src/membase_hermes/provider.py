@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from .capture import CaptureJob, CaptureWorker
 from .client import MembaseApiError, MembaseClient, resolve_auth_state
+from .spool import default_capture_spool
 from .config import (
     DEFAULT_CONFIG_PATH,
     MembaseConfig,
@@ -279,7 +280,11 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         )
         self._mirror_worker.start()
         if self._config.auto_capture:
-            self._capture_worker = CaptureWorker(client=self._client, logger=self._logger)
+            self._capture_worker = CaptureWorker(
+                client=self._client,
+                logger=self._logger,
+                spool=default_capture_spool(),
+            )
             self._capture_worker.start()
         self._start_prefetch_worker()
         start_background_update_check()

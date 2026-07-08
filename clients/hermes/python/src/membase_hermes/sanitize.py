@@ -95,6 +95,19 @@ def sanitize_membase_text(raw: str) -> str:
     return "\n".join(lines).strip()
 
 
+def sanitize_capture_text(raw: str) -> str:
+    """Capture-path sanitizer: strip tags/blocks, then redact secrets.
+
+    Mirrors the OpenClaw runtime's sanitizeCaptureText
+    (redactSecrets(sanitizeMembaseText(raw))). Used before a capture is written
+    to the failure-path disk spool (ADR 0005), so credentials never reach disk.
+    Unlike sanitize_recall_query it does NOT collapse whitespace or clamp
+    length — the stored capture keeps its shape.
+    """
+    cleaned = sanitize_membase_text(raw)
+    return SECRET_ASSIGNMENT_RE.sub(r"\1=[REDACTED]", cleaned)
+
+
 def sanitize_recall_query(raw: str) -> str:
     cleaned = sanitize_membase_text(raw)
     cleaned = SECRET_ASSIGNMENT_RE.sub(r"\1=[REDACTED]", cleaned)

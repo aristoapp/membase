@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass
 
 from .client import MembaseClient
+from .spool import CaptureSpool
 
 
 @dataclass(frozen=True)
@@ -25,11 +26,16 @@ class CaptureWorker:
         max_queue_size: int = 32,
         max_retries: int = 2,
         retry_delay_s: float = 0.25,
+        spool: CaptureSpool | None = None,
     ) -> None:
         self.client = client
         self.logger = logger or logging.getLogger(__name__)
         self.max_retries = max(0, max_retries)
         self.retry_delay_s = max(0.0, retry_delay_s)
+        # Failure-path disk spool (ADR 0005): when a job fails all retries, it is
+        # persisted here instead of dropped, so `hermes-membase dream` can upload
+        # it later. Optional so tests/callers without disk state still work.
+        self._spool = spool
         self._queue: queue.Queue[CaptureJob | None] = queue.Queue(maxsize=max_queue_size)
         self._thread: threading.Thread | None = None
         self._accepting = False
@@ -129,7 +135,23 @@ class CaptureWorker:
                 return
             except Exception as error:
                 if attempt >= self.max_retries:
-                    self.logger.debug("capture ingest failed after retries: %s", error)
+                    # Failure path (ADR 0005): persist to the disk spool instead
+                    # of dropping, so a restart can't lose it and dream uploads
+                    # it later.
+                    if self._spool is not None:
+                        self._spool.enqueue_capture(
+                            content=content,
+                            display_summary=job.display_summary,
+                            project=job.project,
+                        )
+                        self.logger.debug(
+                            "capture ingest failed after retries; spooled for dream: %s",
+                            error,
+                        )
+                    else:
+                        self.logger.debug(
+                            "capture ingest failed after retries: %s", error
+                        )
                     return
                 if self.retry_delay_s > 0:
                     time.sleep(self.retry_delay_s * (attempt + 1))

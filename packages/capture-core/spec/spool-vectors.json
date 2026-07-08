@@ -1,0 +1,42 @@
+{
+  "$comment": "Language-neutral golden vectors binding the TS capture-core disk spool (packages/capture-core/src/spool.ts) and the Hermes Python port (clients/hermes/python/src/membase_hermes/spool.py), per ADR 0002 / ADR 0005. Both test suites consume this file so the on-disk contract — capture_id hashing and the enqueue drop rules — cannot drift between languages. The file-locking/retry mechanics are per-language and intentionally NOT vectorized. Content in capture_id cases is ALREADY sanitized (sanitize itself is covered by sanitize-vectors.json), so these isolate the hash computation.",
+  "capture_id": {
+    "$comment": "sha256(\"{session_id||'unknown'}:{capture_kind}:{sanitized_content}\") as lowercase hex. Verifies TS captureId and Python compute_capture_id agree byte-for-byte.",
+    "cases": [
+      {
+        "session_id": "sess-1",
+        "capture_kind": "conversation",
+        "content": "a captured note worth keeping around",
+        "out": "37e0c5ae09926bf1e44a4e9a21e13c0a773a3ee5c43d8f6f5daf9feaf08fde2c"
+      },
+      {
+        "session_id": null,
+        "capture_kind": "conversation",
+        "content": "unknown-session capture",
+        "out": "2684667f4d5687d8bbbeb71171cd166016d74ce8ccb37b0e5655e92b239c9440"
+      },
+      {
+        "session_id": "sess-1",
+        "capture_kind": "tool_summary",
+        "content": "a captured note worth keeping around",
+        "out": "a06100f1a2ba5519a574e52f102782c3788c608b87339471b2305c3117e1d598"
+      }
+    ]
+  },
+  "enqueue_drop_rules": {
+    "$comment": "Given content (post-sanitize length is what matters), enqueue returns a record (keep=true) or null (keep=false). MIN_CONTENT_LENGTH=20.",
+    "cases": [
+      { "content": "this is long enough to keep", "keep": true },
+      { "content": "too short", "keep": false },
+      { "content": "", "keep": false },
+      { "content": "exactly-twenty-chars", "keep": true }
+    ]
+  },
+  "dedupe": {
+    "$comment": "Enqueuing the same (session_id, capture_kind, content) twice keeps only the first; the second returns null.",
+    "session_id": "sess-dup",
+    "capture_kind": "conversation",
+    "content": "a duplicate capture enqueued twice",
+    "second_enqueue_returns_null": true
+  }
+}
