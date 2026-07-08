@@ -864,16 +864,25 @@ async function evalCaptureSourceTags(entry) {
   // proves sources=[...] actually isolates one client's captures from
   // another's, which is exactly what a hook flush relies on to not have its
   // captures blended with a different client's.
+  //
+  // Query by the run's own sentinel, not a fixed phrase like "[e2e-capture]":
+  // even with cleanupTier3Memories now deleting this run's writes afterward,
+  // concurrent runs and any cleanup miss still leave near-identical past text
+  // in the account, and a fixed phrase competes against all of it in
+  // Graphiti's hybrid search — the same top-N cliff evalLiveFast's projectTag
+  // comment documents. The sentinel is unique per run, so it can't lose that
+  // race.
   const primary = "cursor";
+  const primarySentinel = sentinelFor(primary);
   const t0 = now();
   let ownFound = false;
   let raw = "";
   while (true) {
     const res = await authedFetch(
-      `/memory/search?query=${encodeURIComponent("[e2e-capture]")}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
+      `/memory/search?query=${encodeURIComponent(primarySentinel)}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
     );
     raw = res.status < 400 ? await res.text() : "";
-    if (raw.includes(sentinelFor(primary))) { ownFound = true; break; }
+    if (raw.includes(primarySentinel)) { ownFound = true; break; }
     if (noteQuota("", res.status)) break;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
