@@ -7,12 +7,14 @@ on failure) the way `hermes-membase dream` relies on.
 
 from __future__ import annotations
 
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from membase_hermes.sanitize import sanitize_capture_text
-from membase_hermes.spool import CaptureSpool
+from membase_hermes.spool import INFLIGHT_STALE_MS, CaptureSpool
 
 
 class SpoolBehaviorTest(unittest.TestCase):
@@ -71,6 +73,31 @@ class SpoolBehaviorTest(unittest.TestCase):
         self.assertEqual(flushed, 0)
         self.assertEqual(remaining, 1)
         self.assertEqual(self.spool.pending_count(), 1)
+
+    def test_crash_mid_flush_recovers_batch(self) -> None:
+        # Simulate a crash after the batch is claimed into the inflight file but
+        # before it is requeued: the send handler raises SystemExit, which
+        # flush's `except Exception` does NOT catch, so it unwinds like a kill.
+        self.spool.enqueue_capture(content="a captured message that must survive")
+
+        def _crash(_record: dict) -> None:
+            raise SystemExit("process killed mid-flush")
+
+        with self.assertRaises(SystemExit):
+            self.spool.flush(_crash)
+
+        spool_dir = self.root / "spool"
+        # Batch left pending.jsonl; an inflight file holds the record.
+        self.assertEqual(self._pending_file().read_text("utf-8").strip(), "")
+        inflight = list(spool_dir.glob("inflight-*.jsonl"))
+        self.assertEqual(len(inflight), 1)
+
+        # Age the inflight file past the stale threshold, then any later call
+        # must recover it back to pending — no loss.
+        stale = time.time() - (INFLIGHT_STALE_MS / 1000) - 5
+        os.utime(inflight[0], (stale, stale))
+        self.assertEqual(self.spool.pending_count(), 1)
+        self.assertEqual(list(spool_dir.glob("inflight-*.jsonl")), [])
 
     def test_sent_ledger_blocks_reupload(self) -> None:
         self.spool.enqueue_capture(content="content uploaded once, never twice")

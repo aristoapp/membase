@@ -212,7 +212,11 @@ def _cmd_dream(config_path: Path) -> int:
 
         def _send(record: dict[str, Any]) -> None:
             # ingest raises on failure; a normal return counts as success.
-            client.ingest(record["content"], project=record.get("project"))
+            client.ingest(
+                record["content"],
+                display_summary=record.get("display_summary"),
+                project=record.get("project"),
+            )
 
         flushed, remaining = spool.flush(_send)
         tail = (

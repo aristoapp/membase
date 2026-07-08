@@ -26,6 +26,8 @@ from typing import Any
 MIN_CONTENT_LENGTH = 20
 LOCK_WAIT_MS = 2000
 LOCK_STALE_MS = 30_000
+INFLIGHT_STALE_MS = 60_000
+SENT_LEDGER_MAX = 2000
 DISPLAY_SUMMARY_MAX = 180
 
 
@@ -74,6 +76,16 @@ class CaptureSpool:
     def _lock_path(self) -> Path:
         return self._spool_dir() / ".lock"
 
+    def _inflight_path(self) -> Path:
+        return self._spool_dir() / f"inflight-{os.getpid()}-{int(time.time() * 1000)}.jsonl"
+
+    def _inflight_files(self) -> list[Path]:
+        return sorted(
+            p
+            for p in self._spool_dir().iterdir()
+            if p.name.startswith("inflight-") and p.suffix == ".jsonl"
+        )
+
     # --- locking ---------------------------------------------------------
     def _acquire_lock(self) -> int:
         path = self._lock_path()
@@ -107,8 +119,7 @@ class CaptureSpool:
             self._release_lock(fd)
 
     # --- record io -------------------------------------------------------
-    def _read_records(self) -> list[dict[str, Any]]:
-        path = self._pending_path()
+    def _read_records_from(self, path: Path) -> list[dict[str, Any]]:
         if not path.exists():
             return []
         out: list[dict[str, Any]] = []
@@ -122,13 +133,39 @@ class CaptureSpool:
                 continue
         return out
 
-    def _write_records(self, records: list[dict[str, Any]]) -> None:
-        path = self._pending_path()
-        tmp = path.with_suffix(".jsonl.tmp")
+    def _read_records(self) -> list[dict[str, Any]]:
+        return self._read_records_from(self._pending_path())
+
+    def _write_records_to(self, path: Path, records: list[dict[str, Any]]) -> None:
+        tmp = path.with_suffix(path.suffix + ".tmp")
         body = "".join(json.dumps(r) + "\n" for r in records)
         tmp.write_text(body, "utf-8")
         os.chmod(tmp, 0o600)
         os.replace(tmp, path)
+
+    def _write_records(self, records: list[dict[str, Any]]) -> None:
+        self._write_records_to(self._pending_path(), records)
+
+    def _recover_stale_inflight(self) -> None:
+        """Re-queue records from crashed flushes.
+
+        A flush claims its batch into an ``inflight-*.jsonl`` file (see flush);
+        if the process dies before the batch is requeued, the file lingers.
+        Any inflight file older than INFLIGHT_STALE_MS is assumed abandoned and
+        its records are appended back to pending. Callers must hold the lock.
+        Mirrors the TS spool's recoverStaleInflightLocked.
+        """
+        now_ms = time.time() * 1000
+        for path in self._inflight_files():
+            try:
+                if now_ms - path.stat().st_mtime * 1000 < INFLIGHT_STALE_MS:
+                    continue
+                stale = self._read_records_from(path)
+                if stale:
+                    self._write_records([*self._read_records(), *stale])
+                path.unlink(missing_ok=True)
+            except FileNotFoundError:
+                continue
 
     def _read_sent_ids(self) -> set[str]:
         path = self._sent_path()
@@ -141,9 +178,12 @@ class CaptureSpool:
             return set()
 
     def _write_sent_ids(self, ids: set[str]) -> None:
+        # Cap the ledger like the TS spool's writeSentIds slice(-2000): the
+        # ledger only guards against re-upload of records still on disk, so an
+        # unbounded set would grow (and be rewritten O(n)) on every mark.
         path = self._sent_path()
         tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(sorted(ids)), "utf-8")
+        tmp.write_text(json.dumps(sorted(ids)[-SENT_LEDGER_MAX:]), "utf-8")
         os.chmod(tmp, 0o600)
         os.replace(tmp, path)
 
@@ -184,6 +224,7 @@ class CaptureSpool:
         }
 
         def _do() -> dict[str, Any] | None:
+            self._recover_stale_inflight()
             existing = self._read_records()
             if any(r.get("capture_id") == capture_id for r in existing):
                 return None
@@ -198,7 +239,11 @@ class CaptureSpool:
             return None
 
     def pending_count(self) -> int:
-        return len(self._read_records())
+        def _count() -> int:
+            self._recover_stale_inflight()
+            return len(self._read_records())
+
+        return self._with_lock(_count)
 
     def flush(
         self, send: Callable[[dict[str, Any]], None], limit: int = 50
@@ -209,13 +254,21 @@ class CaptureSpool:
         later dream. Safe to call repeatedly; the sent ledger blocks re-upload.
         """
 
+        inflight = self._inflight_path()
+
         def _claim() -> list[dict[str, Any]]:
+            self._recover_stale_inflight()
             sent = self._read_sent_ids()
             records = [
                 r for r in self._read_records() if r.get("capture_id") not in sent
             ]
             batch = records[:limit]
             self._write_records(records[limit:])
+            # Persist the claimed batch so a crash mid-send can't lose it: the
+            # records leave pending.jsonl only after landing in an inflight
+            # file, which _recover_stale_inflight sweeps back if we die.
+            if batch:
+                self._write_records_to(inflight, batch)
             return batch
 
         batch = self._with_lock(_claim)
@@ -248,6 +301,7 @@ class CaptureSpool:
         def _requeue() -> int:
             if failed:
                 self._write_records([*self._read_records(), *failed])
+            inflight.unlink(missing_ok=True)
             return len(self._read_records())
 
         remaining = self._with_lock(_requeue)
@@ -256,9 +310,12 @@ class CaptureSpool:
 
 def _iso_now() -> str:
     # ISO 8601 with a trailing Z, matching the TS `new Date().toISOString()`.
+    # Both parts come from ONE clock read so a second-rollover between them
+    # can't skew the seconds and milliseconds apart.
+    now = time.time()
     return (
-        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-        + f".{int((time.time() % 1) * 1000):03d}Z"
+        time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now))
+        + f".{int((now % 1) * 1000):03d}Z"
     )
 
 
