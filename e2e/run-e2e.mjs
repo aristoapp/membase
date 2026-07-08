@@ -146,6 +146,12 @@ for (const client of CLIENTS) {
         const ctx = { ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId };
         const fast = await evalLiveFast(ctx, url); // Tier 2 (fast)
         if (TIER3 && fast) {
+          // Sweep BEFORE the recall polls, not only after: a saturated poll
+          // burns its full SLO, the job hits timeout-minutes, and an
+          // end-of-run-only sweep would then never execute — leftovers keep
+          // the account saturated forever. Sweeping first also overlaps the
+          // Tier 2 write's async indexing, so it costs little wall-clock.
+          await sweepOldTestMemories(ctx);
           await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
           await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
           await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
@@ -154,7 +160,7 @@ for (const client of CLIENTS) {
           await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
           await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
           await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
-          await cleanupTier3Memories(ctx); // Tier 3 (delete this run's test memories + sweep old leftovers)
+          await cleanupTier3Memories(ctx); // Tier 3 (delete this run's own test memories)
         }
         lifecycleByUrl.set(url, shared);
       }
@@ -262,12 +268,12 @@ async function evalLiveFast(entry, url) {
   // remember: the live server acknowledges storage with text (no id is returned).
   const r = await callTool(url, {
     token: TOKEN, sessionId, id: 10, name: roles.remember.name,
-    args: argsFor(roles.remember, { primary: `[e2e-test] The secret launch codeword for project ${entry.projectTag} is ${sentinel}. (safe to delete)` })
+    args: argsFor(roles.remember, { primary: `[e2e-test] The secret launch codeword for project ${entry.projectTag} is ${sentinel}. (safe to delete)` }, { project: entry.projectTag })
   });
   entry.latency.remember = round(r.ms);
   const ack = !r.payload?.error && r.status < 400 && (r.raw ?? "").length > 0;
   entry.checks.push(check("remember acknowledges storage", ack, ack ? textOf(r.payload).slice(0, 60) : errText(r)));
-  if (ack) registerCleanup(sentinel);
+  if (ack) registerCleanup(sentinel, entry.projectTag);
 
   // search endpoint responds (no recall-hit wait — indexing is async; recall
   // correctness is judged in Tier 3). This keeps Tier 2 a ~seconds check.
@@ -499,14 +505,14 @@ async function evalFilters(entry, url, roles) {
   const past = new Date(stamp - 24 * 60 * 60 * 1000).toISOString();
   const before = new Date(stamp - 1000).toISOString();
 
-  const withinWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: nowIso }), 73);
+  const withinWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA, date_from: past, date_to: nowIso }), 73);
   entry.checks.push(check(
     "filters: date_from/date_to including now finds recent memory",
     !withinWindow.payload?.error && (withinWindow.raw ?? "").includes(sentinelA),
     !withinWindow.payload?.error ? ((withinWindow.raw ?? "").includes(sentinelA) ? "found" : "not found in window") : errText(withinWindow)
   ));
 
-  const outsideWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { date_from: past, date_to: before }), 74);
+  const outsideWindow = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA, date_from: past, date_to: before }), 74);
   const excludedPast = !(outsideWindow.raw ?? "").includes(sentinelA);
   entry.checks.push(check(
     "filters: date_to before write excludes the memory",
@@ -561,6 +567,10 @@ async function evalHandoff(entry) {
   const restBase = REST_API_BASE.replace(/\/$/, "");
   const stamp = `e2e-handoff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const summary = `Handoff round-trip sentinel ${stamp}. (safe to delete)`;
+  // Per-run project, like the runtime's own project-scoped handoff recall:
+  // unscoped, this recall competes with every past run's [HANDOFF] leftovers
+  // (and evalHandoffReplace's) and falls off the top-N cliff as they pile up.
+  const project = stamp;
   const authedFetch = (path, init) =>
     fetch(`${restBase}${path}`, {
       ...init,
@@ -578,6 +588,7 @@ async function evalHandoff(entry) {
     display_summary: `${HANDOFF_TAG} ${summary}`,
     source: "openclaw",
     channel: "api",
+    project,
   };
   let stored = false;
   try {
@@ -595,7 +606,7 @@ async function evalHandoff(entry) {
     return;
   }
   entry.checks.push(check("handoff: ingest accepted", true, "stored via /memory/ingest"));
-  registerCleanup(stamp);
+  registerCleanup(stamp, project);
 
   // Recall: poll search until the handoff is indexed, then assert the tag
   // survived into the field recall inspects (episode.name / summary). This is
@@ -606,7 +617,7 @@ async function evalHandoff(entry) {
   while (now() - t0 < QUALITY_MAX_RECALL_MS) {
     try {
       const res = await authedFetch(
-        `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles`,
+        `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`,
       );
       if (res.status < 400) {
         const data = await res.json();
@@ -873,9 +884,13 @@ async function evalLiveDeep(entry, url, roles) {
   const t0 = now();
   let attempt = 0;
   while (true) {
+    // Scoped to the per-run projectTag: unscoped, this query competes against
+    // every past run's near-identical codeword memory and the fresh sentinel
+    // can drop out of the top-N entirely — burning the whole SLO on a healthy
+    // server (same cliff the forged-session probe hit; see evalNegative).
     const s = await callTool(url, {
       token: TOKEN, sessionId, id: 21, name: roles.search.name,
-      args: argsFor(roles.search, { primary: sentinel })
+      args: argsFor(roles.search, { primary: sentinel }, { project: entry.projectTag })
     });
     searchMs.push(s.ms);
     if ((s.raw ?? "").includes(sentinel)) {
@@ -1091,53 +1106,39 @@ async function evalNegative(entry, url, roles) {
 // the same call evalHandoffReplace already drives — plus an age-gated sweep
 // that drains leftovers from runs before this fix existed. Cleanup is entirely
 // best-effort: a miss warns, never fails; pass/fail was decided above.
-const SWEEP_MAX_DELETES = 40; // bound cleanup time per run; backlog drains across runs
+const SWEEP_MAX_DELETES = 40; // bound sweep time per run; backlog drains across runs
 const SWEEP_MIN_AGE_MS = 60 * 60 * 1000; // never touch a concurrent run's fresh sentinels
 // Every e2e sentinel embeds its Date.now() stamp; the sweep's age gate reads
 // it back out of the bundle text (e.g. membase-e2e-<ts>-…, e2e-capture-cursor-<ts>).
 const SENTINEL_TS_RE = /(?:membase-)?e2e-(?:[a-z-]+-)?(\d{13})\b/g;
 
-async function cleanupTier3Memories(entry) {
-  const restBase = REST_API_BASE.replace(/\/$/, "");
-  const authedFetch = (path, init) =>
-    fetch(`${restBase}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-  const search = async (query, project) => {
-    const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
-      (project ? `&project=${encodeURIComponent(project)}` : "");
-    const res = await authedFetch(`/memory/search?${qs}`);
-    if (res.status >= 400) return [];
-    return (await res.json())?.episodes ?? [];
-  };
-  let deleted = 0;
-  const deleteEpisode = async (uuid) => {
-    const del = await authedFetch(`/memory/episodes/${encodeURIComponent(uuid)}`, { method: "DELETE" });
-    if (del.status === 204) deleted++;
-  };
+const restFetch = (path, init) =>
+  fetch(`${REST_API_BASE.replace(/\/$/, "")}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${TOKEN}`,
+      "content-type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+const restSearch = async (query, project) => {
+  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
+    (project ? `&project=${encodeURIComponent(project)}` : "");
+  const res = await restFetch(`/memory/search?${qs}`);
+  if (res.status >= 400) return [];
+  return (await res.json())?.episodes ?? [];
+};
+const restDeleteEpisode = async (uuid) => {
+  const del = await restFetch(`/memory/episodes/${encodeURIComponent(uuid)}`, { method: "DELETE" });
+  return del.status === 204;
+};
 
-  // Pass 1: this run's own writes, matched by their unique sentinels. Each
-  // sentinel was already confirmed searchable by its test's recall poll, so a
-  // single search here (no SLO wait) finds it in the healthy case.
-  const missed = [];
-  for (const { sentinel, project } of cleanupTargets.splice(0)) {
-    try {
-      const own = (await search(sentinel, project)).filter((b) => JSON.stringify(b).includes(sentinel));
-      if (!own.length) { missed.push(sentinel); continue; }
-      for (const b of own) if (b?.episode?.uuid) await deleteEpisode(b.episode.uuid);
-    } catch {
-      missed.push(sentinel);
-    }
-  }
-
-  // Pass 2: sweep leftovers from earlier runs (top-20 per sentinel family per
-  // run). Only episodes whose embedded stamps are ALL older than the age gate
-  // are deleted — anything fresher may belong to a concurrently running Tier 3.
+// Sweep leftovers from PAST runs (top-20 per sentinel family per run). Only
+// episodes whose embedded stamps are ALL older than the age gate are deleted —
+// anything fresher may belong to a concurrently running Tier 3. Runs BEFORE
+// the recall polls so a saturated account is drained rather than timing the
+// job out first.
+async function sweepOldTestMemories(entry) {
   const sweepQueries = [
     "[e2e-negative] forged-session write",
     "[e2e-test] secret launch codeword",
@@ -1146,21 +1147,41 @@ async function cleanupTier3Memories(entry) {
     `${HANDOFF_TAG} Handoff round-trip sentinel`,
     `${HANDOFF_TAG} Replace-on-store test`,
   ];
+  let deleted = 0;
   try {
     for (const q of sweepQueries) {
       if (deleted >= SWEEP_MAX_DELETES) break;
-      for (const b of await search(q)) {
+      for (const b of await restSearch(q)) {
         if (deleted >= SWEEP_MAX_DELETES) break;
         const stamps = [...JSON.stringify(b).matchAll(SENTINEL_TS_RE)].map((m) => Number(m[1]));
         if (!stamps.length || !b?.episode?.uuid) continue;
         if (stamps.some((ts) => Date.now() - ts < SWEEP_MIN_AGE_MS)) continue;
-        await deleteEpisode(b.episode.uuid);
+        if (await restDeleteEpisode(b.episode.uuid)) deleted++;
       }
     }
   } catch {
-    // sweep is opportunistic; own-write cleanup above already ran
+    // opportunistic; a failed sweep must never block the actual tests
   }
+  entry.checks.push(warn("sweep: stale test memories from past runs", `deleted=${deleted} episode(s) >1h old`));
+}
 
+// Delete THIS run's own writes, matched by their unique sentinels. Each
+// sentinel was already confirmed searchable by its test's recall poll, so a
+// single search (no SLO wait) finds it in the healthy case.
+async function cleanupTier3Memories(entry) {
+  let deleted = 0;
+  const missed = [];
+  for (const { sentinel, project } of cleanupTargets.splice(0)) {
+    try {
+      const own = (await restSearch(sentinel, project)).filter((b) => JSON.stringify(b).includes(sentinel));
+      if (!own.length) { missed.push(sentinel); continue; }
+      for (const b of own) {
+        if (b?.episode?.uuid && await restDeleteEpisode(b.episode.uuid)) deleted++;
+      }
+    } catch {
+      missed.push(sentinel);
+    }
+  }
   entry.checks.push(missed.length
     ? warn("cleanup: some of this run's test memories not deleted (best-effort)", `deleted=${deleted}; not found: ${missed.map(short).join(", ")}`)
     : check("cleanup: this run's test memories deleted", true, `deleted=${deleted} episode(s) via DELETE /memory/episodes`));
@@ -1242,12 +1263,18 @@ function errText(r) {
   return "";
 }
 
+// Under --tier3, every check is ALSO printed the moment it resolves (GH
+// Actions timestamps each line): a job killed by timeout-minutes used to leave
+// zero diagnostics because report() only prints at the very end — streaming
+// shows exactly which recall poll was burning its SLO when the job died.
 function check(name, pass, detail) {
+  if (TIER3) console.log(`   ${pass ? "·" : "×"} ${name}${detail ? ` — ${detail}` : ""}`);
   return { name, pass: Boolean(pass), detail: detail ?? "" };
 }
 
 // Known live-server contract gaps: surfaced prominently but do not fail the run.
 function warn(name, detail) {
+  if (TIER3) console.log(`   ~ ${name}${detail ? ` — ${detail}` : ""}`);
   return { name, pass: true, warn: true, detail: detail ?? "" };
 }
 function round(ms) {
