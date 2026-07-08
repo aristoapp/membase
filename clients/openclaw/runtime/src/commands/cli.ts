@@ -11,6 +11,7 @@ import {
   writeTokenFile,
 } from "../config";
 import { formatBundles } from "../format";
+import { flushCaptureSpool } from "../spool";
 import { maybePromptGithubStar } from "../star-prompt";
 import type { OpenClawPluginApi } from "../types";
 
@@ -735,6 +736,46 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
           } catch (error) {
             api.logger.error(
               "Membase connection failed:",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        });
+
+      membase
+        .command("dream")
+        .description(
+          "Upload captures that failed to sync and are waiting on disk",
+        )
+        .action(async () => {
+          if (!client.isAuthenticated()) {
+            api.logger.warn(
+              "Not logged in. Run 'openclaw membase login' first.",
+            );
+            return;
+          }
+          try {
+            // No pre-count: pendingSpoolCount + flushSpool would each take the
+            // spool lock, and a background startup drain could move the record
+            // into inflight between the two, making a pre-count race (report
+            // "empty" while a record is mid-flight). flushSpool alone is the
+            // source of truth — it returns { flushed: 0, remaining: 0 } when
+            // there is genuinely nothing to do.
+            const { flushed, remaining } = await flushCaptureSpool(client);
+            if (flushed === 0 && remaining === 0) {
+              api.logger.info(
+                "Nothing to dream — the capture spool is empty.",
+              );
+              return;
+            }
+            api.logger.info(
+              `Dream complete: uploaded ${flushed} capture(s)` +
+                (remaining > 0
+                  ? `, ${remaining} still pending (run 'membase dream' again to retry).`
+                  : "."),
+            );
+          } catch (error) {
+            api.logger.error(
+              "Dream failed:",
               error instanceof Error ? error.message : String(error),
             );
           }
