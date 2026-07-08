@@ -127,6 +127,22 @@ const lifecycleByUrl = new Map(); // run the live lifecycle once per endpoint
 const cleanupTargets = []; // { sentinel, project? }
 const registerCleanup = (sentinel, project) => cleanupTargets.push({ sentinel, project });
 
+// The API enforces a MONTHLY search quota on OAuth/MCP GET /memory/search
+// (free plan: 1000/month, apps/api config free_search_monthly_limit; Pro
+// unlimited). Once the ci-e2e account exhausts it, every search returns 403
+// ("Monthly MCP/API search quota reached") until the period resets — which
+// this suite's 5s recall polls did on 2026-07-07 21:06 after Tier 3 started
+// auto-running per PR. Without this guard each recall poll then burns its
+// full 180s SLO on guaranteed-403s and the job dies at timeout-minutes with
+// a misleading "not searchable" story. Detect the quota once, stop every
+// remaining poll immediately, and fail with the real reason instead.
+let searchQuotaHit = false;
+const SEARCH_QUOTA_RE = /search quota reached/i;
+const noteQuota = (raw, status) => {
+  if (status === 403 || SEARCH_QUOTA_RE.test(raw ?? "")) searchQuotaHit = true;
+  return searchQuotaHit;
+};
+
 for (const client of CLIENTS) {
   const server = readServer(client.config);
   const transport = server?.url ? "http" : server?.command ? "stdio" : "unknown";
@@ -161,6 +177,13 @@ for (const client of CLIENTS) {
           await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
           await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
           await cleanupTier3Memories(ctx); // Tier 3 (delete this run's own test memories)
+          if (searchQuotaHit) {
+            ctx.checks.push(check(
+              "staging: monthly MCP/API search quota not exhausted",
+              false,
+              "GET /memory/search returned 403 (quota reached) — every recall/cleanup result above is inconclusive. Fix the ci-e2e ACCOUNT (plan=pro or FREE_SEARCH_MONTHLY_LIMIT on api-staging), don't debug this suite."
+            ));
+          }
         }
         lifecycleByUrl.set(url, shared);
       }
@@ -482,6 +505,7 @@ async function evalFilters(entry, url, roles) {
   while (true) {
     scoped = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA }), 72);
     if ((scoped.raw ?? "").includes(sentinelA)) break;
+    if (noteQuota(scoped.raw, scoped.status)) break;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
   }
@@ -619,6 +643,7 @@ async function evalHandoff(entry) {
       const res = await authedFetch(
         `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`,
       );
+      if (noteQuota("", res.status)) break;
       if (res.status < 400) {
         const data = await res.json();
         const episodes = data?.episodes ?? [];
@@ -701,6 +726,7 @@ async function evalHandoffReplace(entry) {
         const res = await authedFetch(
           `/memory/search?query=${encodeURIComponent(HANDOFF_TAG)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`
         );
+        if (noteQuota("", res.status)) return null;
         if (res.status < 400) {
           const data = await res.json();
           const episodes = data?.episodes ?? [];
@@ -760,6 +786,7 @@ async function evalHandoffReplace(entry) {
   while (true) {
     const stillA = await findEpisode(sentinelA);
     const stillB = await findEpisode(sentinelB);
+    if (searchQuotaHit) break; // null results are quota 403s, not real absence
     aGone = !stillA;
     bPresent = Boolean(stillB);
     if (aGone && bPresent) break;
@@ -847,6 +874,7 @@ async function evalCaptureSourceTags(entry) {
     );
     raw = res.status < 400 ? await res.text() : "";
     if (raw.includes(sentinelFor(primary))) { ownFound = true; break; }
+    if (noteQuota("", res.status)) break;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
   }
@@ -898,6 +926,7 @@ async function evalLiveDeep(entry, url, roles) {
       timeToRecallMs = Math.round(now() - t0);
       break;
     }
+    if (noteQuota(s.raw, s.status)) break; // 403s never index; don't burn the SLO
     attempt++;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
@@ -1058,6 +1087,7 @@ async function evalNegative(entry, url, roles) {
         name: roles.search.name, args: argsFor(roles.search, { primary: sessionSentinel }, { project: negProject })
       });
       if ((s.raw ?? "").includes(sessionSentinel)) { landedUnderThisToken = true; break; }
+      if (noteQuota(s.raw, s.status)) break;
       if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
       await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
     }
@@ -1125,6 +1155,7 @@ const restSearch = async (query, project) => {
   const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
     (project ? `&project=${encodeURIComponent(project)}` : "");
   const res = await restFetch(`/memory/search?${qs}`);
+  noteQuota("", res.status);
   if (res.status >= 400) return [];
   return (await res.json())?.episodes ?? [];
 };
