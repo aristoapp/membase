@@ -123,7 +123,13 @@ jobs:
        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
                 github.event.pull_request.author_association))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 15m, not 10m: Tier 3 has several recall-polling loops each budgeted up to
+    # QUALITY_MAX_RECALL_MS (180s, since b5d59c0 loosened it for variable staging
+    # indexing). When staging indexing is slow, multiple loops can each near
+    # that budget and the run passed 10m — cancelled mid-flight (a false CI
+    # failure, not a test failure). 15m absorbs the worst case; a genuine hang
+    # still trips it.
+    timeout-minutes: 15
     env:
       MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
       MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
