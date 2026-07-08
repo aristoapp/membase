@@ -50,6 +50,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     login.add_argument("--port", type=int, default=8765)
 
     sub.add_parser("status", help="Check Membase API connectivity")
+    sub.add_parser(
+        "dream", help="Upload captures that failed to sync and are waiting on disk"
+    )
     sub.add_parser("logout", help="Remove stored tokens")
     resync = sub.add_parser("resync", help="Rebuild mirror index from MEMORY.md")
     resync.add_argument(
@@ -187,6 +190,42 @@ def _cmd_status(config_path: Path) -> int:
     except MembaseApiError as error:
         print(f"Membase connection failed: {error}", file=sys.stderr)
         return 1
+    finally:
+        client.close()
+
+
+def _cmd_dream(config_path: Path) -> int:
+    """Upload captures that failed to sync and are waiting on disk (ADR 0005)."""
+    from .spool import default_capture_spool
+
+    spool = default_capture_spool()
+    pending = spool.pending_count()
+    if pending == 0:
+        print("Nothing to dream — the capture spool is empty.")
+        return 0
+
+    client = _build_client_from_config(config_path)
+    try:
+        if not client.is_authenticated():
+            print("Not logged in. Run: hermes-membase login", file=sys.stderr)
+            return 1
+
+        def _send(record: dict[str, Any]) -> None:
+            # ingest raises on failure; a normal return counts as success.
+            client.ingest(
+                record["content"],
+                display_summary=record.get("display_summary"),
+                project=record.get("project"),
+            )
+
+        flushed, remaining = spool.flush(_send)
+        tail = (
+            f", {remaining} still pending (retry later)."
+            if remaining > 0
+            else "."
+        )
+        print(f"Dream complete: uploaded {flushed} capture(s){tail}")
+        return 0
     finally:
         client.close()
 
@@ -388,6 +427,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_login(args, config_path)
     if args.command == "status":
         return _cmd_status(config_path)
+    if args.command == "dream":
+        return _cmd_dream(config_path)
     if args.command == "logout":
         return _cmd_logout(config_path)
     if args.command == "resync":
