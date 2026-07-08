@@ -168,15 +168,23 @@ for (const client of CLIENTS) {
           // the account saturated forever. Sweeping first also overlaps the
           // Tier 2 write's async indexing, so it costs little wall-clock.
           await sweepOldTestMemories(ctx);
-          await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
-          await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
-          await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
-          await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
-          await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
-          await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
-          await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
-          await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
-          await cleanupTier3Memories(ctx); // Tier 3 (delete this run's own test memories)
+          // finally guarantees cleanupTier3Memories runs even if one of these
+          // throws uncaught — otherwise an exception mid-sequence would skip
+          // straight past cleanup and leak every sentinel already registered
+          // this run. (Still can't survive the CI job itself being killed on
+          // timeout-minutes/SIGKILL — nothing in-process can.)
+          try {
+            await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
+            await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
+            await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
+            await evalFilters(ctx, url, fast.roles); // Tier 3 (search_memory/search_wiki filter params)
+            await evalHandoff(ctx); // Tier 3 (handoff store→recall round-trip, REST path)
+            await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
+            await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
+            await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
+          } finally {
+            await cleanupTier3Memories(ctx); // Tier 3 (delete this run's own test memories)
+          }
           if (searchQuotaHit) {
             ctx.checks.push(check(
               "staging: monthly MCP/API search quota not exhausted",
