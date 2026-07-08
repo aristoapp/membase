@@ -60,6 +60,24 @@ describe("failure-path spool", () => {
     const raw = readFileSync(spoolFile(), "utf-8");
     expect(raw).not.toContain(secretValue);
   });
+
+  test("returns true when persisted, false when the spool declines a dup", () => {
+    const content = "a captured turn that the spool will accept first time";
+    expect(spoolFailedCapture(content)).toBe(true);
+    // Same content + same (missing) sessionId → capture_id dedup → declined. The
+    // caller relies on this false to keep the RAM copy instead of dropping it.
+    expect(spoolFailedCapture(content)).toBe(false);
+    expect(getCaptureSpool().pendingSpoolCount()).toBe(1);
+  });
+
+  test("identical content on different channels does not collide", () => {
+    const content = "the same reminder text sent in two different channels here";
+    expect(spoolFailedCapture(content, "channel-a")).toBe(true);
+    expect(spoolFailedCapture(content, "channel-b")).toBe(true);
+    // Without the channelKey→sessionId threading both would hash to
+    // "unknown:..." and the second would be dropped.
+    expect(getCaptureSpool().pendingSpoolCount()).toBe(2);
+  });
 });
 
 describe("dream flush", () => {

@@ -1,8 +1,9 @@
 # ADR 0005 — Dreaming for OpenClaw & Hermes (failure-path disk spool + flush command)
 
-Status: proposed (2026-07-07) · Extends Pillar 3 (dreaming) from the three
-disk-spool clients (Claude/Cursor/Codex) to the two in-process hosts. Builds on
-ADR 0002 (shared capture-core; "don't force one abstraction over the hosts").
+Status: DR-1 accepted (2026-07-07, OpenClaw shipped) · DR-2 proposed (Hermes) ·
+Extends Pillar 3 (dreaming) from the three disk-spool clients
+(Claude/Cursor/Codex) to the two in-process hosts. Builds on ADR 0002 (shared
+capture-core; "don't force one abstraction over the hosts").
 
 ## Goal
 

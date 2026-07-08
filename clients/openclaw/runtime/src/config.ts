@@ -20,7 +20,13 @@ export const DEFAULT_TOKEN_FILE_PATH = join(
 // extensions/). MEMBASE_DATA_DIR overrides it, matching the other clients.
 export function membaseStateDir(): string {
   const override = process.env.MEMBASE_DATA_DIR?.trim();
-  if (override) return override;
+  if (override) {
+    // Expand a leading ~/ so an override like `~/foo` doesn't create a literal
+    // `~` directory — matches the Claude client's config handling.
+    return override.startsWith("~/")
+      ? join(homedir(), override.slice(2))
+      : override;
+  }
   return join(homedir(), ".openclaw", "membase");
 }
 

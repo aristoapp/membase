@@ -24,13 +24,23 @@ export function getCaptureSpool(): CaptureSpool {
   return cached;
 }
 
-/** Persist a failed capture batch to disk so a restart can't lose it. */
-export function spoolFailedCapture(content: string): void {
-  getCaptureSpool().enqueueCapture({
-    capture_kind: "conversation",
-    content,
-    metadata: { source: "openclaw", capture_kind: "conversation" },
-  });
+/**
+ * Persist a failed capture batch to disk so a restart can't lose it. Returns
+ * true only if the record actually reached disk — enqueueCapture returns null
+ * on a dedup hit or a lock timeout, and the caller must NOT drop its RAM copy
+ * in that case (else the batch is lost from both places). `channelKey` is
+ * threaded as the sessionId so identical text from two channels doesn't collide
+ * on the capture_id hash (which falls back to "unknown" without it).
+ */
+export function spoolFailedCapture(content: string, channelKey?: string): boolean {
+  return (
+    getCaptureSpool().enqueueCapture({
+      sessionId: channelKey,
+      capture_kind: "conversation",
+      content,
+      metadata: { source: "openclaw", capture_kind: "conversation" },
+    }) !== null
+  );
 }
 
 /**

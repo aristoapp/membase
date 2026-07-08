@@ -100,10 +100,11 @@ path is a crash-loss window, so it's a tracked enhancement, not a settled n/a.
 on all five (Cursor/Codex shipped via PRs C/D). Pillar 2 (handoff) is Done —
 file-based on the three spawned-process clients (Claude/Cursor/Codex),
 cloud-only-by-choice on OpenClaw/Hermes (continuation still works via cloud
-recall). Pillar 3 (dreaming) is Done on the three disk-spool clients; on
-OpenClaw/Hermes their capture never reaches disk, so a crash/restart is a
-**data-loss window** — closing it (failure-path disk spool + a `dream` flush)
-is planned in **ADR 0005** (OpenClaw DR-1, Hermes DR-2). See each pillar's table.
+recall). Pillar 3 (dreaming) is Done on the three disk-spool clients and now on
+OpenClaw (failure-path disk spool + `membase dream`, ADR 0005 DR-1). Hermes is
+the last gap: its capture never reaches disk, so a crash/restart is a
+**data-loss window** — closing it (Python disk spool + a `dream` flush) is
+planned in **ADR 0005** (Hermes DR-2). See each pillar's table.
 
 **Engineering principle (applies to all three):** use officially documented
 platform features (hooks, rules, custom prompts, provider slots). Do not
@@ -220,15 +221,15 @@ half of capture.
 | Claude Code | Done | `/membase:dream` command — flush `pending.jsonl`, then optional consolidation sweep (PR E `cf62efe`, protocol fix #35) |
 | Cursor | Done | `skills/dream/SKILL.md` — same flush-then-sweep over the shared spool |
 | Codex | Done | `runtime/prompts/dream.md` — same |
-| OpenClaw | Planned (ADR 0005, DR-1) | Today: capture buffers in-memory (`messageBuffers` Map), flush failures **retained in RAM** — a gateway restart loses them, and there is no disk spool for a dream flush to target. Plan: route failed uploads to the shared capture-core disk spool + a `dream` CLI flush (TS reuse, no new dep). |
+| OpenClaw | Done (ADR 0005, DR-1) | Capture still buffers in-memory (`messageBuffers` Map), but a flush failure now routes the batch to the shared capture-core disk spool instead of RAM, so a gateway restart no longer loses it. `membase dream` (plus a best-effort startup drain) flushes the spool. TS reuse of `createCaptureSpool`, no new dep. |
 | Hermes | Planned (ADR 0005, DR-2) | Today: capture uses a bounded in-process `queue.Queue` that **drops on failure/overflow**; nothing persists. Plan: a Python disk spool (golden-vector-bound to the TS spool) + `hermes-membase dream` subcommand. Heavier than OpenClaw (Python port), so a separate step. |
 
-The split is architectural: the three spawned-process clients
+The split was architectural: the three spawned-process clients
 (Claude/Cursor/Codex) persist failed captures to a **disk spool**, so a crash
 loses nothing and dreaming later uploads the backlog. The two long-lived
-in-process hosts keep unsent captures in **RAM only**, so there is nothing on
-disk for a dream sweep to act on — but a crash/restart drops them. Dreaming (the
-sweep) is therefore complete for every client that has a disk spool; giving
-OpenClaw/Hermes the same disk-persist layer (closing the loss window, then
-adding a sweep) is the natural next step, tracked as a post-launch enhancement,
-not a shipped-and-forgotten "n/a".
+in-process hosts kept unsent captures in **RAM only**, so a crash/restart
+dropped them. ADR 0005 closes that gap by adding a failure-path disk spool to
+the RAM model (not replacing it): **OpenClaw now has it** (DR-1, this change),
+leaving **Hermes** as the last client whose failed captures still live in RAM
+only (DR-2, a separate Python port) — tracked, not a shipped-and-forgotten
+"n/a".
