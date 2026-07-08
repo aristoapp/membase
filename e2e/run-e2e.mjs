@@ -156,10 +156,56 @@ const SEARCH_QUOTA_RE = /search quota reached/i;
 // this — and, since it's sticky/never reset, no longer poisons every later
 // eval function's poll loop in the same run with a false "quota reached"
 // diagnosis for the rest of Tier 3.
-const noteQuota = (raw, status) => {
-  if (status >= 400 && SEARCH_QUOTA_RE.test(raw ?? "")) searchQuotaHit = true;
+//
+// toolError: the MCP transport relays a backend 403 as HTTP *200* whose
+// result carries isError:true (see toolErrored below) — status alone never
+// fires there, which is exactly the evalLiveDeep recall-poll path the
+// 2026-07-07 incident burned. MCP call sites pass toolErrored(r); the
+// error gate (status OR toolError) still keeps quota text inside a healthy
+// search RESULT from tripping the flag.
+const noteQuota = (raw, status, toolError = false) => {
+  if ((status >= 400 || toolError) && SEARCH_QUOTA_RE.test(raw ?? "")) searchQuotaHit = true;
   return searchQuotaHit;
 };
+
+// REST helpers for the cleanup/sweep machinery below AND the handoff/capture
+// evals. Declared here, BEFORE the top-level run loop: `const` bindings do
+// not hoist, and the (hoisted) functions that use them are awaited from that
+// loop — declared any later they'd be in the temporal dead zone at call time
+// and every use would throw a swallowed ReferenceError, silently disabling
+// cleanup entirely.
+const restFetch = (path, init) =>
+  fetch(`${REST_API_BASE.replace(/\/$/, "")}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${TOKEN}`,
+      "content-type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+const restSearch = async (query, project) => {
+  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
+    (project ? `&project=${encodeURIComponent(project)}` : "");
+  const res = await restFetch(`/memory/search?${qs}`);
+  if (res.status >= 400) {
+    noteQuota(await res.text(), res.status);
+    return [];
+  }
+  return (await res.json())?.episodes ?? [];
+};
+// Returns the HTTP status so call sites needing a detail string (see
+// evalHandoffReplace) don't have to re-implement the DELETE.
+const restDeleteEpisode = async (uuid) => {
+  const del = await restFetch(`/memory/episodes/${encodeURIComponent(uuid)}`, { method: "DELETE" });
+  return del.status;
+};
+const SWEEP_MAX_DELETES = 40; // bound sweep time per run; backlog drains across runs
+const SWEEP_MIN_AGE_MS = 60 * 60 * 1000; // never touch a concurrent run's fresh sentinels
+// Every e2e sentinel embeds its Date.now() stamp; the sweep's age gate reads
+// it back out of the bundle text (e.g. membase-e2e-<ts>-…, e2e-capture-cursor-<ts>).
+const SENTINEL_TS_RE = /(?:membase-)?e2e-(?:[a-z-]+-)?(\d{13})\b/g;
+const CLEANUP_SEARCH_RETRIES = 3;
+const CLEANUP_SEARCH_RETRY_DELAY_MS = 3000;
 
 for (const client of CLIENTS) {
   const server = readServer(client.config);
@@ -203,12 +249,16 @@ for (const client of CLIENTS) {
             await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
           }
         } finally {
-          // Runs after Tier 2 alone (--live without --tier3) too: evalLiveFast
-          // registers a cleanup sentinel unconditionally, and this was
-          // previously only reachable from inside the TIER3 branch — every
-          // Tier-2-only CI run (e2e-tier2-staging, on every push/PR) leaked
-          // one sentinel per run with nothing to ever drain it.
-          await cleanupTier3Memories(ctx);
+          // Tier 3 only. A Tier-2-only run (--live without --tier3, i.e.
+          // e2e-tier2-staging on every push/PR) reaches here ~2s after
+          // evalLiveFast's write, but write→searchable is ~26-60s on staging —
+          // a search-based cleanup structurally cannot find the sentinel yet,
+          // so it would burn up to 4 quota-counted searches per push for a
+          // guaranteed miss (and a quota 403 here would fail the merge gate
+          // that pass/fail already decided). Tier-2 sentinels are drained by
+          // the next Tier 3 run's age-gated sweep instead (the
+          // "[e2e-test] secret launch codeword" sweep query covers them).
+          if (TIER3) await cleanupTier3Memories(ctx);
         }
         if (searchQuotaHit) {
           ctx.checks.push(check(
@@ -540,10 +590,16 @@ async function evalFilters(entry, url, roles) {
   while (true) {
     scoped = await call(roles.search.name, argsFor(roles.search, { primary: sentinelA }, { project: projectA }), 72);
     if ((scoped.raw ?? "").includes(sentinelA)) break;
-    if (noteQuota(scoped.raw, scoped.status)) break;
+    if (noteQuota(scoped.raw, scoped.status, toolErrored(scoped))) break;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
   }
+  // Quota-dead searches make every check below meaningless — worse, the
+  // absence-style ones (outsideWindow, sources) would falsely PASS because a
+  // quota error body never contains the sentinel (the documented
+  // absence-pass + presence-fail = swallowed-403s anti-pattern). Stop here;
+  // the run-level quota check reports the real reason.
+  if (searchQuotaHit) return;
   const foundOwn = (scoped.raw ?? "").includes(sentinelA);
   entry.checks.push(check(
     `filters: project=A search finds A's memory within ${QUALITY_MAX_RECALL_MS / 1000}s`,
@@ -623,22 +679,12 @@ async function evalFilters(entry, url, roles) {
 // nothing. This test asserts that contract end-to-end against the live REST
 // path the runtime actually uses. Runs once per endpoint under --tier3.
 async function evalHandoff(entry) {
-  const restBase = REST_API_BASE.replace(/\/$/, "");
   const stamp = `e2e-handoff-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const summary = `Handoff round-trip sentinel ${stamp}. (safe to delete)`;
   // Per-run project, like the runtime's own project-scoped handoff recall:
   // unscoped, this recall competes with every past run's [HANDOFF] leftovers
   // (and evalHandoffReplace's) and falls off the top-N cliff as they pile up.
   const project = stamp;
-  const authedFetch = (path, init) =>
-    fetch(`${restBase}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
 
   // Store the way the runtime does: tag lives on BOTH content and
   // display_summary so the derived episode name carries it.
@@ -651,7 +697,7 @@ async function evalHandoff(entry) {
   };
   let stored = false;
   try {
-    const res = await authedFetch("/memory/ingest", {
+    const res = await restFetch("/memory/ingest", {
       method: "POST",
       body: JSON.stringify(ingestBody),
     });
@@ -675,25 +721,18 @@ async function evalHandoff(entry) {
   let recalled = null;
   while (now() - t0 < QUALITY_MAX_RECALL_MS) {
     try {
-      const res = await authedFetch(
-        `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`,
-      );
-      if (res.status >= 400) {
-        if (noteQuota(await res.text(), res.status)) break;
-      } else {
-        const data = await res.json();
-        const episodes = data?.episodes ?? [];
-        recalled = episodes.find((b) => {
-          const name = b?.episode?.name ?? "";
-          const sum = b?.episode?.summary ?? "";
-          return (
-            (name.trimStart().startsWith(HANDOFF_TAG) ||
-              sum.trimStart().startsWith(HANDOFF_TAG)) &&
-            (name.includes(stamp) || sum.includes(stamp))
-          );
-        });
-        if (recalled) break;
-      }
+      const episodes = await restSearch(`${HANDOFF_TAG} session handoff summary`, project);
+      recalled = episodes.find((b) => {
+        const name = b?.episode?.name ?? "";
+        const sum = b?.episode?.summary ?? "";
+        return (
+          (name.trimStart().startsWith(HANDOFF_TAG) ||
+            sum.trimStart().startsWith(HANDOFF_TAG)) &&
+          (name.includes(stamp) || sum.includes(stamp))
+        );
+      });
+      if (recalled) break;
+      if (searchQuotaHit) break;
     } catch {
       // transient; keep polling to the deadline
     }
@@ -723,20 +762,9 @@ async function evalHandoff(entry) {
 // deleteEpisode/deleteMemory call. This test drives that exact contract:
 // ingest A -> search finds A's episode.uuid -> DELETE that uuid -> ingest B
 // (replacement) -> search confirms A is gone and B is present. Scoped to a
-// unique project tag so it never collides with evalHandoff's untagged run or
-// real handoffs on the test account.
+// unique project tag so it never collides with evalHandoff's (separately
+// project-tagged) run or real handoffs on the test account.
 async function evalHandoffReplace(entry) {
-  const restBase = REST_API_BASE.replace(/\/$/, "");
-  const authedFetch = (path, init) =>
-    fetch(`${restBase}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-
   const stamp = Date.now();
   const project = `e2e-handoff-replace-${stamp}`;
   const sentinelA = `e2e-handoff-replace-a-${stamp}`;
@@ -750,7 +778,7 @@ async function evalHandoffReplace(entry) {
       channel: "api",
       project,
     };
-    const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+    const res = await restFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
     return res.status < 400;
   };
 
@@ -759,21 +787,13 @@ async function evalHandoffReplace(entry) {
     const t0 = now();
     while (true) {
       try {
-        const res = await authedFetch(
-          `/memory/search?query=${encodeURIComponent(HANDOFF_TAG)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`
-        );
-        if (res.status >= 400) {
-          if (noteQuota(await res.text(), res.status)) return null;
-        } else {
-          const data = await res.json();
-          const episodes = data?.episodes ?? [];
-          const hit = episodes.find((b) => {
-            const name = b?.episode?.name ?? "";
-            const sum = b?.episode?.summary ?? "";
-            return name.includes(sentinel) || sum.includes(sentinel);
-          });
-          if (hit) return hit;
-        }
+        const hit = (await restSearch(HANDOFF_TAG, project)).find((b) => {
+          const name = b?.episode?.name ?? "";
+          const sum = b?.episode?.summary ?? "";
+          return name.includes(sentinel) || sum.includes(sentinel);
+        });
+        if (hit) return hit;
+        if (searchQuotaHit) return null; // quota 403s never index; don't poll them
       } catch {
         // transient; keep polling to the deadline
       }
@@ -809,9 +829,9 @@ async function evalHandoffReplace(entry) {
   let deleteOk = false;
   let deleteDetail = "";
   try {
-    const del = await authedFetch(`/memory/episodes/${encodeURIComponent(episodeA.episode.uuid)}`, { method: "DELETE" });
-    deleteOk = del.status === 204;
-    deleteDetail = deleteOk ? "204 No Content" : `HTTP ${del.status}`;
+    const delStatus = await restDeleteEpisode(episodeA.episode.uuid);
+    deleteOk = delStatus === 204;
+    deleteDetail = deleteOk ? "204 No Content" : `HTTP ${delStatus}`;
   } catch (err) {
     deleteDetail = String(err?.message ?? err);
   }
@@ -840,6 +860,11 @@ async function evalHandoffReplace(entry) {
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
   }
+  // On a quota break aGone/bPresent were never observed (both still false) —
+  // pushing the checks would fabricate "STALE: A still searchable" and
+  // "B not found — search regressed" for a quota outage. The run-level quota
+  // check reports the real reason instead.
+  if (searchQuotaHit) return;
   entry.checks.push(check(
     "handoff replace: old handoff (A) no longer searchable after delete",
     aGone,
@@ -866,17 +891,6 @@ async function evalHandoffReplace(entry) {
 // harness can verify. Client-side hook firing itself needs a live per-app
 // run (see docs/implementation-overview.html §7.5-style gap notes).
 async function evalCaptureSourceTags(entry) {
-  const restBase = REST_API_BASE.replace(/\/$/, "");
-  const authedFetch = (path, init) =>
-    fetch(`${restBase}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${TOKEN}`,
-        "content-type": "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
-
   const stamp = Date.now();
   const project = `e2e-capture-src-${stamp}`;
   const sentinelFor = (source) => `e2e-capture-${source}-${stamp}`;
@@ -891,7 +905,7 @@ async function evalCaptureSourceTags(entry) {
       project,
     };
     try {
-      const res = await authedFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
+      const res = await restFetch("/memory/ingest", { method: "POST", body: JSON.stringify(body) });
       results[source] = res.status < 400;
     } catch {
       results[source] = false;
@@ -925,12 +939,20 @@ async function evalCaptureSourceTags(entry) {
   let ownFound = false;
   let raw = "";
   while (true) {
-    const res = await authedFetch(
+    const res = await restFetch(
       `/memory/search?query=${encodeURIComponent(primarySentinel)}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
     );
-    raw = await res.text();
-    if (raw.includes(primarySentinel)) { ownFound = true; break; }
-    if (res.status >= 400 && noteQuota(raw, res.status)) break;
+    const body = await res.text();
+    if (res.status >= 400) {
+      // Never sentinel-match an ERROR body: the sentinel sits verbatim in the
+      // request URL, so a 4xx/5xx that echoes the request (validation error,
+      // WAF/proxy page) would force a false PASS here and in the isolation
+      // check below. Error bodies feed the quota guard only.
+      if (noteQuota(body, res.status)) break;
+    } else {
+      raw = body;
+      if (raw.includes(primarySentinel)) { ownFound = true; break; }
+    }
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
   }
@@ -982,7 +1004,7 @@ async function evalLiveDeep(entry, url, roles) {
       timeToRecallMs = Math.round(now() - t0);
       break;
     }
-    if (noteQuota(s.raw, s.status)) break; // 403s never index; don't burn the SLO
+    if (noteQuota(s.raw, s.status, toolErrored(s))) break; // 403s never index; don't burn the SLO
     attempt++;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
@@ -1143,7 +1165,7 @@ async function evalNegative(entry, url, roles) {
         name: roles.search.name, args: argsFor(roles.search, { primary: sessionSentinel }, { project: negProject })
       });
       if ((s.raw ?? "").includes(sessionSentinel)) { landedUnderThisToken = true; break; }
-      if (noteQuota(s.raw, s.status)) break;
+      if (noteQuota(s.raw, s.status, toolErrored(s))) break;
       if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
       await new Promise((res) => setTimeout(res, RECALL_POLL_INTERVAL_MS));
     }
@@ -1192,35 +1214,9 @@ async function evalNegative(entry, url, roles) {
 // the same call evalHandoffReplace already drives — plus an age-gated sweep
 // that drains leftovers from runs before this fix existed. Cleanup is entirely
 // best-effort: a miss warns, never fails; pass/fail was decided above.
-const SWEEP_MAX_DELETES = 40; // bound sweep time per run; backlog drains across runs
-const SWEEP_MIN_AGE_MS = 60 * 60 * 1000; // never touch a concurrent run's fresh sentinels
-// Every e2e sentinel embeds its Date.now() stamp; the sweep's age gate reads
-// it back out of the bundle text (e.g. membase-e2e-<ts>-…, e2e-capture-cursor-<ts>).
-const SENTINEL_TS_RE = /(?:membase-)?e2e-(?:[a-z-]+-)?(\d{13})\b/g;
-
-const restFetch = (path, init) =>
-  fetch(`${REST_API_BASE.replace(/\/$/, "")}${path}`, {
-    ...init,
-    headers: {
-      authorization: `Bearer ${TOKEN}`,
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-const restSearch = async (query, project) => {
-  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
-    (project ? `&project=${encodeURIComponent(project)}` : "");
-  const res = await restFetch(`/memory/search?${qs}`);
-  if (res.status >= 400) {
-    noteQuota(await res.text(), res.status);
-    return [];
-  }
-  return (await res.json())?.episodes ?? [];
-};
-const restDeleteEpisode = async (uuid) => {
-  const del = await restFetch(`/memory/episodes/${encodeURIComponent(uuid)}`, { method: "DELETE" });
-  return del.status === 204;
-};
+// (The consts/helpers these functions use — restSearch, SWEEP_*, CLEANUP_* —
+// are declared near noteQuota at the top, BEFORE the run loop that awaits
+// these hoisted functions; const initializers don't hoist with them.)
 
 // Sweep leftovers from PAST runs (top-20 per sentinel family per run). Only
 // episodes whose embedded stamps are ALL older than the age gate are deleted —
@@ -1239,13 +1235,14 @@ async function sweepOldTestMemories(entry) {
   let deleted = 0;
   try {
     for (const q of sweepQueries) {
-      if (deleted >= SWEEP_MAX_DELETES) break;
+      // First quota 403 proves every remaining sweep search is doomed too.
+      if (searchQuotaHit || deleted >= SWEEP_MAX_DELETES) break;
       for (const b of await restSearch(q)) {
         if (deleted >= SWEEP_MAX_DELETES) break;
         const stamps = [...JSON.stringify(b).matchAll(SENTINEL_TS_RE)].map((m) => Number(m[1]));
         if (!stamps.length || !b?.episode?.uuid) continue;
         if (stamps.some((ts) => Date.now() - ts < SWEEP_MIN_AGE_MS)) continue;
-        if (await restDeleteEpisode(b.episode.uuid)) deleted++;
+        if (await restDeleteEpisode(b.episode.uuid) === 204) deleted++;
       }
     }
   } catch {
@@ -1263,22 +1260,24 @@ async function sweepOldTestMemories(entry) {
 // written to dodge elsewhere. A few short retries (well under the full 180s
 // SLO, since indexing has had the whole rest of Tier 3 to complete) absorb
 // that without materially slowing the run down.
-const CLEANUP_SEARCH_RETRIES = 3;
-const CLEANUP_SEARCH_RETRY_DELAY_MS = 3000;
 async function cleanupTier3Memories(entry) {
   let deleted = 0;
   const missed = [];
   for (const { sentinel, project } of cleanupTargets.splice(0)) {
+    // Quota-dead: every search (and retry sleep) below is guaranteed doomed —
+    // ~4 requests + 9s per sentinel × ~11 sentinels of pure waste. Record the
+    // miss and move on; a future run's sweep drains these once quota resets.
+    if (searchQuotaHit) { missed.push(sentinel); continue; }
     try {
       let own = [];
       for (let attempt = 0; attempt <= CLEANUP_SEARCH_RETRIES; attempt++) {
         own = (await restSearch(sentinel, project)).filter((b) => JSON.stringify(b).includes(sentinel));
-        if (own.length || attempt === CLEANUP_SEARCH_RETRIES) break;
+        if (own.length || searchQuotaHit || attempt === CLEANUP_SEARCH_RETRIES) break;
         await new Promise((res) => setTimeout(res, CLEANUP_SEARCH_RETRY_DELAY_MS));
       }
       if (!own.length) { missed.push(sentinel); continue; }
       for (const b of own) {
-        if (b?.episode?.uuid && await restDeleteEpisode(b.episode.uuid)) deleted++;
+        if (b?.episode?.uuid && await restDeleteEpisode(b.episode.uuid) === 204) deleted++;
       }
     } catch {
       missed.push(sentinel);
