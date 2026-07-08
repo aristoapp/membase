@@ -123,9 +123,21 @@ const results = [];
 const lifecycleByUrl = new Map(); // run the live lifecycle once per endpoint
 
 // Every Tier 3 write registers its unique sentinel here so
-// cleanupTier3Memories can delete it at the end of the run.
+// cleanupTier3Memories can delete it at the end of the run. Register the
+// moment a write is confirmed stored — never gate registration behind later
+// logic (a second write, a delete-and-confirm dance) succeeding, or a write
+// that DID land server-side but whose later step failed leaks with no record
+// of it anywhere.
 const cleanupTargets = []; // { sentinel, project? }
 const registerCleanup = (sentinel, project) => cleanupTargets.push({ sentinel, project });
+// For a write a test already deletes inline as part of its own assertion
+// (e.g. replace-on-store): unregister on confirmed success so
+// cleanupTier3Memories doesn't re-search for something already gone, but
+// leave it registered if the inline delete never confirmed.
+const unregisterCleanup = (sentinel) => {
+  const i = cleanupTargets.findIndex((t) => t.sentinel === sentinel);
+  if (i !== -1) cleanupTargets.splice(i, 1);
+};
 
 // The API enforces a MONTHLY search quota on OAuth/MCP GET /memory/search
 // (free plan: 1000/month, apps/api config free_search_monthly_limit; Pro
@@ -138,8 +150,14 @@ const registerCleanup = (sentinel, project) => cleanupTargets.push({ sentinel, p
 // remaining poll immediately, and fail with the real reason instead.
 let searchQuotaHit = false;
 const SEARCH_QUOTA_RE = /search quota reached/i;
+// Gate on the response BODY, not the bare status: every 403 call site now
+// passes the actual response text, so a 403 from something other than quota
+// exhaustion (an auth hiccup, a WAF block, a real regression) no longer trips
+// this — and, since it's sticky/never reset, no longer poisons every later
+// eval function's poll loop in the same run with a false "quota reached"
+// diagnosis for the rest of Tier 3.
 const noteQuota = (raw, status) => {
-  if (status === 403 || SEARCH_QUOTA_RE.test(raw ?? "")) searchQuotaHit = true;
+  if (status >= 400 && SEARCH_QUOTA_RE.test(raw ?? "")) searchQuotaHit = true;
   return searchQuotaHit;
 };
 
@@ -160,20 +178,21 @@ for (const client of CLIENTS) {
       if (!lifecycleByUrl.has(url)) {
         const shared = { checks: [], latency: {}, quality: {} };
         const ctx = { ...entry, ...shared, checks: shared.checks, latency: shared.latency, quality: shared.quality, sessionId: entry.sessionId };
-        const fast = await evalLiveFast(ctx, url); // Tier 2 (fast)
-        if (TIER3 && fast) {
-          // Sweep BEFORE the recall polls, not only after: a saturated poll
-          // burns its full SLO, the job hits timeout-minutes, and an
-          // end-of-run-only sweep would then never execute — leftovers keep
-          // the account saturated forever. Sweeping first also overlaps the
-          // Tier 2 write's async indexing, so it costs little wall-clock.
-          await sweepOldTestMemories(ctx);
-          // finally guarantees cleanupTier3Memories runs even if one of these
-          // throws uncaught — otherwise an exception mid-sequence would skip
-          // straight past cleanup and leak every sentinel already registered
-          // this run. (Still can't survive the CI job itself being killed on
-          // timeout-minutes/SIGKILL — nothing in-process can.)
-          try {
+        // finally guarantees cleanupTier3Memories runs even if evalLiveFast or
+        // any Tier 3 eval throws uncaught — otherwise an exception mid-sequence
+        // (or Tier 2 alone, since evalLiveFast registers its own sentinel too)
+        // would skip straight past cleanup and leak every sentinel already
+        // registered this run. (Still can't survive the CI job itself being
+        // killed on timeout-minutes/SIGKILL — nothing in-process can.)
+        try {
+          const fast = await evalLiveFast(ctx, url); // Tier 2 (fast)
+          if (TIER3 && fast) {
+            // Sweep BEFORE the recall polls, not only after: a saturated poll
+            // burns its full SLO, the job hits timeout-minutes, and an
+            // end-of-run-only sweep would then never execute — leftovers keep
+            // the account saturated forever. Sweeping first also overlaps the
+            // Tier 2 write's async indexing, so it costs little wall-clock.
+            await sweepOldTestMemories(ctx);
             await evalLiveDeep(ctx, url, fast.roles); // Tier 3 (deep quality/latency + gates)
             await evalContract(ctx, url, fast.tools); // Tier 3 (tool contract, basis: 7 shipped tools)
             await evalResources(ctx, url); // Tier 3 (MCP resources: membase://profile, membase://recent)
@@ -182,16 +201,21 @@ for (const client of CLIENTS) {
             await evalHandoffReplace(ctx); // Tier 3 (handoff replace-on-store: old handoff actually deleted)
             await evalCaptureSourceTags(ctx); // Tier 3 (hook-capture source tagging + isolation, REST path)
             await evalNegative(ctx, url, fast.roles); // Tier 3 (rejection behavior)
-          } finally {
-            await cleanupTier3Memories(ctx); // Tier 3 (delete this run's own test memories)
           }
-          if (searchQuotaHit) {
-            ctx.checks.push(check(
-              "staging: monthly MCP/API search quota not exhausted",
-              false,
-              "GET /memory/search returned 403 (quota reached) — every recall/cleanup result above is inconclusive. Fix the ci-e2e ACCOUNT (plan=pro or FREE_SEARCH_MONTHLY_LIMIT on api-staging), don't debug this suite."
-            ));
-          }
+        } finally {
+          // Runs after Tier 2 alone (--live without --tier3) too: evalLiveFast
+          // registers a cleanup sentinel unconditionally, and this was
+          // previously only reachable from inside the TIER3 branch — every
+          // Tier-2-only CI run (e2e-tier2-staging, on every push/PR) leaked
+          // one sentinel per run with nothing to ever drain it.
+          await cleanupTier3Memories(ctx);
+        }
+        if (searchQuotaHit) {
+          ctx.checks.push(check(
+            "staging: monthly MCP/API search quota not exhausted",
+            false,
+            "GET /memory/search returned 403 (quota reached) — every recall/cleanup result above is inconclusive. Fix the ci-e2e ACCOUNT (plan=pro or FREE_SEARCH_MONTHLY_LIMIT on api-staging), don't debug this suite."
+          ));
         }
         lifecycleByUrl.set(url, shared);
       }
@@ -499,12 +523,15 @@ async function evalFilters(entry, url, roles) {
   const sentinelB = `membase-e2e-filter-b-${stamp}`;
 
   const addA = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelA}` }, { project: projectA }), 70);
+  // Register each write for cleanup as soon as it's confirmed stored, not
+  // gated behind bothStored below — a partial failure (A stored, B errors, or
+  // vice versa) must not leak the one that DID land server-side.
+  if (!addA.payload?.error) registerCleanup(sentinelA, projectA);
   const addB = await call(roles.remember.name, argsFor(roles.remember, { primary: `[e2e-filter] ${sentinelB}` }, { project: projectB }), 71);
+  if (!addB.payload?.error) registerCleanup(sentinelB, projectB);
   const bothStored = !addA.payload?.error && !addB.payload?.error;
   entry.checks.push(check("filters: two project-tagged memories stored", bothStored, bothStored ? "stored" : `${errText(addA)} / ${errText(addB)}`));
   if (!bothStored) return;
-  registerCleanup(sentinelA, projectA);
-  registerCleanup(sentinelB, projectB);
 
   // Async indexing: poll project-scoped search for sentinelA up to the same
   // recall SLO used elsewhere, then check sentinelB is absent from that result.
@@ -651,8 +678,9 @@ async function evalHandoff(entry) {
       const res = await authedFetch(
         `/memory/search?query=${encodeURIComponent(`${HANDOFF_TAG} session handoff summary`)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`,
       );
-      if (noteQuota("", res.status)) break;
-      if (res.status < 400) {
+      if (res.status >= 400) {
+        if (noteQuota(await res.text(), res.status)) break;
+      } else {
         const data = await res.json();
         const episodes = data?.episodes ?? [];
         recalled = episodes.find((b) => {
@@ -734,8 +762,9 @@ async function evalHandoffReplace(entry) {
         const res = await authedFetch(
           `/memory/search?query=${encodeURIComponent(HANDOFF_TAG)}&limit=20&format=bundles&project=${encodeURIComponent(project)}`
         );
-        if (noteQuota("", res.status)) return null;
-        if (res.status < 400) {
+        if (res.status >= 400) {
+          if (noteQuota(await res.text(), res.status)) return null;
+        } else {
           const data = await res.json();
           const episodes = data?.episodes ?? [];
           const hit = episodes.find((b) => {
@@ -756,6 +785,10 @@ async function evalHandoffReplace(entry) {
   const storedA = await ingest(sentinelA);
   entry.checks.push(check("handoff replace: first ingest (A) accepted", storedA, storedA ? "stored" : "ingest rejected"));
   if (!storedA) return;
+  // Register now, unregister below only once the inline delete actually
+  // confirms 204 — if that delete fails, A stays registered and
+  // cleanupTier3Memories's finally-block pass still catches it.
+  registerCleanup(sentinelA, project);
 
   const episodeA = await findEpisode(sentinelA);
   entry.checks.push(check(
@@ -771,7 +804,7 @@ async function evalHandoffReplace(entry) {
   const storedB = await ingest(sentinelB);
   entry.checks.push(check("handoff replace: second ingest (B, the replacement) accepted", storedB, storedB ? "stored" : "ingest rejected"));
   if (!storedB) return;
-  registerCleanup(sentinelB, project); // A is deleted by the test itself below
+  registerCleanup(sentinelB, project);
 
   let deleteOk = false;
   let deleteDetail = "";
@@ -783,6 +816,12 @@ async function evalHandoffReplace(entry) {
     deleteDetail = String(err?.message ?? err);
   }
   entry.checks.push(check("handoff replace: DELETE /memory/episodes/{uuid} on the old handoff succeeds", deleteOk, deleteDetail));
+  // Only drop A from the cleanup registry once its delete is CONFIRMED (204) —
+  // leaving it registered on failure means cleanupTier3Memories's finally
+  // block still gets a chance to remove it, instead of A being silently
+  // orphaned with zero record of it anywhere the moment this inline delete
+  // fails (the original bug: A was never registered at all).
+  if (deleteOk) unregisterCleanup(sentinelA);
   if (!deleteOk) return;
 
   // Confirm the swap: A gone, B present. Poll since delete-then-reindex is
@@ -889,9 +928,9 @@ async function evalCaptureSourceTags(entry) {
     const res = await authedFetch(
       `/memory/search?query=${encodeURIComponent(primarySentinel)}&limit=20&sources=${primary}&project=${encodeURIComponent(project)}`
     );
-    raw = res.status < 400 ? await res.text() : "";
+    raw = await res.text();
     if (raw.includes(primarySentinel)) { ownFound = true; break; }
-    if (noteQuota("", res.status)) break;
+    if (res.status >= 400 && noteQuota(raw, res.status)) break;
     if (now() - t0 + RECALL_POLL_INTERVAL_MS > QUALITY_MAX_RECALL_MS) break;
     await new Promise((res2) => setTimeout(res2, RECALL_POLL_INTERVAL_MS));
   }
@@ -1172,8 +1211,10 @@ const restSearch = async (query, project) => {
   const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
     (project ? `&project=${encodeURIComponent(project)}` : "");
   const res = await restFetch(`/memory/search?${qs}`);
-  noteQuota("", res.status);
-  if (res.status >= 400) return [];
+  if (res.status >= 400) {
+    noteQuota(await res.text(), res.status);
+    return [];
+  }
   return (await res.json())?.episodes ?? [];
 };
 const restDeleteEpisode = async (uuid) => {
@@ -1213,15 +1254,28 @@ async function sweepOldTestMemories(entry) {
   entry.checks.push(warn("sweep: stale test memories from past runs", `deleted=${deleted} episode(s) >1h old`));
 }
 
-// Delete THIS run's own writes, matched by their unique sentinels. Each
-// sentinel was already confirmed searchable by its test's recall poll, so a
-// single search (no SLO wait) finds it in the healthy case.
+// Delete THIS run's own writes, matched by their unique sentinels. Most
+// sentinels were already confirmed searchable by their test's own recall poll
+// by the time this runs — but not all (some are registered right after a
+// successful write, before any poll; a poll that itself timed out still
+// leaves its sentinel registered) — so a single un-retried search can hit
+// the exact same top-N ranking cliff this PR's sentinel-query fixes were
+// written to dodge elsewhere. A few short retries (well under the full 180s
+// SLO, since indexing has had the whole rest of Tier 3 to complete) absorb
+// that without materially slowing the run down.
+const CLEANUP_SEARCH_RETRIES = 3;
+const CLEANUP_SEARCH_RETRY_DELAY_MS = 3000;
 async function cleanupTier3Memories(entry) {
   let deleted = 0;
   const missed = [];
   for (const { sentinel, project } of cleanupTargets.splice(0)) {
     try {
-      const own = (await restSearch(sentinel, project)).filter((b) => JSON.stringify(b).includes(sentinel));
+      let own = [];
+      for (let attempt = 0; attempt <= CLEANUP_SEARCH_RETRIES; attempt++) {
+        own = (await restSearch(sentinel, project)).filter((b) => JSON.stringify(b).includes(sentinel));
+        if (own.length || attempt === CLEANUP_SEARCH_RETRIES) break;
+        await new Promise((res) => setTimeout(res, CLEANUP_SEARCH_RETRY_DELAY_MS));
+      }
       if (!own.length) { missed.push(sentinel); continue; }
       for (const b of own) {
         if (b?.episode?.uuid && await restDeleteEpisode(b.episode.uuid)) deleted++;
