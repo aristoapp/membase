@@ -17,11 +17,6 @@ mkdirSync("plugin/scripts", { recursive: true });
 await Promise.all([
   build({
     ...shared,
-    entryPoints: ["src/cli.ts"],
-    outfile: "plugin/scripts/membase.cjs",
-  }),
-  build({
-    ...shared,
     entryPoints: ["src/hooks/handler.ts"],
     outfile: "plugin/scripts/hook.cjs",
   }),
@@ -33,10 +28,8 @@ await Promise.all([
 ]);
 
 for (const path of [
-  "plugin/scripts/membase.cjs",
   "plugin/scripts/hook.cjs",
   "plugin/scripts/mcp-server.cjs",
-  "plugin/bin/membase",
 ]) {
   try {
     chmodSync(path, 0o755);

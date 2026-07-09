@@ -627,7 +627,7 @@ async function main(): Promise<void> {
     },
     async () => {
       const { client } = requireClient();
-      const recent = await client.getRecentMemories(10);
+      const recent = await client.searchMemory({ query: "", limit: 10 });
       const lines = ["# Membase Recent Memories", ""];
       for (const [index, item] of recent.entries()) {
         lines.push(

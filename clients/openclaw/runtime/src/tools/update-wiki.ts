@@ -1,6 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { rejectIfSensitive, toolResponse } from "../update-check";
+import { rejectIfSensitive, toolResponse } from "../tool-response";
 
 export function registerUpdateWikiTool(
   api: OpenClawPluginApi,

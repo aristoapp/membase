@@ -39,7 +39,6 @@ from .sanitize import (
     sanitize_membase_text,
     sanitize_recall_query,
 )
-from .update_check import consume_update_notice, start_background_update_check
 
 if TYPE_CHECKING:
 
@@ -182,7 +181,6 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         self._config: MembaseConfig | None = None
         self._client: MembaseClient | None = None
         self._notice_delivered = False
-        self._session_id = ""
         self._agent_context = "primary"
         self._mirror_store: MirrorStore | None = None
         self._mirror_worker: MirrorWorker | None = None
@@ -263,7 +261,6 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         else:
             self._config = load_membase_config_file(self._config_path)
 
-        self._session_id = session_id
         self._client = MembaseClient(
             api_url=self._config.api_url,
             auth=resolve_auth_state(self._config, logger=self._logger),
@@ -288,7 +285,6 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             )
             self._capture_worker.start()
         self._start_prefetch_worker()
-        start_background_update_check()
         # Register this connection with Membase so the agent appears in the
         # dashboard's Agents tab. Fire-and-forget on a background thread so
         # network hiccups never block provider initialization.
@@ -824,13 +820,6 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         return "Membase is disconnected. Run 'hermes membase login'."
 
     def _success_text(self, text: str) -> str:
-        """Attach ambient update notice (once/day) on successful tool responses."""
-        try:
-            notice = consume_update_notice()
-        except Exception:
-            notice = None
-        if notice:
-            return f"{text}\n\nMembase update: {notice}"
         return text
 
     def _profile_text(self, client: MembaseClient) -> str:

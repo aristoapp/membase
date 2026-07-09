@@ -6,9 +6,8 @@ import {
   handoffRecallQuery,
   isHandoffMemory,
   pickLatestHandoff,
-  sanitizeCaptureText,
-  sanitizeMembaseText,
-} from "./utils";
+} from "@membase/capture-core";
+import { sanitizeCaptureText, sanitizeMembaseText } from "./utils";
 
 describe("sanitizeCaptureText", () => {
   test("redacts secret assignments on the capture path", () => {

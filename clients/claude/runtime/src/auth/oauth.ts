@@ -4,8 +4,6 @@ import { spawn } from "node:child_process";
 import { MEMORY_SOURCE, USER_AGENT } from "../constants.js";
 import type { TokenState } from "../types.js";
 
-export interface OAuthResult extends TokenState {}
-
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 
 function base64Url(buffer: Buffer): string {
@@ -148,7 +146,7 @@ function listenForCallback(expectedState: string): Promise<{
   });
 }
 
-export async function loginWithOAuth(apiUrl: string): Promise<OAuthResult> {
+export async function loginWithOAuth(apiUrl: string): Promise<TokenState> {
   const state = base64Url(randomBytes(16));
   const callback = await listenForCallback(state);
   try {

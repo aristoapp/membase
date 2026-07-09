@@ -1,7 +1,7 @@
 import type { MembaseClient } from "../client";
 import { formatWikiDocuments } from "../format";
 import type { OpenClawPluginApi } from "../types";
-import { toolResponse } from "../update-check";
+import { toolResponse } from "../tool-response";
 
 export function registerSearchWikiTool(
   api: OpenClawPluginApi,

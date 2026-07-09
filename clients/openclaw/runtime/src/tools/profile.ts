@@ -1,7 +1,7 @@
 import type { MembaseClient } from "../client";
 import { formatProfile } from "../format";
 import type { EpisodeBundle, OpenClawPluginApi } from "../types";
-import { toolResponse } from "../update-check";
+import { toolResponse } from "../tool-response";
 import { withTimeout } from "../utils";
 
 export function registerProfileTool(

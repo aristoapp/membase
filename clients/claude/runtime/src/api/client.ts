@@ -104,10 +104,6 @@ export class MembaseClient {
     return this.request("/user/settings");
   }
 
-  async getRecentMemories(limit = 10): Promise<EpisodeBundle[]> {
-    return this.searchMemory({ query: "", limit });
-  }
-
   async searchWiki(args: {
     query: string;
     limit?: number;
