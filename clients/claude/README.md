@@ -1,45 +1,54 @@
-# Claude Code Connector
+# Membase for Claude Code
 
-Claude Code adapter boundary for Membase.
+Connect [Membase](https://membase.so) persistent memory to
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
-## Artifacts
+This connector ships as a Claude Code **plugin** with a bundled, plugin-local
+(stdio) MCP server. The plugin manages login through Membase's own OAuth flow,
+so there is **no API key** to place in your config.
 
-- `src/index.ts` implements the SDK `ClientAdapter` boundary.
-- `.claude-plugin/plugin.json` is the canonical Claude plugin metadata.
-- `.mcp.json` is the plugin-local Claude MCP config example.
-- `native-artifacts.json` is the review-only snapshot of old Claude commands,
-  hooks, skills, agent, bundled runtime scripts, and session-start evidence.
-- `../../manifests/claude/mcp.json` is the root copy of the same MCP config.
-- `../../docs/install/claude.md` documents local install and verification.
+## Install
 
-## Local Checks
+See the full guide: **[docs/install/claude.md](../../docs/install/claude.md)**.
+
+The plugin-local MCP config looks like this:
+
+```json
+{
+  "mcpServers": {
+    "membase": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs"],
+      "env": { "MEMBASE_CLAUDE_PLUGIN": "1" }
+    }
+  }
+}
+```
+
+The bundled server handles login and Membase API access. The API endpoint
+defaults to `https://api.membase.so` and can be overridden via the plugin's
+`apiUrl` user config.
+
+## Capabilities
+
+Through the shared Membase Context API, the connector exposes: `remember`,
+`search`, `getContext`, and `deleteOrForget`. No internal Membase memory
+details are exposed.
+
+## For contributors
 
 ```bash
 pnpm --filter @membase/client-claude typecheck
-pnpm claude:plugin-parity
-pnpm claude:native-artifacts
-pnpm public-surface
+pnpm claude:plugin-parity     # validates the plugin manifest with the Claude Code CLI
+pnpm claude:native-artifacts  # verifies clients/claude/native-artifacts.json snapshot
+pnpm public-surface           # ensures no internal Membase terms leak
 ```
 
-`pnpm claude:plugin-parity` validates the local Claude plugin manifest with the
-installed Claude Code CLI, checks manifest/version drift, and keeps MCP secrets
-as environment references. The generated MCP config preserves the old
-plugin-local stdio shape: `node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs`.
-The adapter only exposes connector capabilities: remember, search, task
-context, and forget actions through the shared Membase Context API.
-
 `pnpm claude:native-artifacts` verifies that
-`clients/claude/native-artifacts.json` records the old Claude command, hook,
-skill, agent, runtime bundle, and session-start evidence without copying those
-deferred files into the integrated repo.
+`clients/claude/native-artifacts.json` — the review-only snapshot of the old
+Claude command, hook, and skill files — matches the runtime copied in under
+`clients/claude/runtime`.
 
-## Marketplace Asset Reuse
-
-- Reuse the old Claude marketplace metadata shape and owner/license fields only
-  after rewriting copy to the shared connector-capability launch copy.
-- Treat old Claude commands, hooks, skills, agents, and bundled scripts as
-  review-only evidence until each behavior is accepted for migration.
-- No Claude image asset is selected yet.
-- If a Claude icon or marketplace image is added later, place it under
-  `clients/claude/assets/`, update adapter-generated metadata and committed
-  manifest copies together, then run `pnpm generated-artifacts`.
+Plugin metadata lives in `.claude-plugin/plugin.json`; the plugin-local MCP
+config lives in `.mcp.json`. Both are generated — edit the adapter in
+`src/index.ts` and run `pnpm generate` rather than hand-editing them.

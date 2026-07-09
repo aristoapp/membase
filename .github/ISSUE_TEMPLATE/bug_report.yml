@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a problem with a Membase connector or config
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please **do not include
+        secrets, tokens, or private memory content** in this report. For
+        security issues, see [SECURITY.md](../blob/main/SECURITY.md) instead.
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      description: Which client is affected?
+      options:
+        - Claude Code
+        - Cursor
+        - Codex CLI
+        - Hermes Agent
+        - OpenClaw
+        - Other MCP host (generic)
+        - Shared core / SDK
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and its impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Steps, commands, or config needed to reproduce the behavior.
+      placeholder: |
+        1. Configure '...'
+        2. Run '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node/pnpm version, client version, and commit if building from source.
+      placeholder: |
+        - OS:
+        - Node:
+        - pnpm:
+        - Client version:
+        - Commit:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant output. Redact secrets and personal content first.
+      render: shell
+    validations:
+      required: false

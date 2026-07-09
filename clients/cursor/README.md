@@ -1,40 +1,42 @@
-# Cursor Connector
+# Membase for Cursor
 
-Cursor adapter boundary for Membase.
+Connect [Membase](https://membase.so) persistent memory to
+[Cursor](https://cursor.com).
 
-## Artifacts
+Cursor connects to Membase over a **remote HTTP MCP server** with OAuth. There
+is no API key in your config — you authorize on first use.
 
-- `src/index.ts` implements the SDK `ClientAdapter` boundary.
-- `.cursor-plugin/plugin.json` is the canonical Cursor plugin metadata.
-- `mcp.json` is the plugin-local Cursor HTTP MCP config example.
-- `../../manifests/cursor/mcp.json` is the root reviewable HTTP MCP config
-  example.
-- `clients/cursor/native-artifacts.json` is the review-only snapshot of old
-  Cursor rules, skills, logo, and changelog evidence before any copy is ported.
-- `../../docs/install/cursor.md` documents local install and verification.
+## Install
 
-## Local Checks
+See the full guide: **[docs/install/cursor.md](../../docs/install/cursor.md)**.
+
+The MCP config points at the hosted Membase MCP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "membase": {
+      "url": "https://mcp.membase.so/mcp"
+    }
+  }
+}
+```
+
+## Capabilities
+
+Through the shared Membase Context API, the connector exposes: `remember`,
+`search`, `getContext`, and `deleteOrForget`. No internal Membase memory
+details are exposed.
+
+## For contributors
 
 ```bash
 pnpm --filter @membase/client-cursor typecheck
-pnpm cursor:transport-parity
-pnpm cursor:native-artifacts
-pnpm public-surface
+pnpm cursor:transport-parity   # ensures the HTTP MCP endpoint stays the primary transport
+pnpm cursor:native-artifacts   # verifies clients/cursor/native-artifacts.json snapshot
+pnpm public-surface            # ensures no internal Membase terms leak
 ```
 
-The adapter only exposes connector capabilities: remember, search, task context,
-and forget actions through the shared Membase Context API.
-
-The Cursor MCP config preserves the old repo's HTTP MCP endpoint first. Local
-stdio fallback should be added only after an explicit runtime decision.
-`pnpm cursor:native-artifacts` keeps the old Cursor rules, skills, logo, and
-changelog in a snapshot-only state until each artifact is rewritten or approved.
-
-## Marketplace Asset Reuse
-
-- Treat the old `aristoapp/cursor-membase` `assets/logo.svg` as the Cursor
-  logo candidate.
-- Do not add a `logo` field to generated metadata until the file is copied under
-  `clients/cursor/assets/` and approved for reuse.
-- After the logo is copied, update adapter-generated metadata and committed
-  manifest copies together, then run `pnpm generated-artifacts`.
+Plugin metadata lives in `.cursor-plugin/plugin.json` and the MCP config in
+`mcp.json`. Both are generated — edit the adapter in `src/index.ts` and run
+`pnpm generate` rather than hand-editing them.
