@@ -147,30 +147,14 @@ async function startOAuthCallbackListener(
           return;
         }
 
-        if (!code || !state) {
-          settle(() => {
-            if (timeout) clearTimeout(timeout);
-            close();
-            reject(new Error("Missing OAuth code or state parameter"));
-          });
+        // Keep listening on invalid code/state — any local process can hit
+        // the loopback port, and a bogus request must not abort a legitimate
+        // login still in flight.
+        if (!code || state !== expectedState) {
           res.statusCode = 400;
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.end(
-            "<h3>Missing OAuth code/state.</h3><p>You can close this tab.</p>",
-          );
-          return;
-        }
-
-        if (state !== expectedState) {
-          settle(() => {
-            if (timeout) clearTimeout(timeout);
-            close();
-            reject(new Error("OAuth state mismatch"));
-          });
-          res.statusCode = 400;
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.end(
-            "<h3>Invalid OAuth state.</h3><p>You can close this tab.</p>",
+            "<h3>Invalid OAuth callback.</h3><p>You can close this tab.</p>",
           );
           return;
         }
@@ -266,6 +250,13 @@ export async function upsertPluginConfig(
 }
 
 const PLUGIN_ID = "openclaw-membase";
+
+// Remembered content can carry ANSI/terminal escapes from captured shell
+// output; strip C0/C1 control chars (except newline/tab) before printing.
+function stripControlChars(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: that's the point
+  return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "");
+}
 
 export async function ensureToolsAllowlist(): Promise<boolean> {
   const configPath = getOpenClawConfigPath();
@@ -374,7 +365,7 @@ async function exchangeCodeForToken(
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
-      `OAuth token exchange failed (${response.status}): ${text}`,
+      `OAuth token exchange failed (${response.status}): ${text.slice(0, 300)}`,
     );
   }
   return (await response.json()) as OAuthTokenResponse;
@@ -523,7 +514,9 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
               undefined,
               sources,
             );
-            console.log(formatBundles(bundles));
+            // Memory text can carry ANSI escapes from captured terminal
+            // output; strip control chars before printing.
+            console.log(stripControlChars(formatBundles(bundles)));
           } catch (error) {
             api.logger.error(
               "Search failed:",

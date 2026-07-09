@@ -6893,8 +6893,74 @@ var import_node_path7 = require("node:path");
 
 // ../../../packages/capture-core/src/spool.ts
 var import_node_crypto = require("node:crypto");
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
+
+// ../../../packages/capture-core/src/token-store.ts
 var import_node_fs = require("node:fs");
 var import_node_path = require("node:path");
+function writeTextAtomic(path, text, mode = 384) {
+  (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(path), { recursive: true, mode: 448 });
+  const tmp = `${path}.tmp.${process.pid}`;
+  (0, import_node_fs.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
+  try {
+    (0, import_node_fs.renameSync)(tmp, path);
+  } catch (err) {
+    try {
+      (0, import_node_fs.rmSync)(tmp, { force: true });
+    } catch {
+    }
+    throw err;
+  }
+  try {
+    (0, import_node_fs.chmodSync)(path, mode);
+  } catch {
+  }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
+}
+function createTokenStore(options) {
+  const filename = options.filename ?? "credentials.json";
+  function path() {
+    return (0, import_node_path.join)(options.dir(), filename);
+  }
+  function read() {
+    const file2 = path();
+    if (!(0, import_node_fs.existsSync)(file2)) return null;
+    let obj;
+    try {
+      obj = JSON.parse((0, import_node_fs.readFileSync)(file2, "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof obj !== "object" || obj === null) return null;
+    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
+      return null;
+    }
+    return {
+      clientId: obj.clientId,
+      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
+      accessToken: obj.accessToken,
+      refreshToken: obj.refreshToken,
+      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
+      scope: typeof obj.scope === "string" ? obj.scope : void 0
+    };
+  }
+  function write(tokens) {
+    writeJsonAtomic(path(), tokens);
+  }
+  function clear() {
+    try {
+      (0, import_node_fs.rmSync)(path(), { force: true });
+    } catch {
+    }
+  }
+  return { path, read, write, clear };
+}
+
+// ../../../packages/capture-core/src/spool.ts
 var LOCK_STALE_MS = 3e4;
 var LOCK_WAIT_MS = 2e3;
 var INFLIGHT_STALE_MS = 6e4;
@@ -6909,43 +6975,43 @@ function hash(input) {
 function createCaptureSpool(options) {
   const minContentLength = options.minContentLength ?? 20;
   function spoolDir() {
-    const dir = (0, import_node_path.join)(options.stateDir(), "spool");
-    (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
+    const dir = (0, import_node_path2.join)(options.stateDir(), "spool");
+    (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
     return dir;
   }
   function spoolPath() {
-    return (0, import_node_path.join)(spoolDir(), "pending.jsonl");
+    return (0, import_node_path2.join)(spoolDir(), "pending.jsonl");
   }
   function sentPath() {
-    return (0, import_node_path.join)(spoolDir(), "sent.json");
+    return (0, import_node_path2.join)(spoolDir(), "sent.json");
   }
   function lockPath() {
-    return (0, import_node_path.join)(spoolDir(), ".lock");
+    return (0, import_node_path2.join)(spoolDir(), ".lock");
   }
   function inflightPath() {
-    return (0, import_node_path.join)(spoolDir(), `inflight-${process.pid}-${Date.now()}.jsonl`);
+    return (0, import_node_path2.join)(spoolDir(), `inflight-${process.pid}-${Date.now()}.jsonl`);
   }
   function acquireLock(timeoutMs = LOCK_WAIT_MS) {
     const path = lockPath();
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       try {
-        const fd = (0, import_node_fs.openSync)(path, "wx", 384);
+        const fd = (0, import_node_fs2.openSync)(path, "wx", 384);
         return () => {
           try {
-            (0, import_node_fs.closeSync)(fd);
+            (0, import_node_fs2.closeSync)(fd);
           } catch {
           }
           try {
-            (0, import_node_fs.rmSync)(path, { force: true });
+            (0, import_node_fs2.rmSync)(path, { force: true });
           } catch {
           }
         };
       } catch (error51) {
         if (error51.code !== "EEXIST") throw error51;
         try {
-          if (Date.now() - (0, import_node_fs.statSync)(path).mtimeMs > LOCK_STALE_MS) {
-            (0, import_node_fs.rmSync)(path, { force: true });
+          if (Date.now() - (0, import_node_fs2.statSync)(path).mtimeMs > LOCK_STALE_MS) {
+            (0, import_node_fs2.rmSync)(path, { force: true });
             continue;
           }
         } catch {
@@ -6971,8 +7037,8 @@ function createCaptureSpool(options) {
     );
   }
   function readRecordsFromPath(path) {
-    if (!(0, import_node_fs.existsSync)(path)) return [];
-    const raw = (0, import_node_fs.readFileSync)(path, "utf-8").trim();
+    if (!(0, import_node_fs2.existsSync)(path)) return [];
+    const raw = (0, import_node_fs2.readFileSync)(path, "utf-8").trim();
     if (!raw) return [];
     return raw.split(/\r?\n/).map((line) => {
       try {
@@ -6986,20 +7052,17 @@ function createCaptureSpool(options) {
     return readRecordsFromPath(spoolPath());
   }
   function writeRecordsToPath(path, records) {
-    const tmp = `${path}.tmp`;
-    (0, import_node_fs.writeFileSync)(
-      tmp,
-      records.map((record2) => JSON.stringify(record2)).join("\n") + (records.length ? "\n" : ""),
-      { encoding: "utf-8", mode: 384 }
+    writeTextAtomic(
+      path,
+      records.map((record2) => JSON.stringify(record2)).join("\n") + (records.length ? "\n" : "")
     );
-    (0, import_node_fs.renameSync)(tmp, path);
   }
   function writeRecords(records) {
     writeRecordsToPath(spoolPath(), records);
   }
   function appendRecords(records) {
     if (records.length === 0) return;
-    (0, import_node_fs.appendFileSync)(
+    (0, import_node_fs2.appendFileSync)(
       spoolPath(),
       `${records.map((record2) => JSON.stringify(record2)).join("\n")}
 `,
@@ -7011,9 +7074,9 @@ function createCaptureSpool(options) {
   }
   function readSentIds() {
     const path = sentPath();
-    if (!(0, import_node_fs.existsSync)(path)) return /* @__PURE__ */ new Set();
+    if (!(0, import_node_fs2.existsSync)(path)) return /* @__PURE__ */ new Set();
     try {
-      const parsed = JSON.parse((0, import_node_fs.readFileSync)(path, "utf-8"));
+      const parsed = JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
       if (!Array.isArray(parsed)) return /* @__PURE__ */ new Set();
       return new Set(
         parsed.filter((value) => typeof value === "string")
@@ -7024,17 +7087,11 @@ function createCaptureSpool(options) {
   }
   function writeSentIds(ids) {
     const values = Array.from(ids).slice(-2e3);
-    const path = sentPath();
-    const tmp = `${path}.tmp`;
-    (0, import_node_fs.writeFileSync)(tmp, `${JSON.stringify(values, null, 2)}
-`, {
-      encoding: "utf-8",
-      mode: 384
-    });
-    (0, import_node_fs.renameSync)(tmp, path);
+    writeTextAtomic(sentPath(), `${JSON.stringify(values, null, 2)}
+`);
   }
   function inflightFiles() {
-    return (0, import_node_fs.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path.join)(spoolDir(), name));
+    return (0, import_node_fs2.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path2.join)(spoolDir(), name));
   }
   function readInflightRecords() {
     return inflightFiles().flatMap((path) => readRecordsFromPath(path));
@@ -7067,9 +7124,9 @@ function createCaptureSpool(options) {
     const now = Date.now();
     for (const path of inflightFiles()) {
       try {
-        if (now - (0, import_node_fs.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
+        if (now - (0, import_node_fs2.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
         appendPendingRecordsLocked(readRecordsFromPath(path));
-        (0, import_node_fs.rmSync)(path, { force: true });
+        (0, import_node_fs2.rmSync)(path, { force: true });
       } catch {
       }
     }
@@ -7159,76 +7216,12 @@ function createCaptureSpool(options) {
     }
     const remaining = withSpoolLock(() => {
       appendPendingRecordsLocked(failed);
-      if (drained.path) (0, import_node_fs.rmSync)(drained.path, { force: true });
+      if (drained.path) (0, import_node_fs2.rmSync)(drained.path, { force: true });
       return readRecords().length;
     });
     return { flushed, remaining };
   }
   return { captureId, enqueueCapture, flushSpool, pendingSpoolCount: pendingSpoolCount2 };
-}
-
-// ../../../packages/capture-core/src/token-store.ts
-var import_node_fs2 = require("node:fs");
-var import_node_path2 = require("node:path");
-function writeTextAtomic(path, text, mode = 384) {
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
-  try {
-    (0, import_node_fs2.renameSync)(tmp, path);
-  } catch (err) {
-    try {
-      (0, import_node_fs2.rmSync)(tmp, { force: true });
-    } catch {
-    }
-    throw err;
-  }
-  try {
-    (0, import_node_fs2.chmodSync)(path, mode);
-  } catch {
-  }
-}
-function writeJsonAtomic(path, value, mode = 384) {
-  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
-`, mode);
-}
-function createTokenStore(options) {
-  const filename = options.filename ?? "credentials.json";
-  function path() {
-    return (0, import_node_path2.join)(options.dir(), filename);
-  }
-  function read() {
-    const file2 = path();
-    if (!(0, import_node_fs2.existsSync)(file2)) return null;
-    let obj;
-    try {
-      obj = JSON.parse((0, import_node_fs2.readFileSync)(file2, "utf-8"));
-    } catch {
-      return null;
-    }
-    if (typeof obj !== "object" || obj === null) return null;
-    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
-      return null;
-    }
-    return {
-      clientId: obj.clientId,
-      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
-      accessToken: obj.accessToken,
-      refreshToken: obj.refreshToken,
-      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
-      scope: typeof obj.scope === "string" ? obj.scope : void 0
-    };
-  }
-  function write(tokens) {
-    writeJsonAtomic(path(), tokens);
-  }
-  function clear() {
-    try {
-      (0, import_node_fs2.rmSync)(path(), { force: true });
-    } catch {
-    }
-  }
-  return { path, read, write, clear };
 }
 
 // ../../../packages/capture-core/src/handoff.ts
@@ -7238,7 +7231,7 @@ function handoffRecallQuery() {
   return `${HANDOFF_TAG} session handoff summary`;
 }
 function taggedHandoff(args) {
-  const project = args.project?.trim();
+  const project = args.project?.trim().replace(/[()]/g, "");
   const scope = project ? ` (${project})` : "";
   return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
 }
@@ -7266,7 +7259,7 @@ function selectReplaceableHandoffs(bundles, opts) {
   }).slice(0, max);
 }
 async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
-  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => Boolean(uuid3));
+  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => /^[0-9a-f-]{32,36}$/i.test(uuid3 ?? ""));
   const results = await Promise.allSettled(
     targets.map((uuid3) => deleteEpisode(uuid3))
   );
@@ -7405,7 +7398,7 @@ var MembaseTransport = class {
   }
   /** Authenticated fetch with single-flight refresh and one retry on 401. */
   async authorizedFetch(path, options = {}) {
-    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
+    this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
     let response = await this.rawFetch(path, options);
     if (response.status === 401 && this.tokens.refreshToken) {
       await response.body?.cancel();
@@ -31911,7 +31904,7 @@ async function registerClient(apiUrl, redirectUri) {
   }
   return await response.json();
 }
-function listenForCallback() {
+function listenForCallback(expectedState) {
   return new Promise((resolve2, reject) => {
     const server = (0, import_node_http.createServer)((req, res) => {
       try {
@@ -31923,16 +31916,16 @@ function listenForCallback() {
         }
         const code = url2.searchParams.get("code");
         const state = url2.searchParams.get("state") ?? void 0;
-        if (!code) {
+        if (!code || state !== expectedState) {
           res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end("Missing OAuth code.");
+          res.end("Invalid OAuth callback.");
           return;
         }
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(
           "<html><body><h1>Membase connected</h1><p>You can return to Claude Code.</p></body></html>"
         );
-        server.emit("membase-code", { code, state });
+        server.emit("membase-code", { code });
       } catch (error51) {
         res.writeHead(500, { "Content-Type": "text/plain" });
         res.end(String(error51));
@@ -31945,14 +31938,12 @@ function listenForCallback() {
         reject(new Error("Could not allocate OAuth callback port"));
         return;
       }
-      const codePromise = new Promise(
-        (res) => {
-          server.once(
-            "membase-code",
-            (payload) => res(payload)
-          );
-        }
-      );
+      const codePromise = new Promise((res) => {
+        server.once(
+          "membase-code",
+          (payload) => res(payload)
+        );
+      });
       resolve2({
         redirectUri: `http://127.0.0.1:${address.port}/callback`,
         codePromise,
@@ -31967,11 +31958,11 @@ function listenForCallback() {
   });
 }
 async function loginWithOAuth(apiUrl) {
-  const callback = await listenForCallback();
+  const state = base64Url((0, import_node_crypto2.randomBytes)(16));
+  const callback = await listenForCallback(state);
   try {
     const verifier = base64Url((0, import_node_crypto2.randomBytes)(32));
     const challenge = base64Url((0, import_node_crypto2.createHash)("sha256").update(verifier).digest());
-    const state = base64Url((0, import_node_crypto2.randomBytes)(16));
     const client = await registerClient(apiUrl, callback.redirectUri);
     const params = new URLSearchParams({
       response_type: "code",
@@ -31986,14 +31977,11 @@ async function loginWithOAuth(apiUrl) {
     openBrowser(authorizeUrl);
     console.error(`If the browser did not open, visit:
 ${authorizeUrl}`);
-    const { code, state: returnedState } = await withTimeout(
+    const { code } = await withTimeout(
       callback.codePromise,
       CALLBACK_TIMEOUT_MS,
       "OAuth login timed out before the browser callback completed."
     );
-    if (returnedState !== state) {
-      throw new Error("OAuth state mismatch");
-    }
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -32014,7 +32002,7 @@ ${authorizeUrl}`);
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       throw new Error(
-        `OAuth token exchange failed: ${response.status} ${text}`
+        `OAuth token exchange failed: ${response.status} ${text.slice(0, 300)}`
       );
     }
     const data = await response.json();
@@ -32034,9 +32022,13 @@ ${authorizeUrl}`);
 // src/sanitize/index.ts
 var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
 function sanitizeMembaseText(raw) {
-  const cleaned = redactSecrets(
-    stripContextBlocks(raw.replace(PRIVATE_BLOCK_RE, " "))
-  );
+  let stripped = raw;
+  let previous;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(PRIVATE_BLOCK_RE, " ");
+  } while (stripped !== previous);
+  const cleaned = redactSecrets(stripContextBlocks(stripped));
   return normalizeLines(cleaned);
 }
 var looksSensitive2 = looksSensitive;
@@ -32189,7 +32181,7 @@ async function fetchLatestVersion(fetchImpl = fetch) {
     if (!response.ok) return null;
     const body = await response.json();
     const plugin = Array.isArray(body.plugins) ? body.plugins.find((entry) => entry.name === PLUGIN_NAME2) : void 0;
-    return typeof plugin?.version === "string" ? plugin.version : null;
+    return typeof plugin?.version === "string" && /^\d+\.\d+\.\d+$/.test(plugin.version) ? plugin.version : null;
   } catch {
     return null;
   } finally {

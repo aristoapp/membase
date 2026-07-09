@@ -130,7 +130,12 @@ export async function fetchLatestVersion(
     const plugin = Array.isArray(body.plugins)
       ? body.plugins.find((entry) => entry.name === PLUGIN_NAME)
       : undefined;
-    return typeof plugin?.version === "string" ? plugin.version : null;
+    // The fetched string ends up in tool responses (model context) — accept
+    // strict semver only so a compromised manifest can't inject arbitrary text.
+    return typeof plugin?.version === "string" &&
+      /^\d+\.\d+\.\d+$/.test(plugin.version)
+      ? plugin.version
+      : null;
   } catch {
     return null;
   } finally {

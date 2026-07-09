@@ -16,13 +16,12 @@ import {
   openSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { truncateText } from "./index.js";
+import { writeTextAtomic } from "./token-store.js";
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 2_000;
@@ -175,14 +174,11 @@ export function createCaptureSpool(
   }
 
   function writeRecordsToPath(path: string, records: SpoolRecord[]): void {
-    const tmp = `${path}.tmp`;
-    writeFileSync(
-      tmp,
+    writeTextAtomic(
+      path,
       records.map((record) => JSON.stringify(record)).join("\n") +
         (records.length ? "\n" : ""),
-      { encoding: "utf-8", mode: 0o600 },
     );
-    renameSync(tmp, path);
   }
 
   function writeRecords(records: SpoolRecord[]): void {
@@ -217,13 +213,7 @@ export function createCaptureSpool(
 
   function writeSentIds(ids: Set<string>): void {
     const values = Array.from(ids).slice(-2000);
-    const path = sentPath();
-    const tmp = `${path}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(values, null, 2)}\n`, {
-      encoding: "utf-8",
-      mode: 0o600,
-    });
-    renameSync(tmp, path);
+    writeTextAtomic(sentPath(), `${JSON.stringify(values, null, 2)}\n`);
   }
 
   function inflightFiles(): string[] {

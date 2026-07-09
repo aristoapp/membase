@@ -207,22 +207,14 @@ class OAuthCallbackListener:
 
                 code = query.get("code", [None])[0]
                 state = query.get("state", [None])[0]
-                if not code or not state:
-                    outer._publish_once(
-                        OAuthCallbackResult(error="Missing OAuth code or state"),
-                    )
+                # Keep listening on invalid code/state — any local process can
+                # hit the loopback port, and a bogus request must not abort a
+                # legitimate login still in flight.
+                if not code or state != outer.expected_state:
                     self.send_response(400)
                     self.end_headers()
                     self.wfile.write(
-                        b"<h3>Missing OAuth code/state.</h3><p>You can close this tab.</p>",
-                    )
-                    return
-                if state != outer.expected_state:
-                    outer._publish_once(OAuthCallbackResult(error="State mismatch"))
-                    self.send_response(400)
-                    self.end_headers()
-                    self.wfile.write(
-                        b"<h3>Invalid OAuth state.</h3><p>You can close this tab.</p>",
+                        b"<h3>Invalid OAuth callback.</h3><p>You can close this tab.</p>",
                     )
                     return
 

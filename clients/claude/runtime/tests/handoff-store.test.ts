@@ -27,9 +27,9 @@ function makeClient(overrides: Partial<Record<string, unknown>> = {}) {
     searchMemory: async () => {
       calls.push("search");
       return [
-        { episode: { uuid: "u-old-1", name: "[HANDOFF] old one" } },
-        { episode: { uuid: "u-noise", name: "we chose postgres" } },
-        { episode: { uuid: "u-old-2", name: "[HANDOFF] old two" } },
+        { episode: { uuid: "aaaaaaaa-0000-4000-8000-000000000001", name: "[HANDOFF] old one" } },
+        { episode: { uuid: "aaaaaaaa-0000-4000-8000-00000000000f", name: "we chose postgres" } },
+        { episode: { uuid: "aaaaaaaa-0000-4000-8000-000000000002", name: "[HANDOFF] old two" } },
       ];
     },
     ingestMemory: async () => {
@@ -54,7 +54,7 @@ describe("replaceHandoff (one cloud handoff per project)", () => {
     });
     expect(calls[0]).toBe("search");
     expect(calls[1]).toBe("ingest");
-    expect([...deleted].sort()).toEqual(["u-old-1", "u-old-2"]);
+    expect([...deleted].sort()).toEqual(["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000002"]);
     expect(result.replaced).toBe(2);
     expect(result.status).toBe("queued");
   });
@@ -76,12 +76,12 @@ describe("replaceHandoff (one cloud handoff per project)", () => {
   it("unscoped store does not delete project-scoped handoffs", async () => {
     const { client, deleted } = makeClient({
       searchMemory: async () => [
-        { episode: { uuid: "u-scoped", name: "[HANDOFF] (proj) scoped" } },
-        { episode: { uuid: "u-free", name: "[HANDOFF] unscoped" } },
+        { episode: { uuid: "bbbbbbbb-0000-4000-8000-000000000001", name: "[HANDOFF] (proj) scoped" } },
+        { episode: { uuid: "bbbbbbbb-0000-4000-8000-000000000002", name: "[HANDOFF] unscoped" } },
       ],
     });
     const result = await replaceHandoff(client, { summary: "state" });
-    expect(deleted).toEqual(["u-free"]);
+    expect(deleted).toEqual(["bbbbbbbb-0000-4000-8000-000000000002"]);
     expect(result.replaced).toBe(1);
   });
 

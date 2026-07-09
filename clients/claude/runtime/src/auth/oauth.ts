@@ -89,9 +89,9 @@ async function registerClient(
   };
 }
 
-function listenForCallback(): Promise<{
+function listenForCallback(expectedState: string): Promise<{
   redirectUri: string;
-  codePromise: Promise<{ code: string; state?: string }>;
+  codePromise: Promise<{ code: string }>;
   close: () => void;
 }> {
   return new Promise((resolve, reject) => {
@@ -105,16 +105,19 @@ function listenForCallback(): Promise<{
         }
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state") ?? undefined;
-        if (!code) {
+        // Validate state here and keep listening on mismatch — otherwise any
+        // local process that can hit the loopback port could race a bogus
+        // code+state and abort a legitimate login.
+        if (!code || state !== expectedState) {
           res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end("Missing OAuth code.");
+          res.end("Invalid OAuth callback.");
           return;
         }
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(
           "<html><body><h1>Membase connected</h1><p>You can return to Claude Code.</p></body></html>",
         );
-        server.emit("membase-code", { code, state });
+        server.emit("membase-code", { code });
       } catch (error) {
         res.writeHead(500, { "Content-Type": "text/plain" });
         res.end(String(error));
@@ -127,13 +130,11 @@ function listenForCallback(): Promise<{
         reject(new Error("Could not allocate OAuth callback port"));
         return;
       }
-      const codePromise = new Promise<{ code: string; state?: string }>(
-        (res) => {
-          server.once("membase-code", (payload) =>
-            res(payload as { code: string; state?: string }),
-          );
-        },
-      );
+      const codePromise = new Promise<{ code: string }>((res) => {
+        server.once("membase-code", (payload) =>
+          res(payload as { code: string }),
+        );
+      });
       resolve({
         redirectUri: `http://127.0.0.1:${address.port}/callback`,
         codePromise,
@@ -148,11 +149,11 @@ function listenForCallback(): Promise<{
 }
 
 export async function loginWithOAuth(apiUrl: string): Promise<OAuthResult> {
-  const callback = await listenForCallback();
+  const state = base64Url(randomBytes(16));
+  const callback = await listenForCallback(state);
   try {
     const verifier = base64Url(randomBytes(32));
     const challenge = base64Url(createHash("sha256").update(verifier).digest());
-    const state = base64Url(randomBytes(16));
     const client = await registerClient(apiUrl, callback.redirectUri);
     const params = new URLSearchParams({
       response_type: "code",
@@ -166,14 +167,11 @@ export async function loginWithOAuth(apiUrl: string): Promise<OAuthResult> {
     const authorizeUrl = `${apiUrl}/oauth/authorize?${params.toString()}`;
     openBrowser(authorizeUrl);
     console.error(`If the browser did not open, visit:\n${authorizeUrl}`);
-    const { code, state: returnedState } = await withTimeout(
+    const { code } = await withTimeout(
       callback.codePromise,
       CALLBACK_TIMEOUT_MS,
       "OAuth login timed out before the browser callback completed.",
     );
-    if (returnedState !== state) {
-      throw new Error("OAuth state mismatch");
-    }
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -194,7 +192,7 @@ export async function loginWithOAuth(apiUrl: string): Promise<OAuthResult> {
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       throw new Error(
-        `OAuth token exchange failed: ${response.status} ${text}`,
+        `OAuth token exchange failed: ${response.status} ${text.slice(0, 300)}`,
       );
     }
     const data = (await response.json()) as {
