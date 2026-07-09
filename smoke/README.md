@@ -29,11 +29,7 @@ public remember/search/context/delete flow through
 `smoke/public-contract-stub.mjs`.
 
 Secret handling expectations and live MCP smoke prerequisites are documented in
-`docs/security.md`. The future live client-to-MCP smoke launch gate is defined
-in `docs/live-smoke-runbook.md`.
-
-Old repo test migration expectations are mapped in
-`docs/test-coverage-parity.md`.
+`docs/security.md`.
 
 `pnpm smoke:execute` runs the adapter-declared local commands after the same
 contract checks. It does not publish, install global client plugins, or call the
@@ -59,17 +55,6 @@ from the old repo workflow. It runs the integrated OpenClaw typecheck/build
 path, imports the built native extension entrypoint, and keeps the native
 manifest/package in a non-publishing review state.
 
-Live client-to-MCP smoke coverage is intentionally pending until the remaining
-client-specific runtime behavior and accepted live test credentials are in
-place: Hermes live API behavior and OpenClaw native hook/tool behavior. Claude
-plugin-local stdio, Cursor HTTP MCP config, Hermes provider register path, and
-OpenClaw native extension entrypoint are preserved locally, but live remote
-exercise still needs the D6 credential and cleanup decision.
-
-`pnpm smoke:live:preflight` keeps that pending state honest. It verifies that
-D2 and D3 record the Claude plugin-local, Cursor HTTP-first, Hermes provider
-register path, and OpenClaw native entrypoint implementation while Hermes live
-API behavior and fallback decisions stay pending in
-`docs/runtime-parity-decisions.md`, D6 is only accepted in principle, the
-runbook still names those prerequisites, and the committed MCP examples do not
-claim live smoke is runnable.
+`pnpm smoke:live:preflight` validates the committed MCP config examples:
+Claude uses the plugin-local stdio server, Cursor/Hermes/OpenClaw use the
+remote HTTP endpoint, and no config carries a user-supplied API key.

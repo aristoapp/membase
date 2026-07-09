@@ -40,26 +40,6 @@ const expectedArtifacts = [
 
 const requiredDocMarkers = [
   {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm hermes:native-artifacts", SNAPSHOT_PATH, "src/membase_hermes/capture.py"]
-  },
-  {
-    path: "docs/migration-parity.md",
-    markers: [SNAPSHOT_PATH, "Hermes native artifact snapshot"]
-  },
-  {
-    path: "docs/test-coverage-parity.md",
-    markers: ["pnpm hermes:native-artifacts", "Hermes native artifact snapshot"]
-  },
-  {
-    path: "docs/review-summary.md",
-    markers: ["pnpm hermes:native-artifacts", "Hermes native artifact snapshot"]
-  },
-  {
-    path: "docs/runtime-parity-decisions.md",
-    markers: [SNAPSHOT_PATH, "Hermes native artifact snapshot"]
-  },
-  {
     path: "clients/hermes/README.md",
     markers: [SNAPSHOT_PATH, "pnpm hermes:native-artifacts"]
   },

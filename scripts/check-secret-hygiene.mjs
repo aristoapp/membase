@@ -11,8 +11,6 @@ const ROOT_DIR = path.resolve(
 const scanRoots = [
   ".gitignore",
   "README.md",
-  "RUN_LOG.md",
-  "PLAN.md",
   "docs",
   "packages",
   "clients",

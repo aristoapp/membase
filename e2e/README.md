@@ -2,7 +2,7 @@
 
 End-to-end harness that verifies each client connector against the **live**
 Membase MCP server and evaluates quality and latency. Dependency-free (Node 18+
-`fetch`). This is the runnable implementation of `docs/live-smoke-runbook.md`.
+`fetch`).
 
 ## Tiers
 
@@ -90,7 +90,7 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   design, since session-id is a continuity id, not a second credential — so
   the check instead confirms the forged-session write lands under the
   token's own account, not that the call is refused.
-- **handoff replace-on-store** (north-star pillar 2): the "exactly one
+- **handoff replace-on-store**: the "exactly one
   handoff per project" policy (`packages/capture-core/src/handoff.ts`'s
   `sweepReplacedHandoffs`) means storing a new `[HANDOFF]` must delete the
   prior one. The MCP tool surface has no delete tool, but the runtime's real
@@ -99,11 +99,11 @@ MEMBASE_MCP_TOKEN="<oauth-access-token>" node e2e/run-e2e.mjs --tier3
   replacement B, deletes A by UUID, then confirms search shows A gone and B
   present. Previously only store→recall was proven (`evalHandoff`); never
   that a second store actually deletes the first.
-- **hook-capture source tagging** (north-star pillar 1): every client's hook
+- **hook-capture source tagging**: every client's hook
   eventually flushes its spool via a POST to this same REST ingest endpoint
   (`packages/capture-core/src/spool.ts`'s `flushSpool`). This harness cannot
-  fire an actual hook process (that needs each client app running — see
-  `docs/implementation-overview.html` §7.5 for that gap), but it proves the
+  fire an actual hook process (that needs each client app running), but it
+  proves the
   shared backend contract every hook flush depends on: a memory tagged with
   each client's `source` (`cursor`, `codex`, `claude-code`, `hermes`,
   `openclaw`) is accepted, and `sources=[...]` filtering isolates one
