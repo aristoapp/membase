@@ -44,7 +44,7 @@ export function defineHermesRuntimeConfig(
     client: {
       id: HERMES_CLIENT_ID,
       displayName: HERMES_DISPLAY_NAME,
-      version: version ?? "0.0.0"
+      version: version ?? "0.1.0"
     }
   });
 }
@@ -54,7 +54,7 @@ export function generateHermesPluginManifest(
 ): HermesPluginManifest {
   return {
     name: HERMES_PLUGIN_NAME,
-    version: config.client.version ?? "0.0.0",
+    version: config.client.version ?? "0.1.0",
     description:
       "Connect Hermes Agent to Membase context APIs for remember, search, task context, and forget actions.",
     pip_dependencies: [HERMES_PYTHON_PACKAGE]
