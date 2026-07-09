@@ -18,7 +18,7 @@
     "claude:runtime-typecheck": "pnpm --filter @membase/claude-membase-runtime typecheck",
     "claude:runtime-test": "cd clients/claude/runtime && bun test",
     "cursor:runtime-test": "node --test clients/cursor/runtime/cursor-hook.test.mjs",
-    "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/hermes clients/openclaw --clean",
+    "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw --clean",
     "e2e": "node e2e/run-e2e.mjs",
     "e2e:live": "node e2e/run-e2e.mjs --live",
     "generate": "pnpm typecheck && node scripts/regen-artifacts.mjs",
@@ -35,6 +35,8 @@
     "openclaw:runtime-test": "cd clients/openclaw/runtime && bun test",
     "public-surface": "scripts/check-public-surface.sh",
     "secret-hygiene": "node scripts/check-secret-hygiene.mjs",
+    "test": "pnpm capture-core:test && pnpm claude:runtime-test && pnpm openclaw:runtime-test && pnpm cursor:runtime-test && pnpm hermes:test && pnpm contract:test",
+    "lint": "biome lint .",
     "smoke:dry-run": "pnpm typecheck && node smoke/client-smoke.mjs",
     "smoke:execute": "pnpm typecheck && node smoke/client-smoke.mjs --execute",
     "smoke:live:preflight": "node smoke/live-smoke-preflight.mjs",
@@ -45,6 +47,7 @@
     "contract:test": "pnpm --filter @membase/capture-core build && node --test contract/*.contract.test.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
     "typescript": "^6.0.3"
   }
 }

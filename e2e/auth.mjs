@@ -64,8 +64,7 @@ export async function ensureAccessToken() {
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.access_token) {
     throw new Error(
-      `refresh_token exchange failed (HTTP ${res.status}): ${JSON.stringify(body).slice(0, 200)} — ` +
-        "the chain may be broken by rotation; re-run e2e/get-token.mjs once to re-establish it."
+      `refresh_token exchange failed (HTTP ${res.status}): ${JSON.stringify(body).slice(0, 200)} — the chain may be broken by rotation; re-run e2e/get-token.mjs once to re-establish it.`
     );
   }
 

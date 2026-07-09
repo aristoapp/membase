@@ -22,10 +22,7 @@ try {
   execSync(`git diff --exit-code -- ${bundleDir}`, { stdio: "inherit" });
 } catch {
   console.error(
-    `\nClaude bundle provenance check failed: committed bundles under ${bundleDir} ` +
-      "do not match a fresh build of src/.\n" +
-      "If you changed src/: rebuild and commit the bundles — (cd clients/claude/runtime && bun run build).\n" +
-      "If you changed only the bundles: don't — edit src/ instead; the bundles are generated.",
+    `\nClaude bundle provenance check failed: committed bundles under ${bundleDir} do not match a fresh build of src/.\nIf you changed src/: rebuild and commit the bundles — (cd clients/claude/runtime && bun run build).\nIf you changed only the bundles: don't — edit src/ instead; the bundles are generated.`,
   );
   process.exit(1);
 }

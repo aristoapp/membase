@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { registerRecallHook } from "./recall";
 import type { MembaseClient } from "../client";
 import type { MembasePluginConfig, OpenClawPluginApi } from "../types";

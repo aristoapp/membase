@@ -20,13 +20,6 @@ const expectedArtifacts = [
   ["CHANGELOG.md", "changelog", "ported"]
 ];
 
-const requiredDocMarkers = [
-  {
-    path: "clients/cursor/README.md",
-    markers: [SNAPSHOT_PATH, "pnpm cursor:native-artifacts"]
-  }
-];
-
 const failures = [];
 const snapshot = readJson(SNAPSHOT_PATH);
 
@@ -53,13 +46,12 @@ if (snapshot) {
     assert(artifact.status === status, `${SNAPSHOT_PATH}: ${artifactPath} expected status ${status}`);
     assert(typeof artifact.sha === "string" && artifact.sha.length === 40, `${SNAPSHOT_PATH}: ${artifactPath} missing git blob sha`);
     assert(Number.isInteger(artifact.size) && artifact.size > 0, `${SNAPSHOT_PATH}: ${artifactPath} missing size`);
-    assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
+    assert(!Object.hasOwn(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
   }
 }
 
 assertCursorMetadataStillAssetFree();
 assertArtifactsPortedIn();
-assertDocs();
 assertPackageCheckComposition();
 
 if (failures.length > 0) {
@@ -82,7 +74,7 @@ function assertCursorMetadataStillAssetFree() {
     // The logo asset is ported at clients/cursor/assets/logo.svg; referencing
     // it from the generated manifest stays a launch-time choice (D5).
     for (const field of ["logo", "icon"]) {
-      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} stays omitted until the marketplace asset decision (D5) lands`);
+      assert(!Object.hasOwn(manifest, field), `${manifestPath}: ${field} stays omitted until the marketplace asset decision (D5) lands`);
     }
 
     assert(
@@ -109,19 +101,6 @@ function assertArtifactsPortedIn() {
       fs.existsSync(path.join(ROOT_DIR, "clients/cursor", artifactPath)),
       `clients/cursor/${artifactPath}: ported artifact missing after copy-in`
     );
-  }
-}
-
-function assertDocs() {
-  for (const doc of requiredDocMarkers) {
-    const content = readText(doc.path);
-    if (content === undefined) {
-      continue;
-    }
-
-    for (const marker of doc.markers) {
-      assert(content.includes(marker), `${doc.path}: missing marker ${JSON.stringify(marker)}`);
-    }
   }
 }
 

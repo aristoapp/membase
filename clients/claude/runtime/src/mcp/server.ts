@@ -364,8 +364,7 @@ async function main(): Promise<void> {
       });
       await client.recordUsage().catch(() => undefined);
       return success(
-        `Handoff stored in Membase (${status})` +
-          (replaced ? `; replaced ${replaced} older handoff(s).` : "."),
+        `Handoff stored in Membase (${status})${replaced ? `; replaced ${replaced} older handoff(s).` : "."}`,
       );
     },
   );

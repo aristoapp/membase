@@ -45,11 +45,7 @@ const clientSpecs = [
   }
 ];
 
-const {
-  MEMBASE_CONNECTOR_ENV,
-  redactEnvironment,
-  validateConnectorConfig
-} = await importModule("packages/core/dist/index.js");
+const { validateConnectorConfig } = await importModule("packages/core/dist/index.js");
 
 let checkedClients = 0;
 let declaredCommands = 0;

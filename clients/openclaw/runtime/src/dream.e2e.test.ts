@@ -117,7 +117,6 @@ function makeApi() {
 // A fake commander program that captures each command's action handler by name.
 function makeProgram() {
   const actions: Record<string, () => Promise<void>> = {};
-  // biome-ignore lint/suspicious/noExplicitAny: minimal chainable command stub
   const cmd = (path: string): any => ({
     description: () => cmd(path),
     option: () => cmd(path),

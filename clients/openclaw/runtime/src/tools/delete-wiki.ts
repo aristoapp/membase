@@ -69,8 +69,7 @@ export function registerDeleteWikiTool(
           formatWikiDocument(doc, index),
         );
         return await toolResponse(
-          "Found these matching wiki documents. Ask the user which one to delete, then call again with confirm=true and doc_id.\n\n" +
-            lines.join("\n\n"),
+          `Found these matching wiki documents. Ask the user which one to delete, then call again with confirm=true and doc_id.\n\n${lines.join("\n\n")}`,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

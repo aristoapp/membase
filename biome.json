@@ -1,0 +1,41 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+	"root": true,
+	"files": {
+		"includes": [
+			"**",
+			"!**/dist",
+			"!**/*.cjs",
+			"!clients/claude/runtime/plugin",
+			"!pnpm-lock.yaml",
+			"!**/*.svg"
+		]
+	},
+	"formatter": {
+		"enabled": false
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"performance": {
+				"noDelete": "off"
+			},
+			"suspicious": {
+				"noTemplateCurlyInString": "off"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["contract/**", "**/*.e2e.test.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noAssignInExpressions": "off"
+					}
+				}
+			}
+		}
+	]
+}

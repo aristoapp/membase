@@ -60,9 +60,7 @@ export function registerForgetTool(
         });
 
         return await toolResponse(
-          "Found these matching memories. Ask the user which one to delete, " +
-            "then call membase_forget again with confirm=true and the uuid.\n\n" +
-            formatted.join("\n\n"),
+          `Found these matching memories. Ask the user which one to delete, then call membase_forget again with confirm=true and the uuid.\n\n${formatted.join("\n\n")}`,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

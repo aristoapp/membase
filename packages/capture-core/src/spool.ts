@@ -63,6 +63,7 @@ export interface CaptureSpool {
     },
   ): SpoolRecord | null;
   flushSpool(
+    // biome-ignore lint/suspicious/noConfusingVoidType: senders may legitimately return nothing; undefined would force every caller to return a value
     send: (record: SpoolRecord) => Promise<void | boolean>,
     limit?: number,
   ): Promise<{ flushed: number; remaining: number }>;
@@ -320,6 +321,7 @@ export function createCaptureSpool(
   }
 
   async function flushSpool(
+    // biome-ignore lint/suspicious/noConfusingVoidType: senders may legitimately return nothing; undefined would force every caller to return a value
     send: (record: SpoolRecord) => Promise<void | boolean>,
     limit = 10,
   ): Promise<{ flushed: number; remaining: number }> {

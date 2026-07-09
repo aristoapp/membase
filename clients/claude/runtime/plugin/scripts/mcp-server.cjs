@@ -32541,7 +32541,7 @@ async function main() {
       });
       await client.recordUsage().catch(() => void 0);
       return success2(
-        `Handoff stored in Membase (${status})` + (replaced ? `; replaced ${replaced} older handoff(s).` : ".")
+        `Handoff stored in Membase (${status})${replaced ? `; replaced ${replaced} older handoff(s).` : "."}`
       );
     }
   );
