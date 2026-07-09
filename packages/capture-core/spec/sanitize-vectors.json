@@ -1,5 +1,5 @@
 {
-  "$comment": "Language-neutral golden vectors binding the TS capture-core and the Hermes Python sanitize port (ADR 0002). Both test suites consume this file. All secret-shaped values are fabricated fixtures for redaction tests.",
+  "$comment": "Language-neutral golden vectors binding the TS capture-core and the Hermes Python sanitize port. Both test suites consume this file. All secret-shaped values are fabricated fixtures for redaction tests.",
   "redact_secret_assignment_full": {
     "$comment": "Full keyword set (API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY). Capture-path policy (Claude runtime).",
     "cases": [

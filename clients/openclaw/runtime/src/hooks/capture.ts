@@ -28,7 +28,7 @@ const messageBuffers = new Map<string, BufferedMessage[]>();
 const silenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function getChannelKey(event: Record<string, unknown>): string {
-  // Prefer the top-level sessionKey added in openclaw PR #44348.
+  // Newer OpenClaw gateways send a top-level sessionKey; prefer it.
   // Fall back to the legacy session object shape, then to "default".
   if (typeof event.sessionKey === "string" && event.sessionKey) {
     return event.sessionKey;
@@ -81,7 +81,7 @@ async function flushBuffer(
     await client.ingest(content);
     messageBuffers.delete(channelKey);
   } catch (err) {
-    // Failure path (ADR 0005): persist to the disk spool instead of retaining
+    // Failure path: persist to the disk spool instead of retaining
     // in RAM. RAM retention is lost on a gateway restart; the spool survives
     // it and `membase dream` (or the next startup drain) uploads it. Only clear
     // the RAM buffer if the batch actually reached disk — if enqueue was refused
@@ -139,7 +139,7 @@ export function registerCaptureHook(
 
         let text = extractTextContent(m.content);
         // Full secret redaction before buffering — captured text must never
-        // carry credentials off the machine (ADR 0002 §3).
+        // carry credentials off the machine.
         text = sanitizeCaptureText(text);
         if (isOperationalMessage(text)) continue;
         if (text.length >= 10) {
@@ -164,7 +164,7 @@ export function registerCaptureHook(
       if (buffer.length >= MAX_BUFFER_SIZE) {
         const toFlush = buffer.splice(0, buffer.length - MIN_MESSAGES_TO_FLUSH);
         const tempKey = `${channelKey}__flush`;
-        // A failed flush usually spools to disk (ADR 0005) and clears tempKey.
+        // A failed flush usually spools to disk and clears tempKey.
         // But if the spool *declined* the batch (dedup/lock timeout) flushBuffer
         // keeps it in RAM under tempKey, so merge rather than overwrite — a plain
         // set() would drop that retained batch. Cap so a combined gateway+spool

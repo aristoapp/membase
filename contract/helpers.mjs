@@ -254,7 +254,7 @@ export function runEntry(
       child.stdin.write(input);
     }
     if (!holdStdinOpen) child.stdin.end();
-    // ponytail: when holdStdinOpen, the pipe stays open until child exit or
+    // When holdStdinOpen, the pipe stays open until child exit or
     // the killer fires — exactly the "stdin held open" case C-HOOK-6 names.
   });
 }

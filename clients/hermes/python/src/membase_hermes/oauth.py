@@ -124,7 +124,7 @@ def exchange_client_credentials(
 ) -> str:
     """Mint a short-lived access token via the client_credentials grant.
 
-    For admin-provisioned service clients (membase#318) used in CI/headless
+    For admin-provisioned service clients used in CI/headless
     contexts. Returns only an access token — no refresh token is issued; the
     caller re-exchanges its credentials when the token expires.
     """

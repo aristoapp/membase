@@ -1,7 +1,7 @@
 """Golden-vector tests binding the Hermes Python spool to the TS capture-core.
 
 The vectors live in packages/capture-core/spec/spool-vectors.json and are
-consumed by BOTH the TS spool test suite and this file (ADR 0002 / ADR 0005),
+consumed by BOTH the TS spool test suite and this file,
 so the on-disk contract — capture_id hashing and the enqueue drop rules —
 cannot drift between languages.
 """

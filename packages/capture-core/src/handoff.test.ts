@@ -86,7 +86,7 @@ describe("handoff helpers", () => {
   });
 });
 
-// Golden vectors shared with the Hermes Python port (ADR 0002) — see
+// Golden vectors shared with the Hermes Python port — see
 // clients/hermes/python/tests/test_handoff_vectors.py for the other consumer.
 interface EpisodeFields {
   name?: string;

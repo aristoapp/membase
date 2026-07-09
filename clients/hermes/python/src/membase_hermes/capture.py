@@ -32,7 +32,7 @@ class CaptureWorker:
         self.logger = logger or logging.getLogger(__name__)
         self.max_retries = max(0, max_retries)
         self.retry_delay_s = max(0.0, retry_delay_s)
-        # Failure-path disk spool (ADR 0005): when a job fails all retries, it is
+        # Failure-path disk spool: when a job fails all retries, it is
         # persisted here instead of dropped, so `hermes-membase dream` can upload
         # it later. Optional so tests/callers without disk state still work.
         self._spool = spool
@@ -135,7 +135,7 @@ class CaptureWorker:
                 return
             except Exception as error:
                 if attempt >= self.max_retries:
-                    # Failure path (ADR 0005): persist to the disk spool instead
+                    # Failure path: persist to the disk spool instead
                     # of dropping, so a restart can't lose it and dream uploads
                     # it later.
                     if self._spool is not None:

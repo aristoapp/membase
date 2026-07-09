@@ -189,7 +189,7 @@ def _cmd_status(config_path: Path) -> int:
 
 
 def _cmd_dream(config_path: Path) -> int:
-    """Upload captures that failed to sync and are waiting on disk (ADR 0005)."""
+    """Upload captures that failed to sync and are waiting on disk."""
     from .spool import default_capture_spool
 
     spool = default_capture_spool()

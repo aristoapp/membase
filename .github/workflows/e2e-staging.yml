@@ -1,11 +1,10 @@
 name: E2E staging (client_credentials)
 
 # Verifies the connector contract + remember/search/context lifecycle against
-# the STAGING environment, which tracks `develop`. This is the pre-prod gate:
-# changes land on develop -> deploy to staging -> this workflow proves the live
-# connector still works there before prod. Auth uses a staging-only
-# client_credentials service client (aristoapp/membase#318), so no human login
-# and no token rotation is needed.
+# the Membase backend's STAGING environment (the backend's pre-prod gate; its
+# deploys land on staging before prod). Auth uses a staging-only
+# client_credentials service client, so no human login and no token rotation
+# is needed.
 
 on:
   workflow_dispatch:
@@ -43,9 +42,8 @@ jobs:
           node-version: 22
 
       # Staging service credentials — a client_credentials client bound to a
-      # dedicated ci-e2e test user, provisioned against the staging Redis via
-      # apps/api/scripts/create_service_client.py. Revoke by deleting that
-      # service client; no rotation, no PAT.
+      # dedicated ci-e2e test user, provisioned by a Membase backend admin.
+      # Revoke by deleting that service client; no rotation, no PAT.
       # workflow_dispatch → Tier 2 (fast smoke, ~seconds). schedule (nightly)
       # → Tier 3 (deep quality/latency, minutes). Same harness, same creds.
       - name: Run staging e2e (Tier 2 on demand, Tier 3 nightly)

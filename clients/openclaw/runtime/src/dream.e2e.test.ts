@@ -12,8 +12,8 @@ import {
   resetCaptureSpoolForTest,
 } from "./spool";
 
-// ADR 0005 / DR-1 end-to-end. spool.test.ts covers the spool primitives with a
-// stub ingest; this drives the FULL client-side chain the PR actually ships:
+// Failure-path spool end-to-end. spool.test.ts covers the spool primitives
+// with a stub ingest; this drives the FULL client-side chain as shipped:
 // an `agent_end` hook event → a flush that fails against a down gateway →
 // disk spool → the real `membase dream` CLI action → a real HTTP upload once
 // the gateway recovers. The one seam a network-only e2e (e2e/run-e2e.mjs)

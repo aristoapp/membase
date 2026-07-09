@@ -105,7 +105,7 @@ function runPythonSyntaxCheck() {
 }
 
 // The real Hermes provider runtime has been copied into the repo (consolidation
-// Group B, pure copy-in). This validates the runtime is PRESENT and exposes its
+// This validates the runtime is PRESENT and exposes its
 // public connector surface, by source inspection only — it does NOT import the
 // modules (that would require the runtime's third-party deps, e.g. httpx, in CI).
 // Live behavior is covered by the e2e tiers.

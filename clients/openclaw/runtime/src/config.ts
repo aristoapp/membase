@@ -15,7 +15,7 @@ export const DEFAULT_TOKEN_FILE_PATH = join(
   "openclaw-membase.json",
 );
 
-// State dir for the failure-path capture spool (ADR 0005). Sibling of the
+// State dir for the failure-path capture spool. Sibling of the
 // token dir under ~/.openclaw so it survives plugin updates (not in
 // extensions/). MEMBASE_DATA_DIR overrides it, matching the other clients.
 export function membaseStateDir(): string {

@@ -1,11 +1,12 @@
-// Shared client-side capture/recall primitives (ADR 0002, Group D1).
+// Shared client-side capture/recall primitives.
 //
 // Everything here was byte-duplicated (or trivially diverged) across the
 // Claude, OpenClaw, and Hermes runtimes. The core exports the shared
 // primitives; host-specific behavior (extra strip patterns, keyword lists,
 // empty-input policy) stays in each runtime as explicit parameters, so this
 // extraction changes NO runtime behavior. Divergences that look accidental
-// are documented at the parameter site and reconciled deliberately in D2.
+// are documented at the parameter site; the divergences are deliberate,
+// preserved until the rule sets are reconciled.
 //
 // The language-neutral golden vectors in ../spec/sanitize-vectors.json bind
 // this module and the Hermes Python port to the same semantics; both test
@@ -86,8 +87,8 @@ export function normalizeLines(
 
 // ---------------------------------------------------------------------------
 // Secret redaction (the full rule set is the capture-path policy: Claude, and
-// since E1/PR #12 the OpenClaw capture path too. Recall-query paths in
-// OpenClaw/Hermes keep the basic assignment rule until D2.)
+// the OpenClaw capture path too. Recall-query paths in OpenClaw/Hermes
+// keep the basic assignment rule until the rule sets are reconciled.)
 // ---------------------------------------------------------------------------
 
 export const SECRET_ASSIGNMENT_KEYWORDS_FULL = [
@@ -179,7 +180,7 @@ export * from "./token-store.js";
 export * from "./handoff.js";
 
 // ---------------------------------------------------------------------------
-// OAuth HTTP transport (D1 slice 2)
+// OAuth HTTP transport
 //
 // The token-state + single-flight-refresh + retry-on-401 machinery was
 // byte-duplicated in the Claude and OpenClaw clients. Product API methods and

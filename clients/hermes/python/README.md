@@ -1,7 +1,6 @@
 # Hermes Python Runtime
 
-The real Hermes Agent runtime for Membase, copied in as-is from the standalone
-`aristoapp/hermes-membase` repo (consolidation Group B). It ships the memory
+The Hermes Agent runtime for Membase. It ships the memory
 provider, HTTP client with OAuth (browser login and headless
 `client_credentials`), auto-capture, built-in-memory mirroring, the CLI, and
 the installer.

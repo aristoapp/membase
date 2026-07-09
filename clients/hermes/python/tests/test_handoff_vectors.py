@@ -2,7 +2,7 @@
 
 The vectors live in packages/capture-core/spec/handoff-vectors.json and are
 consumed by BOTH the TS capture-core test suite (src/handoff.test.ts) and this
-file (ADR 0002), so tag/clamp/picker/sweep-selection drift between the two
+file, so tag/clamp/picker/sweep-selection drift between the two
 languages fails CI.
 """
 
