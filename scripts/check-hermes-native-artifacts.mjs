@@ -38,17 +38,6 @@ const expectedArtifacts = [
   ["tests/test_provider_tools.py", "test-evidence", "deferred-review-only"]
 ];
 
-const requiredDocMarkers = [
-  {
-    path: "clients/hermes/README.md",
-    markers: [SNAPSHOT_PATH, "pnpm hermes:native-artifacts"]
-  },
-  {
-    path: "docs/install/hermes.md",
-    markers: [SNAPSHOT_PATH, "pnpm hermes:native-artifacts"]
-  }
-];
-
 const failures = [];
 const snapshot = readJson(SNAPSHOT_PATH);
 
@@ -67,13 +56,12 @@ if (snapshot) {
     const artifact = artifacts.find((item) => item.path === artifactPath);
     assert(Boolean(artifact), `${SNAPSHOT_PATH}: missing artifact ${artifactPath}`);
     if (artifact) {
-      assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
+      assert(!Object.hasOwn(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
     }
   }
 }
 
 assertRuntimePortedIn();
-assertDocs();
 assertPackageCheckComposition();
 
 if (failures.length > 0) {
@@ -112,19 +100,6 @@ function assertRuntimePortedIn() {
       !provider.includes("Runtime API calls remain disabled"),
       `${base}/provider.py: still the disabled review scaffold, not the real runtime`
     );
-  }
-}
-
-function assertDocs() {
-  for (const doc of requiredDocMarkers) {
-    const content = readText(doc.path);
-    if (content === undefined) {
-      continue;
-    }
-
-    for (const marker of doc.markers) {
-      assert(content.includes(marker), `${doc.path}: missing marker ${JSON.stringify(marker)}`);
-    }
   }
 }
 

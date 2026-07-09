@@ -251,14 +251,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
       const pending = pendingSpoolCount();
       if (pending > 0) {
         lines.push(
-          `Membase spool has ${pending} pending local capture(s) at ` +
-            `${pendingSpoolPath()}. Rename \`pending.jsonl\` to ` +
-            "`flush-<timestamp>.jsonl` first (atomic — claims the batch; " +
-            "new captures keep going to a fresh pending.jsonl and a second " +
-            "flusher finds nothing). Upload each record's content via " +
-            "add_memory (keep its project). Records that look like secrets: " +
-            "do NOT upload, do NOT delete — report them to the user. Delete " +
-            "the renamed file only after all non-secret records are stored.",
+          `Membase spool has ${pending} pending local capture(s) at ${pendingSpoolPath()}. Rename \`pending.jsonl\` to \`flush-<timestamp>.jsonl\` first (atomic — claims the batch; new captures keep going to a fresh pending.jsonl and a second flusher finds nothing). Upload each record's content via add_memory (keep its project). Records that look like secrets: do NOT upload, do NOT delete — report them to the user. Delete the renamed file only after all non-secret records are stored.`,
         );
       }
     }

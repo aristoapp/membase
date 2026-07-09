@@ -212,13 +212,13 @@ function formatArtifact(value, format) {
 }
 
 function formatHermesPluginYaml(manifest) {
-  return [
+  return `${[
     `name: ${manifest.name}`,
     `version: ${manifest.version}`,
     `description: ${JSON.stringify(manifest.description)}`,
     "pip_dependencies:",
     ...manifest.pip_dependencies.map((dependency) => `  - ${dependency}`)
-  ].join("\n") + "\n";
+  ].join("\n")}\n`;
 }
 
 function describeFirstDifference(actual, expected) {

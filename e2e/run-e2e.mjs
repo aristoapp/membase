@@ -184,8 +184,7 @@ const restFetch = (path, init) =>
     },
   });
 const restSearch = async (query, project) => {
-  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
-    (project ? `&project=${encodeURIComponent(project)}` : "");
+  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles${project ? `&project=${encodeURIComponent(project)}` : ""}`;
   const res = await restFetch(`/memory/search?${qs}`);
   if (res.status >= 400) {
     noteQuota(await res.text(), res.status);

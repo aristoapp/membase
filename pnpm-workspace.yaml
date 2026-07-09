@@ -7,6 +7,8 @@ packages:
 # Dependencies of the openclaw peer dep pulled in for runtime typechecking;
 # none of their postinstall scripts are needed for type-only usage.
 allowBuilds:
+  # biome's postinstall places its platform binary.
+  '@biomejs/biome': true
   '@google/genai': false
   # esbuild's postinstall fetches its platform binary — needed by the claude
   # runtime bundle build (scripts/build.ts).

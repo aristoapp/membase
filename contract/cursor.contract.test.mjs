@@ -5,7 +5,6 @@ import {
   CURSOR_HOOK,
   makeDataDir,
   runEntry,
-  readSpool,
   readSpoolRaw,
   readScratch,
 } from "./helpers.mjs";

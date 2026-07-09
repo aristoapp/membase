@@ -53,7 +53,8 @@ describe("scratch store", () => {
     // Not consumed by the read alone — the file survives a failed enqueue.
     expect(readSession("s1")?.observations.length).toBe(2);
     // Only discardScratch (after a durable enqueue) deletes it.
-    discardScratch(session!.path);
+    if (!session) throw new Error("scratch session missing");
+    discardScratch(session.path);
     expect(readSession("s1")).toBeNull();
   });
 
@@ -140,7 +141,9 @@ describe("scratch store", () => {
     expect(swept.map((s) => s.sessionId)).toEqual(["old"]);
     // Sweep no longer deletes on its own — the caller discards after enqueue.
     expect(() => statSync(oldPath)).not.toThrow();
-    discardScratch(swept[0]!.path);
+    const sweptFirst = swept[0];
+    if (!sweptFirst) throw new Error("swept session missing");
+    discardScratch(sweptFirst.path);
     expect(() => statSync(oldPath)).toThrow();
     // "current" untouched.
     expect(readSession("current")?.observations.length).toBe(1);
@@ -195,11 +198,11 @@ describe("scratch store", () => {
     const late = "2026-07-07T02:00:00.000Z";
     writeFileSync(
       p,
-      [
+      `${[
         JSON.stringify({ meta: true, started_at: early, project: "p" }),
         JSON.stringify({ files: ["a.ts"], commands: [], tasks: 0 }),
         JSON.stringify({ meta: true, started_at: late, project: "p" }),
-      ].join("\n") + "\n",
+      ].join("\n")}\n`,
     );
     expect(readSession("dup")?.startedAt).toBe(early);
   });
@@ -212,10 +215,10 @@ describe("scratch store", () => {
     const p = scratchFile("corrupt");
     writeFileSync(
       p,
-      [
+      `${[
         JSON.stringify({ meta: true, started_at: 1751846400000, project: "p" }),
         JSON.stringify({ files: ["a.ts"], commands: [], tasks: 0 }),
-      ].join("\n") + "\n",
+      ].join("\n")}\n`,
     );
     const session = readSession("corrupt");
     // Bad meta dropped: no started_at, but observations survive and nothing throws.

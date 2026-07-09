@@ -40,6 +40,8 @@ jobs:
       # bundles with bun and diffs them against the committed files.
       - uses: oven-sh/setup-bun@v2
 
+      - run: pnpm lint
+
       - run: pnpm check
 
       # Runtime unit tests (copied in with the Group B runtimes). The parity

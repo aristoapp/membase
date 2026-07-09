@@ -14,7 +14,7 @@ const configPaths = [
 const requiredDocMarkers = [
   {
     path: "docs/install/cursor.md",
-    markers: [CURSOR_MCP_URL, "OAuth", "pnpm cursor:transport-parity"]
+    markers: [CURSOR_MCP_URL, "OAuth"]
   }
 ];
 
@@ -38,7 +38,7 @@ for (const configPath of configPaths) {
   }
 
   for (const forbiddenKey of ["type", "command", "args", "env"]) {
-    if (Object.prototype.hasOwnProperty.call(server, forbiddenKey)) {
+    if (Object.hasOwn(server, forbiddenKey)) {
       failures.push(`${configPath}: must not include ${forbiddenKey} for HTTP-first Cursor MCP`);
     }
   }

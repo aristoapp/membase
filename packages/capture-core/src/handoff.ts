@@ -214,11 +214,7 @@ export function buildHandoffInjection(args: {
   const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
   const storedAt = new Date(args.storedAtMs).toISOString();
   return (
-    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n` +
-    `${neutralizeInjection(args.text)}\n` +
-    "</membase-handoff>\n" +
-    "Use this only if the user is continuing the work it describes; it may " +
-    "already be finished."
+    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n${neutralizeInjection(args.text)}\n</membase-handoff>\nUse this only if the user is continuing the work it describes; it may already be finished.`
   );
 }
 
@@ -234,9 +230,6 @@ export function buildStaleHandoffNotice(args: {
   const now = args.nowMs ?? Date.now();
   const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
   return (
-    `A Membase handoff from ${ageDays} day(s) ago exists for this ` +
-    "project but was not injected (stale). If the user wants to continue " +
-    "that work, recall it (search_memory for \"[HANDOFF]\", or read the " +
-    "local handoff file)."
+    `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]", or read the local handoff file).`
   );
 }
