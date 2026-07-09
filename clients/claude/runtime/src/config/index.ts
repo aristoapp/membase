@@ -47,7 +47,7 @@ function configPath(): string {
 
 // Token I/O is delegated to the shared capture-core store (same file path,
 // same on-disk format) so hook processes and any stdio-bundled client read
-// one source of truth — north-star pillar 1.
+// one source of truth.
 const tokenStore = createTokenStore({ dir: ensureDataDir });
 
 export function credentialsPath(): string {

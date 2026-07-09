@@ -4,6 +4,7 @@ clients/*/dist/
 packages/*/dist/
 *.tsbuildinfo
 __pycache__/
+.venv/
 *.py[cod]
 .env
 .env.*
@@ -22,3 +23,8 @@ repomix*.md
 /batch-review/
 /decisions/
 /openwiki/
+
+# macOS/iCloud sync duplicates ("name 2.ext") — appear spontaneously on
+# iCloud-synced folders and must never be committed
+* 2
+* 2.*

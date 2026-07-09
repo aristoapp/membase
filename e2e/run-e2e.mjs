@@ -750,7 +750,7 @@ async function evalHandoff(entry) {
 }
 
 // ---------- Tier 3: handoff replace-on-store (REST ingest/search/delete) ----------
-// North-star pillar 2 policy (exactly ONE handoff per project — replace-on-
+// Handoff policy (exactly ONE per project — replace-on-
 // store, see packages/capture-core/src/handoff.ts's sweepReplacedHandoffs):
 // storing a new [HANDOFF] must search for the prior one, then DELETE it. This
 // is the one piece of that contract evalHandoff (above) never exercises — it
@@ -878,7 +878,7 @@ async function evalHandoffReplace(entry) {
 }
 
 // ---------- Tier 3: hook-capture source tagging (REST ingest, per client) ----------
-// North-star pillar 1 (hook-based passive capture): every client's hook
+// Hook-based passive capture: every client's hook
 // eventually flushes its spool via a real POST to the same REST ingest
 // endpoint this harness already drives (packages/capture-core/src/spool.ts
 // flushSpool -> client.ingest). This suite cannot fire an actual hook process

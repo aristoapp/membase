@@ -1,5 +1,5 @@
-// MEMBASE_CLIENT_SOURCE lets other stdio-bundled clients (Cursor/Codex,
-// north-star pillar 1) run the same bundle with correct source attribution.
+// MEMBASE_CLIENT_SOURCE lets other stdio-bundled clients (Cursor/Codex)
+// run the same bundle with correct source attribution.
 // constants.ts reads the env at module load, so every case runs in a
 // subprocess with the env var explicitly set or deleted.
 import { describe, expect, it } from "bun:test";

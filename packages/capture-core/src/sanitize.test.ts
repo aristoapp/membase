@@ -5,6 +5,7 @@ import {
   buildSecretAssignmentRe,
   clampRecallQuery,
   isCasualChat,
+  neutralizeInjection,
   redactSecrets,
   SECRET_ASSIGNMENT_KEYWORDS_BASIC,
   stripContextBlocks,
@@ -72,6 +73,12 @@ describe("golden vectors", () => {
   test("recall_query_clamp", () => {
     for (const c of group("recall_query_clamp").cases) {
       expect(clampRecallQuery(c.in)).toBe(c.out as string);
+    }
+  });
+
+  test("neutralize_injection", () => {
+    for (const c of group("neutralize_injection").cases) {
+      expect(neutralizeInjection(c.in)).toBe(c.out as string);
     }
   });
 });

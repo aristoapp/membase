@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cursor hooks.json adapter (north-star pillar 1). Cursor's hook events and
+// Cursor hooks.json adapter for shared auto-capture. Cursor's hook events and
 // payload fields differ from the Claude/Codex shape, so this script only
 // TRANSLATES: map the Cursor payload to the shared runtime's input, then
 // pipe it into the bundled hook.cjs (which owns summarize/spool/flush).
