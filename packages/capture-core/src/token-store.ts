@@ -1,7 +1,7 @@
-// Disk token store (north-star pillar 1, stdio bundle mode).
+// Disk token store (stdio bundle mode).
 //
 // Extracted from the Claude runtime's config module so every stdio-bundled
-// client (Claude today; Cursor/Codex per docs/north-star-readiness.md) shares
+// client (Claude today; Cursor/Codex next) shares
 // one credentials format and one atomic-write path: hook processes and the
 // bundled MCP server read the SAME file, which is what makes hook-side upload
 // possible without a second login. File is 0600 inside a 0700 dir.

@@ -22,22 +22,6 @@ const expectedArtifacts = [
 
 const requiredDocMarkers = [
   {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm cursor:native-artifacts", SNAPSHOT_PATH, "rules/membase.mdc"]
-  },
-  {
-    path: "docs/migration-parity.md",
-    markers: ["clients/cursor/native-artifacts.json", "Cursor native artifact snapshot"]
-  },
-  {
-    path: "docs/test-coverage-parity.md",
-    markers: ["pnpm cursor:native-artifacts", "snapshot-only"]
-  },
-  {
-    path: "docs/review-summary.md",
-    markers: ["pnpm cursor:native-artifacts", "Cursor native artifact snapshot"]
-  },
-  {
     path: "clients/cursor/README.md",
     markers: [SNAPSHOT_PATH, "pnpm cursor:native-artifacts"]
   }

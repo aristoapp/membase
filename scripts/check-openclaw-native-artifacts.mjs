@@ -39,26 +39,6 @@ const expectedArtifacts = [
 
 const requiredDocMarkers = [
   {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm openclaw:native-artifacts", SNAPSHOT_PATH, "src/commands/cli.ts"]
-  },
-  {
-    path: "docs/migration-parity.md",
-    markers: [SNAPSHOT_PATH, "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/test-coverage-parity.md",
-    markers: ["pnpm openclaw:native-artifacts", "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/review-summary.md",
-    markers: ["pnpm openclaw:native-artifacts", "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/runtime-parity-decisions.md",
-    markers: [SNAPSHOT_PATH, "OpenClaw native artifact snapshot"]
-  },
-  {
     path: "clients/openclaw/README.md",
     markers: [SNAPSHOT_PATH, "pnpm openclaw:native-artifacts"]
   },

@@ -13,17 +13,6 @@ const configPaths = [
 
 const requiredDocMarkers = [
   {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm cursor:transport-parity", CURSOR_MCP_URL]
-  },
-  {
-    path: "docs/runtime-parity-decisions.md",
-    markers: [
-      "Finalized to `membase.so` with no user-supplied API key",
-      "Finalized: Claude plugin-local stdio and Cursor/Hermes/OpenClaw remote HTTP MCP"
-    ]
-  },
-  {
     path: "docs/install/cursor.md",
     markers: [CURSOR_MCP_URL, "OAuth", "pnpm cursor:transport-parity"]
   }

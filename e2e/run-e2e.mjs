@@ -887,9 +887,8 @@ async function evalHandoffReplace(entry) {
 // tagged with a given client's `source` is accepted, and `sources=[...]`
 // filtering actually isolates one client's captures from another's. If this
 // contract breaks, every client's hook capture breaks silently right along
-// with it, so it is the highest-leverage piece of pillar 1 a network-only
-// harness can verify. Client-side hook firing itself needs a live per-app
-// run (see docs/implementation-overview.html §7.5-style gap notes).
+// with it, so it is the highest-leverage piece of hook capture a network-only
+// harness can verify. Client-side hook firing itself needs a live per-app run.
 async function evalCaptureSourceTags(entry) {
   const stamp = Date.now();
   const project = `e2e-capture-src-${stamp}`;

@@ -38,26 +38,6 @@ const expectedArtifacts = [
 
 const requiredDocMarkers = [
   {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm claude:native-artifacts", SNAPSHOT_PATH, "plugin/commands/login.md"]
-  },
-  {
-    path: "docs/migration-parity.md",
-    markers: [SNAPSHOT_PATH, "Claude native artifact snapshot"]
-  },
-  {
-    path: "docs/test-coverage-parity.md",
-    markers: ["pnpm claude:native-artifacts", "Claude native artifact snapshot"]
-  },
-  {
-    path: "docs/review-summary.md",
-    markers: ["pnpm claude:native-artifacts", "Claude native artifact snapshot"]
-  },
-  {
-    path: "docs/runtime-parity-decisions.md",
-    markers: [SNAPSHOT_PATH, "Claude native artifact snapshot"]
-  },
-  {
     path: "clients/claude/README.md",
     markers: [SNAPSHOT_PATH, "pnpm claude:native-artifacts"]
   },
