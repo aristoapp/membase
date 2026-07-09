@@ -187,8 +187,7 @@ OAuth prompt on first use:
 
 ## Tools
 
-Every connector exposes the same small, stable capability set — nothing about
-Membase's internal memory engine leaks through:
+Every connector gives your agent the same small, stable set of tools:
 
 | Capability | What it does |
 | --- | --- |
@@ -214,9 +213,8 @@ Save this: the staging database resets every night at 02:00 UTC.
 
 ## How it works
 
-Connectors talk to a stable Membase Context API. Membase owns storage, ranking,
-freshness, provenance, and governance behind that API — this repo never exposes
-those internals.
+Every connector is a thin adapter over one shared core, talking to the hosted
+Membase API:
 
 ```text
 Client plugin or MCP config      ← per-client adapter (clients/*)
@@ -225,20 +223,13 @@ Client plugin or MCP config      ← per-client adapter (clients/*)
 Shared connector core            ← packages/core, packages/connector-sdk
         │
         ▼
-Membase Context API              ← stable public surface
-        │
-        ▼
-Private Membase memory engine    ← storage, graph, ranking (not in this repo)
+Membase API                      ← hosted service (memory storage & search)
 ```
 
-Dependencies point downward only. Client-specific behavior stays in
-`clients/*`; shared behavior lives in `packages/*`. A CI guard fails the build
-if any internal Membase term (storage schema, graph, embeddings, ranking) leaks
-into the public surface.
-
-> **Note:** This repository is the connector/integration layer only. The
-> Membase Context API, memory engine, and their supporting services are a
-> separate, private system and are not part of this repo.
+Client-specific behavior stays in `clients/*`; shared behavior lives in
+`packages/*`. The Membase service itself (storage, search, ranking) is a
+separate hosted system — this repo is just the connectors, so adding or
+improving a client never requires touching a backend.
 
 For the full design rationale, see [docs/architecture.md](docs/architecture.md),
 the decision records in [docs/adr/](docs/adr/), and the "where does X live"
