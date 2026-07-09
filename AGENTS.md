@@ -16,7 +16,7 @@ Repo-specific rules:
   `pnpm check`'s public-surface guard fails the build otherwise.
 - **Layering points down only**: client-specific behavior stays in
   `clients/*`, shared behavior in `packages/*`. See [MAP.md](MAP.md) for
-  where things live and [docs/adr/](docs/adr/) for why.
+  where things live and [docs/architecture.md](docs/architecture.md) for why.
 - **After touching a descriptor, adapter, or `packages/connector-sdk`**, run
   `pnpm generate` so committed manifests/configs stay in sync with the
   adapters.

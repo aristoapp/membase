@@ -240,9 +240,8 @@ into the public surface.
 > Membase Context API, memory engine, and their supporting services are a
 > separate, private system and are not part of this repo.
 
-For the full design rationale, see [docs/architecture.md](docs/architecture.md),
-the decision records in [docs/adr/](docs/adr/), and the "where does X live"
-map in [MAP.md](MAP.md).
+For the full design rationale, see [docs/architecture.md](docs/architecture.md)
+and the "where does X live" map in [MAP.md](MAP.md).
 
 ## Contributing
 

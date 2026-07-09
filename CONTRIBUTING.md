@@ -79,15 +79,15 @@ A few principles keep this repo maintainable. Please follow them:
 - **Behavioral variance stays per-client.** Don't merge adapters sideways; push
   genuinely shared behavior down into `packages/capture-core` instead.
 - **Every enforced decision gets a doc and a guard.** If you change a rule,
-  update its doc (usually under `docs/` or an ADR) *and* the `scripts/check-*.mjs`
+  update its doc (usually under `docs/`) *and* the `scripts/check-*.mjs`
   guard that enforces it, in the same PR.
 - **Committed manifests/configs are generated artifacts.** Don't hand-edit files
   under `manifests/` or generated files under `clients/*`; change the adapter or
   descriptor and run `pnpm generate`.
 
 See [MAP.md](MAP.md) for a map of where things live, and
-[docs/architecture.md](docs/architecture.md) plus [docs/adr/](docs/adr/) for the
-reasoning behind these boundaries.
+[docs/architecture.md](docs/architecture.md) for the reasoning behind these
+boundaries.
 
 ## Adding a new connector
 
