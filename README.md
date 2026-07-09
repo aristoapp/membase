@@ -13,47 +13,58 @@ survives across sessions, tools, and platforms so your agents remember what
 matters. This repository is the **integration surface**: it gives editors,
 CLIs, and MCP-capable agents a consistent, secure way to connect to Membase.
 
-Instead of a separate plugin repo per client, every connector lives here behind
-one shared core, one auth model, and one small public contract.
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=membase&config=%7B%22type%22%3A%20%22http%22%2C%20%22url%22%3A%20%22https%3A%2F%2Fmcp.membase.so%2Fmcp%22%7D)
 
-> **Status:** actively developed, pre-1.0. The public connector contract
-> (`remember` / `search` / `getContext` / `deleteOrForget`) is stable; client
-> runtimes and packaging are still maturing. Expect changes before a tagged
-> release.
-
-## Table of contents
-
-- [Why Membase](#why-membase)
-- [Quick start](#quick-start)
-- [Supported clients](#supported-clients)
-- [What you get](#what-you-get)
-- [Use cases](#use-cases)
-- [Example prompts](#example-prompts)
-- [How it works](#how-it-works)
-- [Repository layout](#repository-layout)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
-
-## Why Membase
+## Use cases
 
 Most AI tools forget everything the moment a chat ends. Context you've already
 explained — your stack, your preferences, decisions you made last week — has to
 be re-explained every session, and it never carries across to a different tool.
+With Membase, your agents share one persistent memory:
 
-**With Membase**, your agents share one persistent memory:
+- **Persistent project context** — your agent remembers your stack, conventions,
+  and past decisions instead of asking again every session.
+- **Cross-tool continuity** — capture something in Claude Code and recall it in
+  Cursor or Codex, because they share one memory.
+- **Long-running work** — pick up a multi-day task with the relevant history
+  pulled back into context automatically.
+- **Personal knowledge** — save facts, preferences, and notes once and let any
+  connected agent retrieve them on demand.
 
-- **Remembers across sessions** — no re-explaining the same context every time.
-- **Shared across tools** — the same memory in Claude Code, Cursor, Codex, and more.
-- **Private by design** — connectors expose a tiny capability surface; your
-  memory engine stays behind Membase's API, never in this repo.
-- **No API keys to manage** — auth is handled through Membase's OAuth login.
+## Installation
 
-## Quick start
+Every client connects to the same hosted MCP server:
+`https://mcp.membase.so/mcp`. **No API key needed** — the first time your
+client calls Membase, it opens a Membase OAuth login in your browser. Approve
+it once and you're connected; no tokens are stored in any config file.
+Headless/CI environments use a `client_credentials` service token via
+environment variables instead.
 
-The fastest path is the hosted (remote) Membase MCP server. Any MCP-capable
-host can point at it and authorize over OAuth on first use:
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --transport http membase https://mcp.membase.so/mcp
+```
+
+Want auto-capture and cross-session handoff too? Install the Membase
+**plugin** (a bundled MCP server plus hooks) instead — see
+[clients/claude](clients/claude).
+
+Full guide: [docs/install/claude.md](docs/install/claude.md)
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Click to install:
+
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9)
+
+Or add it by hand to `.cursor/mcp.json` (this project) or `~/.cursor/mcp.json`
+(all projects):
 
 ```json
 {
@@ -65,29 +76,116 @@ host can point at it and authorize over OAuth on first use:
 }
 ```
 
-One-click install for popular editors:
+Full guide: [docs/install/cursor.md](docs/install/cursor.md)
 
-[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9)
+</details>
+
+<details>
+<summary><b>Codex CLI</b></summary>
+
+```bash
+codex mcp add membase --url https://mcp.membase.so/mcp
+codex mcp login membase
+```
+
+Or add it to `~/.codex/config.toml` (global) or `.codex/config.toml`
+(this project):
+
+```toml
+[mcp_servers.membase]
+url = "https://mcp.membase.so/mcp"
+```
+
+Full guide: [docs/install/codex.md](docs/install/codex.md)
+
+</details>
+
+<details>
+<summary><b>VS Code</b></summary>
+
+Click to install:
+
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=membase&config=%7B%22type%22%3A%20%22http%22%2C%20%22url%22%3A%20%22https%3A%2F%2Fmcp.membase.so%2Fmcp%22%7D)
 
-For the precise file, field names, and any native (non-remote) integration, use
-the per-client guide for your tool below.
+Or add it to your MCP config (`.vscode/mcp.json`):
 
-## Supported clients
+```json
+{
+  "servers": {
+    "membase": {
+      "type": "http",
+      "url": "https://mcp.membase.so/mcp"
+    }
+  }
+}
+```
 
-| Client | Integration | Install guide |
-| --- | --- | --- |
-| **Claude Code** | Plugin with a bundled (stdio) MCP server | [docs/install/claude.md](docs/install/claude.md) |
-| **Cursor** | Remote HTTP MCP server + OAuth | [docs/install/cursor.md](docs/install/cursor.md) |
-| **Codex CLI** | Remote HTTP MCP server + OAuth | [docs/install/codex.md](docs/install/codex.md) |
-| **Hermes Agent** | Native Python provider + MCP config | [docs/install/hermes.md](docs/install/hermes.md) |
-| **OpenClaw** | Native plugin (TypeScript) + MCP config | [docs/install/openclaw.md](docs/install/openclaw.md) |
+</details>
 
-Any other MCP-capable host (ChatGPT, Gemini CLI, VS Code, OpenCode, Poke, or a
-generic MCP URL) can connect using the remote server shown in
-[Quick start](#quick-start) plus the OAuth prompt on first use.
+<details>
+<summary><b>Hermes Agent</b></summary>
 
-## What you get
+Add the server under `mcp_servers` in `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  membase:
+    url: "https://mcp.membase.so/mcp"
+```
+
+Prefer a native integration? Hermes also ships a Python provider package —
+see [clients/hermes](clients/hermes).
+
+Full guide: [docs/install/hermes.md](docs/install/hermes.md)
+
+</details>
+
+<details>
+<summary><b>OpenClaw</b></summary>
+
+**Remote MCP (simplest).** Add Membase to your OpenClaw MCP config:
+
+```json
+{
+  "mcpServers": {
+    "membase": {
+      "url": "https://mcp.membase.so/mcp"
+    }
+  }
+}
+```
+
+**Native plugin (richer — auto-capture and recall).** From an OpenClaw checkout:
+
+```bash
+openclaw plugins install --link ./clients/openclaw
+openclaw plugins enable openclaw-membase
+openclaw gateway restart
+```
+
+Full guide: [docs/install/openclaw.md](docs/install/openclaw.md)
+
+</details>
+
+<details>
+<summary><b>Other MCP hosts</b> (ChatGPT, Gemini CLI, OpenCode, Poke, …)</summary>
+
+Any MCP-capable host can connect with the generic remote config plus the
+OAuth prompt on first use:
+
+```json
+{
+  "mcpServers": {
+    "membase": {
+      "url": "https://mcp.membase.so/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+## Tools
 
 Every connector exposes the same small, stable capability set — nothing about
 Membase's internal memory engine leaks through:
@@ -99,26 +197,8 @@ Membase's internal memory engine leaks through:
 | `getContext` | Pull task-relevant context for the current work |
 | `deleteOrForget` | Remove or forget a memory |
 
-Authentication is handled for you: **there is no user-supplied API key**.
-Interactive clients authenticate through Membase's OAuth login flow, and
-headless/CI environments use a `client_credentials` service token. Configs only
-ever reference environment variables — never secret values.
-
-## Use cases
-
-- **Persistent project context** — your agent remembers your stack, conventions,
-  and past decisions instead of asking again every session.
-- **Cross-tool continuity** — capture something in Claude Code and recall it in
-  Cursor or Codex, because they share one memory.
-- **Long-running work** — pick up a multi-day task with the relevant history
-  pulled back into context automatically.
-- **Personal knowledge** — save facts, preferences, and notes once and let any
-  connected agent retrieve them on demand.
-
-## Example prompts
-
-Once a connector is installed, memory works through natural language — the agent
-calls the tools for you:
+You won't call these directly — memory works through natural language, and the
+agent calls the tools for you:
 
 ```txt
 Remember that we deploy from the release branch, never from main.
@@ -160,33 +240,14 @@ into the public surface.
 > Membase Context API, memory engine, and their supporting services are a
 > separate, private system and are not part of this repo.
 
-For the full design rationale, see [docs/architecture.md](docs/architecture.md)
-and the decision records in [docs/adr/](docs/adr/).
+For the full design rationale, see [docs/architecture.md](docs/architecture.md),
+the decision records in [docs/adr/](docs/adr/), and the "where does X live"
+map in [MAP.md](MAP.md).
 
-## Repository layout
+## Contributing
 
-```text
-packages/core/            Auth, endpoint, and MCP-config primitives (client-safe only)
-packages/connector-sdk/   Public SDK for adding new connectors (ClientAdapter, defineMcpHostAgent)
-packages/capture-core/    Shared capture runtime: sanitize, spool, OAuth transport
-clients/claude/           Claude Code plugin adapter + bundled runtime
-clients/cursor/           Cursor MCP adapter
-clients/codex/            Codex CLI MCP adapter
-clients/hermes/           Hermes Agent adapter + native Python provider
-clients/openclaw/         OpenClaw plugin adapter + native runtime
-manifests/                Canonical generated plugin/MCP manifest examples
-docs/install/             Per-client install guides
-docs/adr/                 Architecture decision records
-smoke/                    Connector-contract smoke tests
-scripts/                  CI guards and artifact generation
-```
-
-A more detailed "where does X live" map is in [MAP.md](MAP.md).
-
-## Development
-
-This is a [pnpm](https://pnpm.io) monorepo. You'll need **Node.js 20+** and
-**pnpm 11+**.
+Contributions are welcome! This is a [pnpm](https://pnpm.io) monorepo
+(**Node.js 20+**, **pnpm 11+**):
 
 ```bash
 pnpm install
@@ -198,25 +259,11 @@ committed manifests match adapter-generated output, runs the connector smoke
 tests, scans for accidentally committed secrets, and enforces the public
 surface boundary. Run it before opening a pull request.
 
-Common scripts:
-
-```bash
-pnpm build            # typecheck + build all packages and clients
-pnpm generate         # regenerate committed manifests/configs from adapters
-pnpm smoke:dry-run    # validate adapter MCP config + public contract via a stub
-pnpm smoke:execute    # additionally run adapter-declared local commands
-```
-
-Individual package and client checks are available via pnpm filters, e.g.
-`pnpm --filter @membase/client-claude typecheck`.
-
-## Contributing
-
-Contributions are welcome! Adding a new MCP host is often just a descriptor —
-`defineMcpHostAgent()` in `packages/connector-sdk` — plus a regen, not a
-hand-written adapter. See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the
-branch → `pnpm check` → PR flow, and how to add a connector, and please review
-our [Code of Conduct](CODE_OF_CONDUCT.md).
+Adding a new MCP host is often just a descriptor — `defineMcpHostAgent()` in
+`packages/connector-sdk` — plus a regen, not a hand-written adapter. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the branch → `pnpm check` →
+PR flow, and how to add a connector, and please review our
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
