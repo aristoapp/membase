@@ -19,6 +19,7 @@ import {
   isCasualChat,
   isOperationalMessage,
   looksSensitive,
+  sanitizeMembaseText,
   sanitizeRecallQuery,
   truncateText,
 } from "../sanitize/index.js";
@@ -42,7 +43,6 @@ import {
   pickLatestHandoff,
 } from "./session-start.js";
 import {
-  buildSessionCaptureCandidate,
   extractToolObservation,
 } from "./summary.js";
 import { buildSessionDigest } from "./digest.js";
@@ -561,7 +561,7 @@ async function spoolSessionSummary(
   const project = resolveProjectSlug(input.cwd, config);
   const raw =
     typeof input.compact_summary === "string" ? input.compact_summary : "";
-  const content = buildSessionCaptureCandidate(raw);
+  const content = sanitizeMembaseText(raw);
   if (!content || looksSensitive(content)) return;
   enqueueCapture({
     capture_kind: captureKind,

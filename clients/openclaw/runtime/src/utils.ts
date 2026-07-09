@@ -122,18 +122,6 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-export {
-  HANDOFF_TAG,
-  handoffRecallQuery,
-  buildHandoffMemory,
-  buildHandoffDisplaySummary,
-  isHandoffMemory,
-  pickLatestHandoff,
-  selectReplaceableHandoffs,
-  sweepReplacedHandoffs,
-  HANDOFF_RECALL_LIMIT,
-} from "@membase/capture-core";
-
 export function extractLastUserMessage(event: Record<string, unknown>): string {
   const messages = event.messages;
   if (Array.isArray(messages)) {

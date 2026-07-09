@@ -29,7 +29,6 @@ import { registerSearchWikiTool } from "./tools/search-wiki";
 import { registerStoreTool } from "./tools/store";
 import { registerUpdateWikiTool } from "./tools/update-wiki";
 import type { OpenClawPluginApi } from "./types";
-import { startBackgroundUpdateCheck } from "./update-check";
 
 type TokenPair = {
   accessToken: string;
@@ -220,7 +219,6 @@ export default {
         );
     }
 
-    startBackgroundUpdateCheck();
 
     const client = new MembaseClient(
       cfg.apiUrl.replace(/\/$/, ""),
@@ -288,28 +286,25 @@ export default {
     }
     if (cfg.autoCapture) {
       registerCaptureHook(api, client, api.logger);
-      // Startup drain (ADR 0005): upload any captures a previous run spooled to
-      // disk on flush failure, so a gateway restart recovers them without
-      // waiting for a manual `membase dream`. Background + best-effort.
+      // Startup drain: upload any captures a previous run spooled to disk on
+      // flush failure, so a gateway restart recovers them without waiting for
+      // a manual `membase dream`. Background + best-effort.
       //
-      // isAuthenticated() only checks that a token exists locally, not that it
-      // still works. On every restart with an expired/revoked token that would
-      // fire a full backlog upload that 401s on each record — refresh churn +
-      // inflated attempt counts before the user does anything. Probe once with a
-      // cheap authed call first; only drain if it succeeds.
-      if (client.isAuthenticated()) {
-        client
-          .getProfile()
-          .then(() => flushCaptureSpool(client))
-          .then(({ flushed }) => {
-            if (flushed > 0) {
-              api.logger.info(
-                `membase: dreamed ${flushed} spooled capture(s) on startup`,
-              );
-            }
-          })
-          .catch(() => undefined);
-      }
+      // A locally-present token can still be expired/revoked; a blind backlog
+      // upload would 401 on each record — refresh churn + inflated attempt
+      // counts before the user does anything. Probe once with a cheap authed
+      // call first; only drain if it succeeds.
+      client
+        .getProfile()
+        .then(() => flushCaptureSpool(client))
+        .then(({ flushed }) => {
+          if (flushed > 0) {
+            api.logger.info(
+              `membase: dreamed ${flushed} spooled capture(s) on startup`,
+            );
+          }
+        })
+        .catch(() => undefined);
     }
 
     registerCli(api, client);

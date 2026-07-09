@@ -22,23 +22,6 @@ def get_hermes_home() -> Path:
 DEFAULT_CONFIG_PATH = get_hermes_home() / "membase.json"
 DEFAULT_TOKEN_FILE_PATH = get_hermes_home() / "credentials" / "membase.json"
 
-KNOWN_KEYS = {
-    "apiUrl",
-    "clientId",
-    "tokenFile",
-    "accessToken",
-    "refreshToken",
-    "serviceClientId",
-    "serviceClientSecret",
-    "autoRecall",
-    "autoWikiRecall",
-    "autoCapture",
-    "maxRecallChars",
-    "debug",
-    "mirrorBuiltin",
-}
-
-
 @dataclass
 class TokenPair:
     access_token: str = ""

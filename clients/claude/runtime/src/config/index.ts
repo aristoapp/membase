@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { createTokenStore, writeJsonAtomic } from "@membase/capture-core";
 import {
   DEFAULT_API_URL,
@@ -26,10 +26,6 @@ export function getDataDir(): string {
     join(homedir(), ".claude", "plugins", "membase");
   // MCP-client env entries are not shell-expanded, so `~/...` arrives literal.
   return dir.startsWith("~/") ? join(homedir(), dir.slice(2)) : dir;
-}
-
-export function getPluginRoot(): string {
-  return process.env.CLAUDE_PLUGIN_ROOT || resolve(process.cwd(), "plugin");
 }
 
 export function ensureDataDir(): string {

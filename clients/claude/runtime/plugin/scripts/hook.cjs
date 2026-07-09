@@ -660,9 +660,6 @@ var MembaseClient = class {
   async getProfile() {
     return this.request("/user/settings");
   }
-  async getRecentMemories(limit = 10) {
-    return this.searchMemory({ query: "", limit });
-  }
   async searchWiki(args) {
     const params = new URLSearchParams({
       query: args.query,
@@ -1107,9 +1104,6 @@ var PASSIVE_BASH_RE = /^(pwd|ls|rg|grep|find|sed|cat|nl|wc|head|tail|git\s+(stat
 function objectValue(value) {
   return value && typeof value === "object" ? value : {};
 }
-function buildSessionCaptureCandidate(raw) {
-  return sanitizeMembaseText(raw);
-}
 function extractToolObservation(tool) {
   const name = String(tool.name ?? tool.tool_name ?? tool.type ?? "");
   const allowed = [
@@ -1400,7 +1394,7 @@ var ASYNC_FLUSH_LIMIT = 3;
 var STDIN_IDLE_MS = 2e3;
 var STDIN_MAX_BYTES = 8388608;
 function readStdin() {
-  return new Promise((resolve2) => {
+  return new Promise((resolve) => {
     let data = "";
     let settled = false;
     let timer;
@@ -1412,7 +1406,7 @@ function readStdin() {
         process.stdin.destroy();
       } catch {
       }
-      resolve2(data);
+      resolve(data);
     };
     const arm = () => {
       clearTimeout(timer);
@@ -1722,7 +1716,7 @@ async function spoolSessionSummary(input, captureKind) {
   if (config.captureMode !== "summary") return;
   const project = resolveProjectSlug(input.cwd, config);
   const raw = typeof input.compact_summary === "string" ? input.compact_summary : "";
-  const content = buildSessionCaptureCandidate(raw);
+  const content = sanitizeMembaseText(raw);
   if (!content || looksSensitive2(content)) return;
   enqueueCapture({
     capture_kind: captureKind,

@@ -30,12 +30,7 @@ import os
 import shutil
 from pathlib import Path
 
-
-def _get_hermes_home() -> Path:
-    raw = os.environ.get("HERMES_HOME", "").strip()
-    if raw:
-        return Path(raw).expanduser()
-    return Path.home() / ".hermes"
+from .config import get_hermes_home
 
 
 def install_plugin_payload(target_dir: Path | None = None) -> Path:
@@ -45,7 +40,7 @@ def install_plugin_payload(target_dir: Path | None = None) -> Path:
     if not plugin_src.exists():
         raise FileNotFoundError(f"Plugin payload not found: {plugin_src}")
 
-    destination = target_dir or (_get_hermes_home() / "plugins" / "membase")
+    destination = target_dir or (get_hermes_home() / "plugins" / "membase")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     if destination.exists():

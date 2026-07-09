@@ -12,7 +12,6 @@ import {
 } from "../config";
 import { formatBundles } from "../format";
 import { flushCaptureSpool } from "../spool";
-import { maybePromptGithubStar } from "../star-prompt";
 import type { OpenClawPluginApi } from "../types";
 
 type OAuthTokenResponse = {
@@ -469,7 +468,6 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
 
           api.logger.info("OAuth login complete. Plugin config saved.");
           api.logger.info("Restart OpenClaw gateway to apply.");
-          await maybePromptGithubStar().catch(() => {});
         });
 
       membase
