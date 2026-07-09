@@ -1,165 +1,56 @@
-# Codex Install
+# Membase for Codex CLI
 
-This guide covers the Codex CLI connector flow for the integrated Membase
-Plugin/MCP repo. It documents local install artifacts only; it does not publish
-a marketplace entry.
+Give the OpenAI Codex CLI a persistent memory with [Membase](https://membase.so).
+About a minute to set up.
 
-## Prerequisites
+## Install
 
-- Node.js 20 or newer.
-- `pnpm install` run at the repo root.
-- OpenAI Codex CLI installed.
-- A Membase account. Codex authenticates to the remote Membase MCP server via
-  Codex-managed OAuth (`codex mcp login membase`) — no CLI and no API keys on
-  our side.
+Add the server to `~/.codex/config.toml` (global) or `.codex/config.toml`
+(this project):
 
-## Build And Sync Check
-
-```bash
-pnpm --filter @membase/client-codex build
-pnpm generated-artifacts
+```toml
+[mcp_servers.membase]
+url = "https://mcp.membase.so/mcp"
 ```
 
-`pnpm generated-artifacts` verifies that the adapter output still matches
-`clients/codex/.codex-plugin/plugin.json`, `clients/codex/.mcp.json`,
-`manifests/codex/plugin.json`, and `manifests/codex/mcp.json`.
+Or use the CLI:
 
-## MCP Config Placement
+```bash
+codex mcp add membase --url https://mcp.membase.so/mcp
+```
 
-Codex supports remote **streamable-HTTP** MCP servers, so — like Cursor — the
-connector points Codex directly at the hosted endpoint (no local stdio bridge).
-
-Two supported paths:
-
-1. **Config file (recommended).** Add the server to `~/.codex/config.toml`
-   (global) or `.codex/config.toml` (project):
-
-   ```toml
-   [mcp_servers.membase]
-   url = "https://mcp.membase.so/mcp"
-   startup_timeout_sec = 20
-   tool_timeout_sec = 60
-   enabled = true
-   ```
-
-   CLI equivalent:
-
-   ```bash
-   codex mcp add membase --url https://mcp.membase.so/mcp
-   ```
-
-   The canonical JSON example (used by the plugin path and mirrored from the
-   adapter) is `manifests/codex/mcp.json`.
-
-2. **Plugin bundle.** `clients/codex/.codex-plugin/plugin.json` is a Codex
-   plugin manifest whose `mcpServers` field references the bundled
-   `.mcp.json`. This is the marketplace-distributable form.
-
-## Authentication
-
-Membase uses Codex-managed OAuth against the hosted server. After the server is
-configured, run:
+## Sign in
 
 ```bash
 codex mcp login membase
 ```
 
-Verify the connection inside a Codex session with `/mcp`. No API keys or tokens
-are stored in the config; auth is handled by Codex's OAuth flow (or, for
-CI/headless, a bearer token via `bearer_token_env_var`).
+**No API key needed** — Codex handles the OAuth login. Confirm it worked by
+running `/mcp` inside a Codex session; you should see `membase` listed.
 
-## Verify
+## Try it
 
-- `/mcp` in a Codex session lists `membase` with the tools exposed by the
-  live MCP server: `add_memory`, `search_memory`, `get_current_date`,
-  `add_wiki`, `search_wiki`, `update_wiki`, and `delete_wiki`.
+Ask Codex:
 
-## Session Handoff
+> Remember that our CI runs on Node 22.
 
-File-based session handoff (design: `docs/implementation-overview.html` §7.5).
-The store side is a custom prompt; the recall side is the shared SessionStart
-hook bundle. Its local-file injection needs no auth of its own; the cross-client
-cloud fallback runs only when a disk login is present.
+Then later:
 
-1. Install the store-side prompt (exposed as `/handoff` in Codex):
+> Which Node version does CI use?
 
-```bash
-cp clients/codex/runtime/prompts/handoff.md ~/.codex/prompts/handoff.md
-```
+## What you can do
 
-2. Install the hooks: merge `clients/codex/runtime/hooks.json` into
-   `~/.codex/hooks.json`, replacing `REPO_ROOT` with this repository's
-   absolute path. The shared hook bundle injects the local handoff file at
-   session start/resume (file-first; cloud fallback only with a disk
-   login), with age framing — handoffs older than 7 days are announced
-   instead of injected.
+Behind the scenes Membase gives Codex these tools — Codex calls them for you:
 
-Flow: `/handoff` prints the summary, stores it in Membase tagged `[HANDOFF]`
-(cross-client pickup via `search_memory`), and writes
-`.codex/membase-handoff.md` (project) or `~/.codex/membase-handoff.md`
-(global). The next Codex session's hook reads that file and injects it as
-`additionalContext`. Override the file location with `MEMBASE_HANDOFF_FILE`.
-## Auto-Capture (Memory Hooks)
+`add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` ·
+`delete_wiki` · `get_current_date`
 
-Auto-capture (north-star pillar 1): conversations upload memory passively.
-Capture is per-SESSION, not per-tool: meaningful tool calls (file edits,
-important commands, sub-agent tasks) accumulate in a local per-session scratch
-during the session, and are folded into ONE session digest that uploads when
-the session ends. Codex has no session-end event, so its digest uploads on a
-later session's start — specifically the next start that finds the scratch idle
->30min (back-to-back sessions defer it until you stay away that long). One
-consequence: if you run a Codex session and then never open Codex again, that
-final session's digest is never built. User prompts and assistant messages are
-never captured. Two modes, both official-features-only:
+## Advanced (optional)
 
-1. Install the hook adapter: merge `clients/codex/runtime/hooks.json` into
-   `~/.codex/hooks.json`, replacing `REPO_ROOT` with this repository's
-   absolute path. The entries run the shared membase hook bundle on
-   `SessionStart`, `UserPromptSubmit`, `PostToolUse` (including
-   `apply_patch` file edits), and `Stop`.
-2. Pick a mode:
-   - **stdio bundle (recommended — real-time).** Add a command-based MCP
-     server to `~/.codex/config.toml`:
-     `[mcp_servers.membase]` with `command = "node"`,
-     `args = ["REPO_ROOT/clients/claude/runtime/plugin/scripts/mcp-server.cjs"]`,
-     `env = { MEMBASE_CLIENT_SOURCE = "codex", MEMBASE_DATA_DIR = "/ABSOLUTE/HOME/.membase/codex" }`
-     (replace `/ABSOLUTE/HOME` with your home directory's absolute path —
-     `config.toml` env values get no `~` expansion),
-     then ask the agent to call the membase `login` tool once. Tokens land
-     on disk, so hooks flush captures and inject recall in real time —
-     Claude Code parity.
-   - **HTTP fallback (current install, no extra login).** Hooks only spool
-     captures locally (`~/.membase/codex/spool/pending.jsonl`); the
-     session-start hook announces the pending count and the in-app AI
-     uploads via `add_memory` — the `/dream` prompt is that flush. Install
-     it alongside the handoff prompt:
+Session handoff and auto-capture are available through Codex prompts and hooks —
+see [clients/codex](../../clients/codex).
 
-     ```bash
-     cp clients/codex/runtime/prompts/dream.md ~/.codex/prompts/dream.md
-     ```
+## Help
 
-     Sync lags by at most one session.
-
-## Secret Handling
-
-No raw token or API key appears in `~/.codex/config.toml`, the
-`.codex-plugin` bundle, generated artifacts, or logs. Auth is handled by
-Codex-managed OAuth; for CI/headless, a bearer token is referenced via
-`bearer_token_env_var` (an env-var name, never an inline value).
-No public artifact describes Membase storage, graph, embedding, ranking, or internal memory-engine details — only connector capabilities (remember, search, task context, forget).
-
-## Review Checklist
-
-Before proposing changes, run and confirm green:
-
-```bash
-pnpm --filter @membase/client-codex typecheck
-pnpm generated-artifacts
-pnpm check
-pnpm smoke:execute
-```
-
-- Generated `.codex-plugin/plugin.json` and `.mcp.json` match the committed
-  artifacts (`pnpm generated-artifacts`).
-- No secret material is committed (`pnpm secret-hygiene`, `pnpm public-surface`).
-- The Codex MCP config points only at the public HTTP endpoint.
+- Membase docs — https://docs.membase.so
+- Codex CLI — https://developers.openai.com/codex/cli

@@ -1,8 +1,8 @@
 # Secret Handling and Security
 
-This document covers `MEM-329` and `MEM-331` security expectations for the
-integrated Plugin/MCP repo. It is intentionally scoped to public connector
-installation, MCP configuration, diagnostics, and smoke testing.
+This document describes the security and secret-handling model for the Membase
+connectors. It is intentionally scoped to public connector installation, MCP
+configuration, diagnostics, and smoke testing.
 
 ## Security Boundary
 
@@ -81,7 +81,6 @@ client-specific runtime behavior and live test inputs are accepted. Claude
 plugin-local stdio, Cursor HTTP MCP config, Hermes provider register behavior,
 and OpenClaw native entrypoint metadata are preserved, but live exercise still
 needs explicit test credentials, endpoint/profile, and cleanup policy.
-The concrete launch-gate runbook is `docs/live-smoke-runbook.md`.
 When live smoke is added, it should:
 
 - authenticate through the client's OAuth or plugin login flow, never an

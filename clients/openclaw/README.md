@@ -1,50 +1,42 @@
-# OpenClaw Connector
+# Membase for OpenClaw
 
-OpenClaw adapter boundary for the integrated Membase Plugin/MCP repo.
+Connect [Membase](https://membase.so) persistent memory to OpenClaw.
 
-This package owns the reviewable OpenClaw manifest shape, a native extension
-entrypoint, a shared MCP config example, and smoke-test declarations. Runtime
-hook/tool parity with the existing `aristoapp/openclaw-membase` repo is tracked
-separately in the migration checklist.
+OpenClaw integrates through a **native plugin** (a TypeScript extension) plus an
+MCP config. Auth uses Membase's OAuth flow; configs reference environment
+variables, never raw secrets.
 
-## Artifacts
+## Install
 
-- `src/index.ts` implements the SDK `ClientAdapter` and exports the default
-  native extension entrypoint used by OpenClaw.
-- `package.json` declares `openclaw.extensions` for the built entrypoint at
+See the full guide: **[docs/install/openclaw.md](../../docs/install/openclaw.md)**.
+
+## Package layout
+
+- `src/index.ts` — implements the connector adapter and exports the native
+  OpenClaw extension entrypoint.
+- `package.json` — declares `openclaw.extensions` for the built entrypoint at
   `./dist/index.js`.
-- `native-artifacts.json` records the old OpenClaw command, hook, tool,
-  config, update-check, and runtime-test evidence as review-only inventory.
-- `openclaw.plugin.json` is the local OpenClaw manifest placeholder.
-- `mcp.json` is the canonical local MCP config example.
-- `../../manifests/openclaw/` contains the reviewable launch copies.
+- `openclaw.plugin.json` — the OpenClaw plugin manifest.
+- `mcp.json` — the MCP config example.
 
-## Local Verification
+## Capabilities
+
+Through the shared Membase Context API, the connector exposes: `remember`,
+`search`, `getContext`, and `deleteOrForget`. No internal Membase memory
+details are exposed.
+
+## For contributors
 
 ```bash
 pnpm --filter @membase/client-openclaw typecheck
 pnpm --filter @membase/client-openclaw build
-pnpm openclaw:native-artifacts
-pnpm openclaw:native-parity
-pnpm public-surface
+pnpm openclaw:native-parity   # typecheck + build gate; verifies the built entrypoint imports
+pnpm openclaw:native-artifacts # verifies clients/openclaw/native-artifacts.json snapshot
+pnpm public-surface           # ensures no internal Membase terms leak
 ```
 
-`pnpm openclaw:native-artifacts` verifies
-`clients/openclaw/native-artifacts.json`, keeps old OpenClaw runtime artifacts
-uncopied, and keeps generated metadata free of premature command, hook, or tool
-declarations.
+Run the runtime tests with:
 
-`pnpm openclaw:native-parity` is the integrated, non-publishing parity gate for
-the old OpenClaw `check-types` plus build workflow. It also verifies that the
-local native manifest and package remain private review artifacts and that the
-built extension entrypoint can be imported.
-
-## Marketplace Asset Reuse
-
-- No existing OpenClaw image asset is selected from the old
-  `aristoapp/openclaw-membase` repo.
-- Reuse the native manifest shape already represented in
-  `openclaw.plugin.json`.
-- If OpenClaw listing review requires an image, add it under
-  `clients/openclaw/assets/`, update adapter-generated metadata and committed
-  manifest copies together, then run `pnpm generated-artifacts`.
+```bash
+pnpm openclaw:runtime-test
+```

@@ -1,134 +1,51 @@
-# Hermes Agent Install
+# Membase for Hermes Agent
 
-This guide covers the review-ready Hermes Agent connector flow for the
-integrated Membase Plugin/MCP repo. It documents local install artifacts only;
-it does not publish a package, mutate a Hermes installation, or deprecate the
-old Hermes repo.
+Give Hermes Agent a persistent memory with [Membase](https://membase.so).
+About a minute to set up.
 
-## Prerequisites
+## Install
 
-- Python 3.11 or newer for the Hermes native plugin package.
-- `pnpm install` run at the repo root for the connector workspace checks.
-- A Membase account. The Hermes provider and the remote MCP endpoint
-  authenticate through an OAuth flow; there is no user-supplied API key.
-
-## Build And Sync Check
-
-```bash
-pnpm --filter @membase/client-hermes build
-pnpm generated-artifacts
-pnpm hermes:python-parity
-pnpm hermes:native-artifacts
-```
-
-`pnpm generated-artifacts` verifies that the adapter output still matches
-`clients/hermes/plugin/plugin.yaml`, `manifests/hermes/plugin.yaml`, and
-`manifests/hermes/mcp.json`.
-`pnpm hermes:python-parity` verifies the Hermes Python package review scaffold,
-console script entrypoints, native YAML package data, Python syntax, provider
-import/register behavior, and non-publishing boundary.
-`pnpm hermes:native-artifacts` verifies
-`clients/hermes/native-artifacts.json`, the review-only inventory of old Hermes
-provider, capture, CLI, OAuth, wiki, formatting, asset, update-check, and test
-evidence before any live behavior is ported.
-
-## Native Plugin Metadata
-
-Hermes plugin metadata lives in `clients/hermes/plugin/plugin.yaml`. The root
-copy in `manifests/hermes/plugin.yaml` is the reviewable launch artifact.
-
-The current manifest keeps the existing `hermes-membase` Python package as the
-runtime dependency while migration parity is still being checked.
-The local review scaffold for that package shape lives under
-`clients/hermes/python/`; it is not a publishable release artifact. The
-scaffold includes an importable `MembaseMemoryProvider` and native plugin
-`register(ctx)` shim so Hermes can load the provider boundary in local review
-without calling the Membase API.
-
-For local review, keep the native metadata at the plugin metadata path expected
-by the Hermes package. Do not move MCP server configuration into
-`plugin.yaml`; keep MCP server entries in the user's Hermes config.
-
-## MCP Config Translation
-
-For setups that connect Hermes to the hosted Membase MCP server instead of the
-native package, use `manifests/hermes/mcp.json` as the canonical example. Hermes
-stores MCP servers under `mcp_servers` in `~/.hermes/config.yaml`, so the JSON
-example maps to this YAML shape:
+Point Hermes at the hosted Membase MCP server. Hermes keeps MCP servers under
+`mcp_servers` in `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
   membase:
     url: "https://mcp.membase.so/mcp"
-    headers: {}
 ```
 
-Authentication to the remote MCP server is handled by Hermes' OAuth flow on
-first use; no token is stored in the config file. The native Python package
-remains the primary runtime; treat `manifests/hermes/plugin.yaml` as native
-plugin metadata and `manifests/hermes/mcp.json` as the remote MCP example.
+Prefer a native integration? Hermes also ships a Python provider package —
+see [clients/hermes](../../clients/hermes).
 
-## Session Handoff
+## Sign in
 
-The provider registers `membase_handoff` (mode `store` | `recall`) alongside
-the other memory tools, mirroring the OpenClaw runtime tool:
+**No API key needed.** Hermes runs the Membase OAuth flow the first time it
+connects; no token is stored in your config file.
 
-- `store` writes a `[HANDOFF]`-tagged summary to the cloud and enforces the
-  cloud policy of exactly one handoff per project: old `[HANDOFF]`-named
-  episodes are searched before the ingest and deleted afterwards via
-  `DELETE /memory/episodes/{uuid}` (name-tag match only, unscoped stores skip
-  `(project)`-marked names, per-episode failures non-fatal), and the response
-  reports how many were replaced. The stored summary is echoed back to the
-  user.
-- `recall` fetches the most recent handoff (latest by event/capture time, not
-  relevance rank). If the requested project has no handoff, it falls back to
-  an unscoped search and prefixes the result with an explicit "showing the
-  most recent handoff from another scope" notice.
+## Try it
 
-Hermes has no session-start injection; recall is explicit via the tool,
-matching OpenClaw.
+Ask Hermes:
 
-## Local Verification
+> Remember that the design review is every Thursday at 3pm.
 
-```bash
-pnpm check
-pnpm smoke:execute
-```
+Then later:
 
-`pnpm check` typechecks the adapter, verifies generated artifacts, runs the
-dry-run smoke harness, runs the live-smoke preflight, checks Hermes Python
-package parity, checks the Hermes native artifact snapshot, scans for raw
-secret-looking values, and checks the public connector surface.
-`pnpm smoke:execute` additionally runs the adapter-declared local commands
-without publishing, installing the Hermes package, or calling the Membase API.
+> When is the design review?
 
-Host-level Hermes runtime API checks remain pending until the Python
-package/native provider path is accepted for live connector calls against
-test-only credentials.
+## What you can do
 
-## Review Checklist
+Behind the scenes Membase gives Hermes these tools — Hermes calls them for you:
 
-- `clients/hermes/plugin/plugin.yaml` has connector capability copy only.
-- `clients/hermes/python/src/membase_hermes/provider.py` is the ported
-  runtime provider (memory tools plus wiki tools; provider, capture, OAuth,
-  and mirroring behavior copied in as-is from the standalone repo).
-- `clients/hermes/native-artifacts.json` is present and
-  `pnpm hermes:native-artifacts` passes (it asserts the ported runtime
-  modules exist; the snapshot is the historical inventory of what moved).
-- `manifests/hermes/mcp.json` contains `mcpServers.membase` with the remote
-  `url` and an empty `headers` object.
-- The translated Hermes config uses `mcp_servers.membase` with `url` and
-  `headers`.
-- No raw token or API key appears in any committed config; authentication is the
-  OAuth flow.
-- No public artifact describes Membase storage, graph, embedding, ranking, or
-  private memory-engine details.
+`add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` ·
+`delete_wiki` · `get_current_date`
 
-## References
+## For contributors
 
-- Hermes Agent MCP guide:
-  https://github.com/NousResearch/hermes-agent/blob/main/website/docs/guides/use-mcp-with-hermes.md
-- Hermes optional MCP manifest example:
-  https://github.com/NousResearch/hermes-agent/blob/main/optional-mcps/linear/manifest.yaml
-- Existing Hermes Membase repo:
-  https://github.com/aristoapp/hermes-membase
+`clients/hermes/native-artifacts.json` is the review-only snapshot of the
+Hermes-native provider files; `pnpm hermes:native-artifacts` asserts it stays in
+sync with the runtime under `clients/hermes`.
+
+## Help
+
+- Membase docs — https://docs.membase.so
+- Hermes MCP guide — https://github.com/NousResearch/hermes-agent/blob/main/website/docs/guides/use-mcp-with-hermes.md

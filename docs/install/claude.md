@@ -1,123 +1,51 @@
-# Claude Code Install
+# Membase for Claude Code
 
-This guide covers the review-ready Claude Code connector flow for the
-integrated Membase Plugin/MCP repo. It documents local install artifacts only;
-it does not publish a marketplace entry or deprecate the old Claude repo.
+Give Claude Code a persistent memory with [Membase](https://membase.so).
+About a minute to set up.
 
-## Prerequisites
+## Install
 
-- Node.js 20 or newer.
-- `pnpm install` run at the repo root.
-- Claude Code CLI installed for `pnpm claude:plugin-parity`.
-- A Membase account. The Claude Code plugin manages authentication through its
-  own login flow; there is no user-supplied API key in the MCP config.
-
-## Build And Sync Check
+Add the hosted Membase MCP server:
 
 ```bash
-pnpm --filter @membase/client-claude build
-pnpm generated-artifacts
-pnpm claude:plugin-parity
-pnpm claude:native-artifacts
+claude mcp add --transport http membase https://mcp.membase.so/mcp
 ```
 
-`pnpm generated-artifacts` verifies that the adapter output still matches
-`clients/claude/.claude-plugin/plugin.json`, `clients/claude/.mcp.json`,
-`manifests/claude/plugin.json`, and `manifests/claude/mcp.json`.
-`pnpm claude:plugin-parity` runs local Claude Code plugin validation without
-marketplace submission and checks manifest/version/MCP secret-reference drift.
-`pnpm claude:native-artifacts` verifies
-`clients/claude/native-artifacts.json`, the inventory of the Claude-native
-commands, hooks, skills, agent, and bundled runtime scripts now ported at
-`clients/claude/runtime` (consolidation Group C).
+Want auto-capture and cross-session handoff too? Install the Membase **plugin**
+(a bundled MCP server plus hooks) instead — see [clients/claude](../../clients/claude).
 
-## MCP Config Placement
+## Sign in
 
-Use `clients/claude/.mcp.json` as the canonical plugin-local MCP example. The
-same `mcpServers.membase` entry is copied to `manifests/claude/mcp.json` for
-root-level review, and can be adapted into a project-scoped `.mcp.json` or
-user/local Claude MCP config.
+**No API key needed.** The first time Claude uses Membase, it opens a Membase
+OAuth login in your browser. Approve it once and you're connected — no tokens
+are stored in any config file.
 
-```json
-{
-  "mcpServers": {
-    "membase": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs"],
-      "env": {
-        "MEMBASE_CLAUDE_PLUGIN": "1"
-      }
-    }
-  }
-}
-```
+## Try it
 
-For plugin-local review, keep `.mcp.json` at the plugin root:
+Ask Claude:
 
-```text
-clients/claude/.mcp.json
-```
+> Remember that we deploy from the release branch, never from `main`.
 
-For a project-scoped review install, copy the manifest example into the target
-project's `.mcp.json`:
+Then later, in any session:
 
-```bash
-cp manifests/claude/mcp.json /path/to/project/.mcp.json
-```
+> What did we decide about deploys?
 
-For a private local or user-scoped install, keep the same server shape but store
-it through Claude Code's MCP config flow instead of committing it to a project.
+## What you can do
 
-The bundled `scripts/mcp-server.cjs` handles login and Membase API access, so no
-API key or endpoint override belongs in the config. The Membase API endpoint
-defaults to `https://api.membase.so` and is configurable through the plugin's
-`apiUrl` user config.
+Behind the scenes Membase gives Claude these tools — you won't call them
+directly, Claude uses them for you:
 
-## Plugin Metadata
+`add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` ·
+`delete_wiki` · `get_current_date`
 
-Claude plugin metadata lives in `clients/claude/.claude-plugin/plugin.json`.
-The root manifest copy in `manifests/claude/plugin.json` is the reviewable
-launch artifact.
+## For contributors
 
-The plugin-local MCP config lives at `clients/claude/.mcp.json`. Do not put
-commands, skills, hooks, or MCP config inside `.claude-plugin/`; that directory
-should contain `plugin.json`.
+`clients/claude/native-artifacts.json` is the review-only snapshot of the
+old Claude command, hook, and skill files now copied into
+`clients/claude/runtime`. `pnpm claude:native-artifacts` asserts the two stay
+in sync.
 
-## Local Verification
+## Help
 
-```bash
-pnpm check
-pnpm smoke:execute
-```
-
-`pnpm check` typechecks the adapter, verifies generated artifacts, runs the
-dry-run smoke harness, validates the Claude plugin manifest, checks the Claude
-native artifact snapshot, scans for raw secret-looking values, and checks the
-public connector surface.
-`pnpm smoke:execute` additionally runs the adapter-declared local commands
-without publishing or calling the Membase API.
-
-The plugin-local stdio server is ported at
-`clients/claude/runtime/plugin/scripts/mcp-server.cjs`; a host-level install
-check against it is part of the manual gate in
-`docs/north-star-readiness.md`.
-
-## Review Checklist
-
-- `clients/claude/.claude-plugin/plugin.json` has connector capability copy
-  only.
-- `manifests/claude/mcp.json` contains `mcpServers.membase`.
-- `clients/claude/native-artifacts.json` lists the Claude command, hook, skill,
-  agent, runtime bundle, and session-start inventory, all ported at
-  `clients/claude/runtime` and asserted present by `pnpm claude:native-artifacts`.
-- No raw token or API key appears in any committed config; the bundled plugin
-  manages login.
-- No public artifact describes Membase storage, graph, embedding, ranking, or
-  private memory-engine details.
-
-## References
-
-- Claude Code plugins: https://docs.anthropic.com/en/docs/claude-code/plugins
-- Claude Code MCP: https://docs.anthropic.com/en/docs/claude-code/mcp
-- PostHog Claude plugin metadata example:
-  https://github.com/PostHog/ai-plugin/blob/main/.claude-plugin/plugin.json
+- Membase docs — https://docs.membase.so
+- Claude Code MCP — https://docs.anthropic.com/en/docs/claude-code/mcp

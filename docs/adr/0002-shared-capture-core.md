@@ -1,8 +1,8 @@
 # ADR 0002 — Shared capture-core, per-host hook adapters, two-language policy
 
-Status: accepted (Jaehwan, 2026-07-05) · Builds on ADR 0001 and the Group B/C
-copy-ins. Implementation is **Group D**; it starts only after the
-`docs/north-star-readiness.md` two-key gate clears (do not block launch on it).
+Status: accepted (2026-07-05) · Builds on ADR 0001 and the earlier runtime
+copy-ins. Implementation is tracked as **Group D** and does not block the
+initial launch.
 
 ## Context
 

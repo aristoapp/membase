@@ -4,19 +4,7 @@ Date: 2026-06-28
 
 ## Status
 
-Accepted for local implementation.
-
-## Linear Source of Truth
-
-This decision follows the Linear project `Plugin/MCP 통합 레포 출시` and its
-issues:
-
-- `MEM-327`: Plugin/MCP integration repo architecture decision
-- `MEM-328`: integrated repo scaffolding
-- `MEM-329`: shared auth/install/MCP core and client manifest integration
-- `MEM-330`: migration of Claude, Cursor, Hermes, and OpenClaw repos
-- `MEM-331`: README, install docs, and marketplace assets
-- `MEM-332`: old plugin repo deprecation and launch consolidation
+Accepted.
 
 ## Decision
 

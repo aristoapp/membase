@@ -132,32 +132,22 @@ const documentMarkers = [
       "docs/architecture.md",
       "docs/install/claude.md",
       "docs/install/cursor.md",
+      "docs/install/codex.md",
       "docs/install/hermes.md",
       "docs/install/openclaw.md",
-      "docs/migration-parity.md",
-      "docs/test-coverage-parity.md",
-      "docs/security.md",
-      "docs/live-smoke-runbook.md",
-      "docs/packaging-action-parity.md",
-      "docs/marketplace-assets.md",
-      "docs/deprecation-plan.md",
-      "docs/runtime-parity-decisions.md",
-      "docs/review-summary.md"
+      "docs/security.md"
     ]
   },
   {
     path: "docs/architecture.md",
     markers: [
-      "Current Decision",
+      "Positioning",
+      "Boundary",
       "Public Capability Contract",
-      "Client Adapter Status",
-      "Migration Parity Status",
-      "Client Smoke Harness",
-      "Live MCP Smoke Runbook",
-      "Live Smoke Preflight",
-      "Packaging and Action Parity",
-      "Runtime Parity Decision Ledger",
-      "Linear-Ready Summary",
+      "Adapter Contract",
+      "Repo Boundary",
+      "Client Adapters",
+      "Verification",
       "Secret Handling"
     ]
   },
@@ -239,16 +229,13 @@ const documentMarkers = [
 ];
 
 const installDocMarkers = [
-  "No raw token or API key appears",
-  "pnpm check",
-  "pnpm smoke:execute",
-  "Review Checklist",
-  "No public artifact describes Membase storage, graph, embedding, ranking"
+  "No API key",
+  "OAuth"
 ];
 
 const clientReadmeMarkers = [
-  "Marketplace Asset Reuse",
-  "pnpm generated-artifacts"
+  "For contributors",
+  "docs/install/"
 ];
 
 const failures = [];

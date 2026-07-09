@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Membase documentation
+    url: https://docs.membase.so
+    about: Product docs, guides, and API reference for Membase.
+  - name: Security vulnerability
+    url: https://github.com/aristoapp/membase-plugin-mcp/security/advisories/new
+    about: Report security issues privately (do not open a public issue).
+  - name: Community & questions (Discord)
+    url: https://discord.gg/vHgtDd6UTK
+    about: Ask questions, share ideas, and reach the maintainers on Discord.
