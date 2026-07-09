@@ -1,6 +1,6 @@
-// Failure-path capture spool for OpenClaw (ADR 0005 / DR-1).
+// Failure-path capture spool for OpenClaw.
 //
-// The normal capture path stays in-memory (hooks/capture.ts) — ADR 0002's
+// The normal capture path stays in-memory (hooks/capture.ts) — the shared
 // "don't force the disk abstraction on the long-lived gateway". This spool is
 // used ONLY when a live upload fails: instead of retaining the batch in RAM
 // (lost on gateway restart), enqueue it here so a later `membase dream` (or the

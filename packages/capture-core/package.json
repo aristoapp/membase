@@ -4,7 +4,7 @@
   "license": "MIT",
   "private": true,
   "type": "module",
-  "description": "Shared client-side capture/recall primitives (sanitize, redaction, casual/noise filters) for the Membase connector runtimes. ADR 0002.",
+  "description": "Shared client-side capture/recall primitives (sanitize, redaction, casual/noise filters) for the Membase connector runtimes.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

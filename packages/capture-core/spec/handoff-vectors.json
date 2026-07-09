@@ -1,5 +1,5 @@
 {
-  "$comment": "Language-neutral golden vectors binding capture-core/src/handoff.ts and the Hermes Python port clients/hermes/python/src/membase_hermes/handoff.py (ADR 0002). Both test suites consume this file so tag/clamp/picker/sweep-selection drift fails CI. Bundle cases carry bare episode fields; each language wraps them in its bundle shape and asserts by index (picked_index / selected_indexes refer to input order).",
+  "$comment": "Language-neutral golden vectors binding capture-core/src/handoff.ts and the Hermes Python port clients/hermes/python/src/membase_hermes/handoff.py. Both test suites consume this file so tag/clamp/picker/sweep-selection drift fails CI. Bundle cases carry bare episode fields; each language wraps them in its bundle shape and asserts by index (picked_index / selected_indexes refer to input order).",
   "recall_query": {
     "out": "[HANDOFF] session handoff summary"
   },

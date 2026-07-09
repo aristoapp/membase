@@ -92,7 +92,7 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   captures and instructions to store them via add_memory. Source:
   install docs "the session-start hook injects 'N pending captures — flush
   them'".
-- C-HOOK-2 — Dreaming v2: `hook.cjs PostToolUse` with a Codex-shaped payload
+- C-HOOK-2 — Session-digest capture: `hook.cjs PostToolUse` with a Codex-shaped payload
   (`{session_id, tool_name:"apply_patch", tool_input:{command:"*** Update
   File: x.ts"}}`) records the observation to the per-session SCRATCH
   (`<dataDir>/scratch/<session_id>.jsonl`) naming the touched file — and adds
@@ -101,7 +101,7 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   exactly ONE `session_summary` record in the spool, attributed to the client
   source, then deletes the scratch. C-HOOK-2c: for a client with no end event
   (Codex) or a crash, the next `SessionStart` sweeps any scratch idle >30min
-  into a digest. Source: the "Session-digest capture (dreaming v2)" design
+  into a digest. Source: the session-digest capture design
   decision.
 - C-HOOK-3 — Attribution follows `MEMBASE_CLIENT_SOURCE`: with `codex`, the
   session digest's text/display identifies Codex, not Claude Code; with the
@@ -118,7 +118,7 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   `source` = the client source; `SessionStart` flushes at most 1. On 401 the
   runtime refreshes via `POST /oauth/token` exactly once and retries.
   Source: capture-core transport JSDoc ("single-flight-refresh +
-  retry-on-401"); D3 addendum for source attribution.
+  retry-on-401") plus source attribution.
 - C-HOOK-7 — Single-document stdout: whatever a hook entry point prints is
   at most ONE JSON object, parseable with a single JSON.parse of the whole
   stdout. Source: Claude Code hooks output schema (one JSON object per hook
@@ -137,7 +137,7 @@ Cursor hooks output schema `{"additional_context": ...}` per cursor.com/docs)
 - C-CUR-2 — `cursor-hook.mjs afterFileEdit` with
   `{conversation_id, workspace_roots:[dir], file_path}` records the edited
   file to the session scratch (`scratch/<conversation_id>.jsonl`), not the
-  upload spool (dreaming v2); stdout is empty.
+  upload spool; stdout is empty.
 - C-CUR-3 — `cursor-hook.mjs afterShellExecution` with `{command: "pnpm build"}`
   scratches a Bash observation; trivial/read-only commands (e.g. `ls`) scratch
   nothing. Source: install docs promise that capture is "summaries", not a

@@ -7,16 +7,16 @@
  *
  * The tag MUST live on a field the search bundle exposes — the episode name /
  * summary — not just the ingested content body: the bundle carries `name` and
- * `summary` but not the raw body (see NodeResponse in clients/openclaw/runtime/src/types.ts). The backend
- * derives the episode name from `display_summary` (graph_sync.py:298 →
- * build_safe_episode_name(display_title or display_summary or content)), so
- * `buildHandoffDisplaySummary` prefixes the tag there and `isHandoffMemory`
- * matches against `episode.name`/`episode.summary`.
+ * `summary` but not the raw body (see NodeResponse in
+ * clients/openclaw/runtime/src/types.ts). The backend derives the episode
+ * name from `display_summary` (a server-side behavior, not verifiable
+ * locally), so `buildHandoffDisplaySummary` prefixes the tag there and
+ * `isHandoffMemory` matches against `episode.name`/`episode.summary`.
  */
 export const HANDOFF_TAG = "[HANDOFF]";
 
-// display_summary max_length on the backend (models/ingest.py) is 500; the tag
-// + scope is short, so clamp the user summary to leave headroom.
+// The backend caps display_summary at 500 chars; the tag + scope is short,
+// so clamp the user summary to leave headroom.
 const HANDOFF_SUMMARY_MAX = 400;
 
 /** Recall/replace search window: relevance can outrank the real handoff,

@@ -120,7 +120,7 @@ def sanitize_capture_text(raw: str) -> str:
 
     Mirrors the OpenClaw runtime's sanitizeCaptureText
     (redactSecrets(sanitizeMembaseText(raw))). Used before a capture is written
-    to the failure-path disk spool (ADR 0005), so credentials never reach disk.
+    to the failure-path disk spool, so credentials never reach disk.
     Unlike sanitize_recall_query it does NOT collapse whitespace or clamp
     length — the stored capture keeps its shape.
     """

@@ -1,8 +1,8 @@
-// Disk-persisted capture spool (ADR 0002 / D1 slice 3).
+// Disk-persisted capture spool.
 //
 // Extracted from the Claude runtime. This design exists for hosts whose hook
 // handlers are SHORT-LIVED SPAWNED PROCESSES (Claude Code today, Cursor's
-// hooks.json processes in D3): captures must survive across invocations, so
+// hooks.json processes): captures must survive across invocations, so
 // the queue lives on disk with a lock file, crash-safe inflight handoff, and
 // a sent-id ledger for dedupe. Long-lived hosts (OpenClaw gateway, Hermes)
 // keep their in-process queues — this is deliberately NOT one abstraction

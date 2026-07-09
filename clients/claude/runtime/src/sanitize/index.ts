@@ -1,5 +1,5 @@
 // Claude-runtime sanitize surface, now composed from @membase/capture-core
-// (ADR 0002 / D1). Public API and behavior are unchanged; only the shared
+// Public API and behavior are unchanged; only the shared
 // primitives moved to the core. Claude-specific pieces stay here: the
 // <private> block, the smaller memory-keyword list, empty-input-is-casual,
 // and the operational heartbeat patterns.

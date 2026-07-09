@@ -24,7 +24,7 @@ export interface MembaseClientOptions {
 }
 
 // Transport (token state, single-flight refresh, retry-on-401) lives in
-// @membase/capture-core (ADR 0002 / D1 slice 2); this class keeps the
+// @membase/capture-core; this class keeps the
 // OpenClaw product API surface, text-first response parsing, and debug
 // logging behavior.
 export class MembaseClient {

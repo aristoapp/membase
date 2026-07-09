@@ -52,13 +52,13 @@ describe("sanitizeCaptureText", () => {
 describe("handoff memory tagging", () => {
   test("tags stored handoff content with the literal marker and project scope", () => {
     const content = buildHandoffMemory({
-      summary: "Shipped D1 slices, gate closed.",
+      summary: "Shipped the release, gate closed.",
       project: "membase-plugin-mcp",
     });
 
     expect(content.startsWith(HANDOFF_TAG)).toBe(true);
     expect(content).toContain("membase-plugin-mcp");
-    expect(content).toContain("Shipped D1 slices, gate closed.");
+    expect(content).toContain("Shipped the release, gate closed.");
   });
 
   test("omits the project scope when none is known", () => {
@@ -84,7 +84,7 @@ describe("handoff memory tagging", () => {
     // The backend uses display_summary as the episode name, which is the field
     // recall's isHandoffMemory check reads — the tag must be at the very start.
     const ds = buildHandoffDisplaySummary({
-      summary: "Shipped D1 slices, gate closed.",
+      summary: "Shipped the release, gate closed.",
       project: "membase-plugin-mcp",
     });
     expect(ds.startsWith(HANDOFF_TAG)).toBe(true);

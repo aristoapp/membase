@@ -133,7 +133,7 @@ def sweep_replaced_handoffs(
     """Delete the replaceable old handoffs; per-uuid failures are non-fatal
     (leftovers are swept by the next successful store). Returns how many were
     actually deleted."""
-    # ponytail: sequential deletes (batch is capped at 10); parallelize if the
+    # Sequential deletes (batch is capped at 10); parallelize if the
     # sweep ever becomes latency-critical.
     deleted = 0
     for bundle in select_replaceable_handoffs(bundles, project_scoped=project_scoped):

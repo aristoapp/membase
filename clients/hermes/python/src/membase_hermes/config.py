@@ -37,7 +37,7 @@ class MembaseConfig:
     refresh_token: str = ""
     # Admin-provisioned client_credentials service credentials (CI/headless).
     # When set (and no access token is supplied), the client mints a short-lived
-    # access token itself — no browser login, no token file. See membase#318.
+    # access token itself — no browser login, no token file.
     service_client_id: str = ""
     service_client_secret: str = ""
     auto_recall: bool = False

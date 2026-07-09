@@ -46,7 +46,7 @@ test("C-CUR-2 afterFileEdit records the edited file to the session scratch; stdo
   });
   assert.equal(run.code, 0);
   assert.equal(run.stdout.trim(), "", "afterFileEdit must print nothing");
-  // Dreaming v2: a per-tool observation lands in the session scratch, not the
+  // A per-tool observation lands in the session scratch, not the
   // upload spool (conversation_id maps to session_id).
   assert.equal(readSpoolRaw(dir), "", "afterFileEdit must not touch the upload spool");
   const scratch = readScratch(dir, "conv-2");

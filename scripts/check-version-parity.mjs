@@ -137,7 +137,7 @@ function assertNoUnexpectedVersionFields(relativePath) {
   const manifest = readJson(relativePath);
   if (manifest !== undefined && Object.hasOwn(manifest, "version")) {
     failures.push(
-      `${relativePath}: do not add a manifest version until OpenClaw version ownership is accepted`
+      `${relativePath}: the OpenClaw manifest intentionally carries no version field — the package.json is the version source`
     );
   }
 }

@@ -60,7 +60,7 @@ test("end to end: afterFileEdit lands in the session scratch via the shared bund
     env: { ...process.env, MEMBASE_DATA_DIR: dataDir },
     encoding: "utf8",
   });
-  // Dreaming v2: a per-tool observation lands in the per-session scratch
+  // A per-tool observation lands in the per-session scratch
   // (keyed by conversation_id → session_id), never the upload spool.
   assert.equal(
     fs.existsSync(path.join(dataDir, "spool", "pending.jsonl")),

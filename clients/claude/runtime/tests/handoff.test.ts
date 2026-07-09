@@ -9,13 +9,13 @@ import {
 describe("handoff memory tagging", () => {
   it("tags stored handoff content with the literal marker", () => {
     const content = buildHandoffMemory({
-      summary: "Shipped D1 slices, gate closed.",
+      summary: "Shipped the release, gate closed.",
       project: "membase-plugin-mcp",
     });
 
     expect(content.startsWith(HANDOFF_TAG)).toBe(true);
     expect(content).toContain("membase-plugin-mcp");
-    expect(content).toContain("Shipped D1 slices, gate closed.");
+    expect(content).toContain("Shipped the release, gate closed.");
   });
 
   it("omits the project scope when no slug is known", () => {

@@ -56,7 +56,7 @@ test("C-HOOK-2 PostToolUse writes the tool observation to the per-session scratc
     },
   });
   assert.equal(run.code, 0);
-  // Dreaming v2: a single tool call is NOT a memory. It lands in scratch;
+  // A single tool call is NOT a memory. It lands in scratch;
   // the spool stays empty until a session digest is built at session end.
   assert.equal(readSpoolRaw(dir), "", "no per-tool record may reach the upload spool");
   const scratch = readScratch(dir, "s-tool");
