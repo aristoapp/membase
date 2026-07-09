@@ -7085,7 +7085,9 @@ function createCaptureSpool(options) {
       }),
       capture_kind: record2.capture_kind,
       content,
-      display_summary: record2.display_summary ?? truncateText(content, 180),
+      // Caller-supplied display_summary is raw hook/tool text — sanitize it
+      // like content so secrets can't reach disk via the summary field.
+      display_summary: record2.display_summary ? options.sanitize(record2.display_summary) : truncateText(content, 180),
       project: record2.project,
       metadata: record2.metadata,
       created_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -7144,7 +7146,14 @@ function createCaptureSpool(options) {
         failed.push({
           ...record2,
           attempts: (record2.attempts ?? 0) + 1,
-          last_error: error51 instanceof Error ? error51.message : String(error51)
+          // Uploader errors can echo response bodies; sanitize and clamp
+          // before persisting to disk.
+          last_error: truncateText(
+            options.sanitize(
+              error51 instanceof Error ? error51.message : String(error51)
+            ),
+            300
+          )
         });
       }
     }
@@ -32498,11 +32507,11 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive2(args.content)) {
+      if (looksSensitive2(args.content) || args.metadata && looksSensitive2(JSON.stringify(args.metadata))) {
         throw new Error("Refusing to store content that looks like a secret.");
       }
       const result = await client.ingestMemory({
-        content: args.content,
+        content: sanitizeMembaseText(args.content),
         metadata: {
           ...args.metadata ?? {},
           plugin: INGEST_PLUGIN_LABEL,
@@ -32541,7 +32550,7 @@ async function main() {
         throw new Error("Refusing to store content that looks like a secret.");
       }
       const { status, replaced } = await replaceHandoff(client, {
-        summary: args.summary,
+        summary: sanitizeMembaseText(args.summary),
         project: args.project,
         metadata: {
           plugin: INGEST_PLUGIN_LABEL,
@@ -32657,7 +32666,7 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive2(args.content)) {
+      if (looksSensitive2(args.content) || looksSensitive2(args.title)) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret."
         );
@@ -32686,7 +32695,7 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (typeof args.content === "string" && looksSensitive2(args.content)) {
+      if (typeof args.content === "string" && looksSensitive2(args.content) || typeof args.title === "string" && looksSensitive2(args.title)) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret."
         );

@@ -31,7 +31,11 @@ import {
   profileResourceFields,
 } from "../profile/index.js";
 import { resolveProjectSlug } from "../project/index.js";
-import { looksSensitive, truncateText } from "../sanitize/index.js";
+import {
+  looksSensitive,
+  sanitizeMembaseText,
+  truncateText,
+} from "../sanitize/index.js";
 import {
   consumeUpdateNotice,
   startBackgroundUpdateCheck,
@@ -309,11 +313,16 @@ async function main(): Promise<void> {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive(args.content)) {
+      if (
+        looksSensitive(args.content) ||
+        (args.metadata && looksSensitive(JSON.stringify(args.metadata)))
+      ) {
         throw new Error("Refusing to store content that looks like a secret.");
       }
+      // Same sanitize funnel as the capture path: strip <private> blocks and
+      // injected context, redact secret assignments.
       const result = await client.ingestMemory({
-        content: args.content,
+        content: sanitizeMembaseText(args.content),
         metadata: {
           ...(args.metadata ?? {}),
           plugin: INGEST_PLUGIN_LABEL,
@@ -354,7 +363,7 @@ async function main(): Promise<void> {
         throw new Error("Refusing to store content that looks like a secret.");
       }
       const { status, replaced } = await replaceHandoff(client, {
-        summary: args.summary,
+        summary: sanitizeMembaseText(args.summary),
         project: args.project,
         metadata: {
           plugin: INGEST_PLUGIN_LABEL,
@@ -481,7 +490,7 @@ async function main(): Promise<void> {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive(args.content)) {
+      if (looksSensitive(args.content) || looksSensitive(args.title)) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret.",
         );
@@ -512,7 +521,10 @@ async function main(): Promise<void> {
     },
     async (args) => {
       const { client } = requireClient();
-      if (typeof args.content === "string" && looksSensitive(args.content)) {
+      if (
+        (typeof args.content === "string" && looksSensitive(args.content)) ||
+        (typeof args.title === "string" && looksSensitive(args.title))
+      ) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret.",
         );
