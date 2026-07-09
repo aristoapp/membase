@@ -10,6 +10,7 @@ By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md
 ## Ways to contribute
 
 - **Report bugs** or request features via [GitHub Issues](https://github.com/aristoapp/membase-plugin-mcp/issues).
+- **Ask questions or chat** with the community and maintainers on our [Discord](https://discord.gg/vHgtDd6UTK).
 - **Improve documentation** — install guides, the architecture docs, or this file.
 - **Add or improve a connector** for a new or existing MCP host.
 - **Report a security issue** privately — see [SECURITY.md](SECURITY.md).

@@ -5,14 +5,16 @@ helping keep the project and its users safe.
 
 ## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues,
-discussions, or pull requests.**
+**Please do not report security vulnerabilities in public GitHub issues, pull
+requests, or public Discord channels.**
 
 Instead, report them privately using either of the following:
 
-- Email **support@aristo.so** with the subject line `SECURITY: membase-plugin-mcp`, or
+- Message a maintainer privately (a direct message) on our
+  [Discord](https://discord.gg/vHgtDd6UTK), or
 - Open a private report via GitHub's
-  [Security Advisories](https://github.com/aristoapp/membase-plugin-mcp/security/advisories/new).
+  [Security Advisories](https://github.com/aristoapp/membase-plugin-mcp/security/advisories/new)
+  — preferred when sharing exploit details.
 
 Please include as much of the following as you can:
 
