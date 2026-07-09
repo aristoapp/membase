@@ -79,7 +79,7 @@ export function defineOpenClawRuntimeConfig(
     client: {
       id: OPENCLAW_CLIENT_ID,
       displayName: OPENCLAW_DISPLAY_NAME,
-      version: version ?? "0.0.0"
+      version: version ?? "0.1.0"
     }
   });
 }

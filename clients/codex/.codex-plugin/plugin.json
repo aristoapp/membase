@@ -1,6 +1,6 @@
 {
   "name": "membase",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Connect Codex CLI to Membase context APIs for remember, search, task context, and forget actions.",
   "author": {
     "name": "Membase",

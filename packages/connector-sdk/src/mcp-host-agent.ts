@@ -145,7 +145,7 @@ export function defineMcpHostAgent<
       client: {
         id: descriptor.id,
         displayName: descriptor.displayName,
-        version: version ?? "0.0.0",
+        version: version ?? "0.1.0",
       },
     });
   };
@@ -158,7 +158,7 @@ export function defineMcpHostAgent<
     }
 
     return descriptor.manifest.template({
-      version: config.client.version ?? "0.0.0",
+      version: config.client.version ?? "0.1.0",
     });
   };
 
