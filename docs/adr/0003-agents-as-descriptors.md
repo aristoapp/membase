@@ -1,6 +1,6 @@
 # ADR 0003 — Agents are descriptors, not implementations
 
-Status: accepted (Jaehwan, 2026-07-05) · Refines ADR 0001's thin-shim rule and
+Status: accepted (2026-07-05) · Refines ADR 0001's thin-shim rule and
 mirrors the public docs taxonomy at docs.membase.so.
 
 ## Context
@@ -96,6 +96,5 @@ ships a runtime; its adapter can still become a descriptor while
   the descriptor's install/configFile/extras/requirements/postInstall fields —
   in E1 those fields are declarative documentation only (nothing generates
   from them yet).
-- Independent of Group D (capture-core); either can land first. Both wait
-  behind the north-star Gate 2 sign-off for publishing purposes but may merge
-  to main before it.
+- Independent of Group D (capture-core); either can land first. Both may merge
+  to main independently of the publishing decision.
