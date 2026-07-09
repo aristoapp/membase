@@ -28,7 +28,9 @@ export function handoffRecallQuery(): string {
 }
 
 function taggedHandoff(args: { summary: string; project?: string }): string {
-  const project = args.project?.trim();
+  // Parens delimit the scope marker (see SCOPED_HANDOFF_RE); strip them from
+  // the slug so a crafted project name can't corrupt scope parsing.
+  const project = args.project?.trim().replace(/[()]/g, "");
   const scope = project ? ` (${project})` : "";
   return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
 }
@@ -85,11 +87,14 @@ export function pickLatestHandoff<
   // A missing/unparseable timestamp means "unknown", not "oldest" — treating
   // it as epoch 0 would let a real but older timestamped handoff beat an
   // actually-newer untimed one. Untimed bundles instead keep their relevance
-  // rank relative to each other via the tie-break below.
+  // rank relative to each other via the tie-break below. Timestamps are
+  // clamped to now: a far-future valid_at (plantable via any ingestion path)
+  // must not permanently win "latest".
+  const now = Date.now();
   const time = (b: T): number | null => {
     const raw = b.episode.valid_at ?? b.episode.created_at ?? "";
     const t = Date.parse(raw);
-    return Number.isNaN(t) ? null : t;
+    return Number.isNaN(t) ? null : Math.min(t, now);
   };
   return handoffs.reduce((latest, b) => {
     const bTime = time(b);
@@ -160,9 +165,11 @@ export async function sweepReplacedHandoffs<
   deleteEpisode: (uuid: string) => Promise<void>,
   opts: { projectScoped: boolean; max?: number },
 ): Promise<number> {
+  // Server-supplied uuids feed an authenticated DELETE; require uuid shape so
+  // a crafted value can't redirect the request path.
   const targets = selectReplaceableHandoffs(bundles, opts)
     .map((b) => b.episode.uuid)
-    .filter((uuid): uuid is string => Boolean(uuid));
+    .filter((uuid): uuid is string => /^[0-9a-f-]{32,36}$/i.test(uuid ?? ""));
   const results = await Promise.allSettled(
     targets.map((uuid) => deleteEpisode(uuid)),
   );

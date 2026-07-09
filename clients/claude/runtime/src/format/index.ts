@@ -118,7 +118,8 @@ export function buildRecallContext(
   // block early or forge a system-reminder.
   const body = neutralizeInjection(sections.join("\n\n"));
   const full = `<membase-context>\n${intro}\n\n${body}\n\n${disclaimer}\n</membase-context>`;
+  const suffix = "\n...</membase-context>";
   return full.length > maxChars
-    ? `${full.slice(0, maxChars - 14)}\n...</membase-context>`
+    ? `${full.slice(0, maxChars - suffix.length)}${suffix}`
     : full;
 }

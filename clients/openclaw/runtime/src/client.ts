@@ -60,7 +60,7 @@ export class MembaseClient {
       refreshFailedMessage: (status) =>
         `Token refresh failed (${status}). Run 'openclaw membase login' to re-authenticate.`,
       apiErrorMessage: (status, text) =>
-        `Membase API error (${status}): ${text}`,
+        `Membase API error (${status}): ${text.slice(0, 300)}`,
       onTokenRefresh: (tokens) => {
         opts?.onTokenRefresh?.({
           accessToken: tokens.accessToken,

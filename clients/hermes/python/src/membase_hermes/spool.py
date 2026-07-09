@@ -285,7 +285,7 @@ class CaptureSpool:
                     {
                         **record,
                         "attempts": int(record.get("attempts", 0)) + 1,
-                        "last_error": str(error),
+                        "last_error": str(error)[:300],
                     }
                 )
                 continue

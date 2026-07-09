@@ -308,7 +308,8 @@ export class MembaseTransport {
     path: string,
     options: RequestInit = {},
   ): Promise<Response> {
-    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
+    // Log the path only — query strings can carry user-derived recall text.
+    this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
     let response = await this.rawFetch(path, options);
     if (response.status === 401 && this.tokens.refreshToken) {
       await response.body?.cancel();
