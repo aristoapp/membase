@@ -10,6 +10,7 @@ const npmPackagePaths = [
   "packages/core/package.json",
   "packages/connector-sdk/package.json",
   "clients/claude/package.json",
+  "clients/codex/package.json",
   "clients/cursor/package.json",
   "clients/hermes/package.json",
   "clients/openclaw/package.json"

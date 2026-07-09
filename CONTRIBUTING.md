@@ -17,23 +17,31 @@ By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Development setup
 
-You'll need **Node.js 20+** and **pnpm 11+** (this is a pnpm monorepo). Some
-client runtimes additionally use Python 3.12 (Hermes) or Bun (runtime tests).
+You'll need **Node.js 20+** and **pnpm 11+** (this is a pnpm monorepo). The
+full test matrix additionally uses **Bun** (Claude/OpenClaw/capture-core
+runtime tests) and **Python 3.11+** with `httpx` + `pyyaml` (Hermes). In CI
+the Claude Code CLI is also installed for live plugin validation; locally
+that step skips with a warning when the CLI is absent.
 
 ```bash
 git clone https://github.com/aristoapp/membase-plugin-mcp.git
 cd membase-plugin-mcp
 pnpm install
-pnpm check
+pnpm check   # full guard chain (offline; needs python3 for the Hermes parity check)
+pnpm test    # all package test suites (needs Bun + Python)
 ```
 
 `pnpm check` is the full gate. It must pass before a pull request is merged. It:
 
 - typechecks the workspace,
 - verifies committed manifests/configs match adapter-generated output,
-- runs the connector smoke tests against a local stub,
+- runs the connector smoke tests (fully offline — no Membase account needed),
 - scans for accidentally committed secrets, and
 - enforces the public surface boundary.
+
+Everything above runs offline against fakes; only the `e2e/` tiers talk to
+live Membase environments, and those need credentials you won't have as an
+external contributor — CI runs them for you.
 
 Useful scripts while developing:
 

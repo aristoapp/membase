@@ -25,8 +25,8 @@ Use `/membase:dream` as a maintenance pass, not as part of normal recall.
   current correct state, resolving conflicts by preferring later facts.
 - Tag every consolidated memory with the literal prefix `[DREAM]` so it's
   identifiable later (e.g. by a subsequent dream pass).
-- Never delete or overwrite originals automatically. Membase has no
-  bulk-delete; only call `forget_memory` on specific memories the user
-  explicitly confirms should go, after showing what the new memory
-  supersedes.
+- Never delete or overwrite originals automatically. This client has no
+  memory-delete tool; list what the new memory supersedes and let the user
+  remove originals from the Membase dashboard (or a delete-capable client)
+  if they want them gone.
 - If the spool is empty and nothing is duplicated or stale, say so plainly.

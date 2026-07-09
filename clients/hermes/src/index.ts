@@ -56,7 +56,7 @@ export function generateHermesPluginManifest(
     name: HERMES_PLUGIN_NAME,
     version: config.client.version ?? "0.1.0",
     description:
-      "Connect Hermes Agent to Membase context APIs for remember, search, task context, and forget actions.",
+      "Connect Hermes Agent to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
     pip_dependencies: [HERMES_PYTHON_PACKAGE]
   };
 }
