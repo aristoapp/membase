@@ -41,9 +41,9 @@ Behind the scenes Membase gives Hermes these tools — Hermes calls them for you
 
 ## For contributors
 
-`clients/hermes/native-artifacts.json` is the review-only snapshot of the
-Hermes-native provider files; `pnpm hermes:native-artifacts` asserts it stays in
-sync with the runtime under `clients/hermes`.
+The provider source lives under `clients/hermes/python`;
+`pnpm hermes:python-parity` asserts the packaged plugin files stay in sync
+with it.
 
 ## Help
 

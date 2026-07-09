@@ -40,10 +40,9 @@ directly, Claude uses them for you:
 
 ## For contributors
 
-`clients/claude/native-artifacts.json` is the review-only snapshot of the
-old Claude command, hook, and skill files now copied into
-`clients/claude/runtime`. `pnpm claude:native-artifacts` asserts the two stay
-in sync.
+The plugin source lives under `clients/claude/runtime`; the committed
+`plugin/scripts/*.cjs` bundles are generated from it, and
+`pnpm claude:bundle-provenance` asserts they match a fresh build.
 
 ## Help
 
