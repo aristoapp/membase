@@ -1,7 +1,7 @@
 // Package-level contract tests for the disk capture spool. The Claude
 // runtime has its own integration tests; these pin the behaviors every
-// spool consumer (Claude today, Cursor/Codex adapters per north-star
-// pillar 1) relies on — most importantly: a failed upload (e.g. quota 403)
+// spool consumer (Claude today, the Cursor/Codex adapters next) relies on —
+// most importantly: a failed upload (e.g. quota 403)
 // must never lose the capture.
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";

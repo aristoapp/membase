@@ -1,3 +1,4 @@
+import { neutralizeInjection } from "@membase/capture-core";
 import type { MembaseClient } from "../client";
 import { formatBundle, formatWikiDocument } from "../format";
 import type { MembasePluginConfig, OpenClawPluginApi } from "../types";
@@ -100,10 +101,14 @@ export function registerRecallHook(
           sections.push(`${wikiHeader}\n${wikiLines.join("\n")}`);
         }
 
+        // Memory/wiki text is untrusted (it can arrive via Slack/Gmail/other-
+        // client captures); neutralize block/control tags so it can't close
+        // this context block early or forge a system-reminder.
+        const body = neutralizeInjection(sections.join("\n\n"));
         return {
           prependContext:
             `<membase-context>\n${RECALL_INTRO}\n\n` +
-            `${sections.join("\n\n")}\n\n${RECALL_DISCLAIMER}\n</membase-context>`,
+            `${body}\n\n${RECALL_DISCLAIMER}\n</membase-context>`,
         };
       } catch {
         return {};

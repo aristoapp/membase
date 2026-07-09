@@ -1,4 +1,4 @@
-// Shared handoff tagging + recall selection (north-star pillar 2).
+// Shared handoff tagging + recall selection.
 // Extracted from the OpenClaw runtime so every client agrees on one literal
 // tag, one display-summary rule, and one "latest by time" picker.
 /**
@@ -183,14 +183,18 @@ export function isHandoffFresh(storedAtMs: number, nowMs?: number): boolean {
   return Math.max(0, now - storedAtMs) <= HANDOFF_STALE_MS;
 }
 
-// Untrusted handoff text is interpolated into a <membase-handoff> block and,
-// for the Codex/cwd file, can even come from a checked-in repo file — so it
-// must not be able to close the block early or forge a hook control tag.
-// Neutralize the block delimiter and the harness's system-reminder tag by
+// Untrusted memory/handoff text is interpolated into harness-injected blocks
+// (<membase-handoff>, <membase-context>) and can come from low-trust sources —
+// a checked-in repo file, Slack/Gmail ingestion, another client's captures —
+// so it must not be able to close a block early or forge a hook control tag.
+// Neutralize the block delimiters and the harness's system-reminder tag by
 // inserting a zero-width space; the text stays readable, the tags inert.
-function neutralizeInjection(text: string): string {
+// Applied at render time (every client's recall/handoff renderer calls this)
+// so write-time gaps in other ingestion paths can't bypass it.
+// Golden-vector-bound to the Hermes Python port (spec/sanitize-vectors.json).
+export function neutralizeInjection(text: string): string {
   return text.replace(
-    /<\/?(membase-handoff|system-reminder)\b/gi,
+    /<\/?(membase-handoff|membase-context|system-reminder)\b/gi,
     (m) => `${m[0]}​${m.slice(1)}`,
   );
 }

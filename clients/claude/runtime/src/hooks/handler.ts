@@ -245,7 +245,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
           ? "Membase is installed but not connected. Run /membase:login to enable memory."
           : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.",
       );
-      // HTTP-fallback mode (north-star pillar 1): hooks collect without
+      // HTTP-fallback mode: hooks collect without
       // tokens, so the authenticated in-app AI is the uploader — announce
       // the backlog so it can flush.
       const pending = pendingSpoolCount();

@@ -23,7 +23,7 @@ const scanRoots = [
   "tsconfig.json",
 ];
 
-const ignoredSegments = new Set([".git", "node_modules", "dist"]);
+const ignoredSegments = new Set([".git", "node_modules", "dist", ".venv", "__pycache__"]);
 
 const textExtensions = new Set([
   ".cjs",

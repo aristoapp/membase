@@ -1,4 +1,4 @@
-// Local handoff file (north-star pillar 2: same-client continuation is
+// Local handoff file (same-client continuation is
 // file-based). One rolling file per project under the plugin data dir;
 // freshness comes from the file's mtime, so the content stays plain text.
 import { readFileSync, statSync } from "node:fs";

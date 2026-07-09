@@ -3,7 +3,7 @@ export const PLUGIN_VERSION = "0.1.4";
 export const DEFAULT_API_URL = "https://api.membase.so";
 export const DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
 // The bundled stdio server/hook binaries are shared by other stdio-bundled
-// clients (north-star pillar 1): MEMBASE_CLIENT_SOURCE overrides memory
+// clients: MEMBASE_CLIENT_SOURCE overrides memory
 // source attribution and the user agent without a separate build. Unset =
 // Claude Code behavior, byte-identical requests.
 // Interpolated into the User-Agent header: reject anything outside a safe

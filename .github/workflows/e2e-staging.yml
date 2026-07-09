@@ -33,8 +33,8 @@ jobs:
     timeout-minutes: 10
     env:
       # Staging Cloud Run endpoints (stable per project; not secrets).
-      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
-      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+      MEMBASE_AUTH_BASE: ${{ vars.MEMBASE_STAGING_AUTH_BASE }}
+      MEMBASE_MCP_URL: ${{ vars.MEMBASE_STAGING_MCP_URL }}
     steps:
       - uses: actions/checkout@v4
 

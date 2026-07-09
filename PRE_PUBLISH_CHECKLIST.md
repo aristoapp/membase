@@ -36,6 +36,11 @@ decision or GitHub settings access.
   monitored, or change it.
 - [ ] Update the LICENSE copyright holder if it should be a legal entity name
   rather than "Membase".
+- [ ] Version bump for the first public release: bump `package.json` (root) to
+  `0.1.0`, mirror it in every path `scripts/check-version-parity.mjs` lists
+  (workspace packages, plugin.json manifests, hermes plugin.yaml, pyproject),
+  then run `pnpm generate && pnpm check`. Deferred from the cleanup PR to
+  avoid conflicting with in-flight feature branches.
 
 ## Remaining — GitHub settings
 

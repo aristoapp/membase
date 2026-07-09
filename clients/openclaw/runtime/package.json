@@ -1,6 +1,7 @@
 {
   "name": "@membase/openclaw-membase-runtime",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "OpenClaw plugin runtime for Membase (tools, hooks, commands) \u2014 copied in as-is from the standalone connector; refactor toward shared core later.",
