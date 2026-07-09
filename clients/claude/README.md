@@ -31,16 +31,23 @@ defaults to `https://api.membase.so` and can be overridden via the plugin's
 
 ## Capabilities
 
-Through the shared Membase Context API, the connector exposes: `remember`,
-`search`, `getContext`, and `deleteOrForget`. No internal Membase memory
-details are exposed.
+The plugin's stdio MCP server registers the hosted tool set plus
+plugin-managed extras:
+
+`add_memory` · `search_memory` · `add_wiki` · `search_wiki` ·
+`update_wiki` · `delete_wiki` · `get_current_date`
+
+plus `store_handoff`, `login` / `logout` / `get_status` /
+`set_project_config`, the `membase://profile|recent|project` resources, and
+auto-capture/recall hooks. No Membase server internals are
+exposed.
 
 ## For contributors
 
 ```bash
 pnpm --filter @membase/client-claude typecheck
 pnpm claude:plugin-parity     # validates the plugin manifest with the Claude Code CLI
-pnpm public-surface           # ensures no internal Membase terms leak
+pnpm public-surface           # lints the public API surface
 ```
 
 Plugin metadata lives in `.claude-plugin/plugin.json`; the plugin-local MCP

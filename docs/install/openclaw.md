@@ -19,7 +19,8 @@ Two ways to connect — pick one:
 }
 ```
 
-**Native plugin (richer — auto-capture and recall).** From an OpenClaw checkout:
+**Native plugin (richer — auto-capture and recall).** From a clone of this
+repo (`membase-plugin-mcp`):
 
 ```bash
 openclaw plugins install --link ./clients/openclaw

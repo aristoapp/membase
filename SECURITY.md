@@ -42,9 +42,9 @@ Reports that are especially in scope for this repo include:
 
 ## Handling of secrets
 
-By design, this repo never stores raw secrets. Connectors reference environment
-variables (for example `${MEMBASE_API_KEY}`) rather than values, and a
-`secret-hygiene` guard runs in CI to catch accidental leaks. See
+By design, this repo never stores raw secrets. Auth is each client's OAuth
+flow — there is no user-supplied API key — and a `secret-hygiene` guard runs
+in CI to catch accidental leaks. See
 [docs/security.md](docs/security.md) for the full secret-handling and redaction
 model. If you find a committed secret, please treat it as a vulnerability and
 report it privately using the process above.

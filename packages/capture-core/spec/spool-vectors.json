@@ -33,7 +33,7 @@
     ]
   },
   "dedupe": {
-    "$comment": "Enqueuing the same (session_id, capture_kind, content) twice keeps only the first; the second returns null.",
+    "$comment": "Enqueuing the same (session_id, capture_kind, content) twice keeps only the first; the second returns null. Consumed by the Python suite; the TS side covers dedupe behaviorally in spool.test.ts.",
     "session_id": "sess-dup",
     "capture_kind": "conversation",
     "content": "a duplicate capture enqueued twice",

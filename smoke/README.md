@@ -21,12 +21,9 @@ pnpm hermes:python-parity
 pnpm openclaw:native-parity
 ```
 
-The dry-run harness imports the built Claude, Cursor, Hermes, and OpenClaw
-adapters, validates each generated MCP config, checks that diagnostics redact
-API key values where configs use local env, verifies Cursor HTTP MCP shape,
-verifies each adapter declares executable smoke commands, and exercises the
-public remember/search/context/delete flow through
-`smoke/public-contract-stub.mjs`.
+The dry-run harness imports the built client adapters, validates each
+generated MCP config (no leaked sentinel secret, correct transport shape),
+and verifies each adapter declares executable smoke commands.
 
 Secret handling expectations and live MCP smoke prerequisites are documented in
 `docs/security.md`.

@@ -51,7 +51,7 @@ export const cursorAgent = defineMcpHostAgent<CursorPluginManifest>({
       name: "membase",
       displayName: "Membase",
       description:
-        "Connect Cursor to Membase context APIs for remember, search, task context, and forget actions.",
+        "Connect Cursor to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
       version,
       author: { ...MEMBASE_PUBLISHER },
       homepage: MEMBASE_HOMEPAGE,

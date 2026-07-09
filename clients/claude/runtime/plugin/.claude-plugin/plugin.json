@@ -7,7 +7,7 @@
     "email": "support@membase.so"
   },
   "homepage": "https://membase.so",
-  "repository": "https://github.com/aristoapp/claude-membase",
+  "repository": "https://github.com/aristoapp/membase-plugin-mcp",
   "license": "MIT",
   "keywords": ["membase", "memory", "mcp", "claude-code"],
   "skills": "./skills/",

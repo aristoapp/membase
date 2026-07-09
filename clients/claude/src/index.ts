@@ -62,7 +62,7 @@ export function generateClaudePluginManifest(
   return {
     name: "membase",
     description:
-      "Connect Claude Code to Membase context APIs for remember, search, task context, and forget actions.",
+      "Connect Claude Code to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
     version: config.client.version ?? "0.1.0",
     author: {
       name: "Membase",

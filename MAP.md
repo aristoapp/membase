@@ -8,7 +8,7 @@ this shape.
 
 | Path | Owns | One-liner |
 | --- | --- | --- |
-| `packages/core` | normalized endpoint/auth config primitives | client-safe config only; never imports Membase storage/ranking/graph internals |
+| `packages/core` | normalized endpoint config primitives | client-safe config only; never imports Membase storage/ranking/graph internals |
 | `packages/connector-sdk` | adapter-facing extension surface + `defineMcpHostAgent()` | descriptor mechanism for config-only agents |
 | `packages/capture-core` | sanitize, spool/buffer, capture kinds, `MembaseTransport` (OAuth) | shared "what" logic; golden vectors in `spec/*.json` bind TS+Python |
 | `clients/claude` | Claude Code plugin (descriptor + `runtime/`) | hybrid: descriptor-tier manifest + real runtime (spawned hook process, disk spool) |
@@ -18,18 +18,18 @@ this shape.
 | `clients/openclaw` | OpenClaw plugin runtime (TS, in-process) | long-lived gateway, in-memory buffers (not disk spool) |
 | `scripts/check-*.mjs` + `check-public-surface.sh` | CI guards, one per invariant | run via `pnpm check`; see Conventions |
 | `smoke/` | client-smoke + live-smoke-preflight | exercises public connector contract only |
-| `e2e/` | staging verification (`client_credentials`) | not yet wired to prod; see [e2e/README.md](e2e/README.md) |
+| `e2e/` | live/staging verification tiers | tier 1 hits prod unauthenticated, tiers 2–3 hit staging with service credentials; see [e2e/README.md](e2e/README.md) |
 | `docs/architecture.md` | repo shape + design decisions | source of truth for "why", read before "what" |
 
 ## Entry points
 
-- `pnpm check` — the full gate: typecheck, generated-artifacts, all parity/native-artifact/version/secret-hygiene/public-surface guards, smoke dry-run. Run before any PR.
+- `pnpm check` — the full gate: typecheck, generated-artifacts, all parity/version/secret-hygiene/public-surface guards, smoke dry-run. Run before any PR.
 - `pnpm generate` — regenerate descriptor-driven manifests/configs (`scripts/regen-artifacts.mjs`); required after touching a descriptor or `connector-sdk`.
 - `pnpm e2e` / `pnpm e2e:live` — staging verification pipeline.
 
 ## Conventions
 
-- **Public contract is fixed and small**: `remember`, `search`, `getContext`, `deleteOrForget` + client manifest/config generation + smoke tests. Internal terms (storage schema, graph, embedding, ranking, governance) must never leak into `packages/core`/`packages/connector-sdk` — enforced by `check-public-surface.sh`.
+- **Public surface = the hosted MCP tool set + per-client runtime tools** plus client manifest/config generation and smoke tests. Internal terms (storage schema, graph, embedding, ranking, governance) must never leak into `packages/core`/`packages/connector-sdk` — enforced by `check-public-surface.sh`.
 - **One guard script per invariant**, named `check-<thing>.mjs`, wired into `pnpm check`. Don't fold guards together; don't skip adding one for a new invariant (see `check-secret-hygiene.mjs`, `check-version-parity.mjs` as the pattern).
 - **Descriptor over adapter** for anything that's data-variance, not behavior-variance: a new config-only MCP host agent is a `defineMcpHostAgent()` entry + regen, not a hand-written ~120-line adapter.
 - **Behavioral variance stays per-client; never merge adapters sideways** — push shared behavior down into `capture-core` instead.

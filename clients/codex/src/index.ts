@@ -56,7 +56,7 @@ export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
       name: "membase",
       version,
       description:
-        "Connect Codex CLI to Membase context APIs for remember, search, task context, and forget actions.",
+        "Connect Codex CLI to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
       author: { ...MEMBASE_PUBLISHER },
       homepage: MEMBASE_HOMEPAGE,
       repository: MEMBASE_REPOSITORY,

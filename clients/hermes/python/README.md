@@ -7,7 +7,7 @@ the installer.
 
 Layout:
 
-- `pyproject.toml` — package `membase-hermes`, console scripts
+- `pyproject.toml` — package `hermes-membase`, console scripts
   `hermes-membase` (CLI) and `hermes-membase-install` (installer). Version is
   pinned to the repo-wide `0.0.0` until publishing is decided.
 - `src/membase_hermes/plugin/plugin.yaml` must stay byte-equal to the
@@ -23,5 +23,5 @@ publishing is a separate launch-time step.
 
 ```bash
 pnpm hermes:python-parity   # metadata, entrypoints, YAML sync, syntax, runtime presence
-pnpm hermes:test            # unittest suite (needs httpx + PyYAML on PYTHONPATH)
+pnpm hermes:test            # unittest suite (Python 3.11+; pip install httpx pyyaml first)
 ```
