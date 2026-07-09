@@ -1,4 +1,4 @@
-// Shared handoff tagging + recall selection (north-star pillar 2).
+// Shared handoff tagging + recall selection.
 // Extracted from the OpenClaw runtime so every client agrees on one literal
 // tag, one display-summary rule, and one "latest by time" picker.
 /**
@@ -183,14 +183,18 @@ export function isHandoffFresh(storedAtMs: number, nowMs?: number): boolean {
   return Math.max(0, now - storedAtMs) <= HANDOFF_STALE_MS;
 }
 
-// Untrusted handoff text is interpolated into a <membase-handoff> block and,
-// for the Codex/cwd file, can even come from a checked-in repo file — so it
-// must not be able to close the block early or forge a hook control tag.
-// Neutralize the block delimiter and the harness's system-reminder tag by
+// Untrusted memory/handoff text is interpolated into harness-injected blocks
+// (<membase-handoff>, <membase-context>) and can come from low-trust sources —
+// a checked-in repo file, Slack/Gmail ingestion, another client's captures —
+// so it must not be able to close a block early or forge a hook control tag.
+// Neutralize the block delimiters and the harness's system-reminder tag by
 // inserting a zero-width space; the text stays readable, the tags inert.
-function neutralizeInjection(text: string): string {
+// Applied at render time (every client's recall/handoff renderer calls this)
+// so write-time gaps in other ingestion paths can't bypass it.
+// Golden-vector-bound to the Hermes Python port (spec/sanitize-vectors.json).
+export function neutralizeInjection(text: string): string {
   return text.replace(
-    /<\/?(membase-handoff|system-reminder)\b/gi,
+    /<\/?(membase-handoff|membase-context|system-reminder)\b/gi,
     (m) => `${m[0]}​${m.slice(1)}`,
   );
 }
@@ -210,11 +214,7 @@ export function buildHandoffInjection(args: {
   const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
   const storedAt = new Date(args.storedAtMs).toISOString();
   return (
-    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n` +
-    `${neutralizeInjection(args.text)}\n` +
-    "</membase-handoff>\n" +
-    "Use this only if the user is continuing the work it describes; it may " +
-    "already be finished."
+    `<membase-handoff stored_at="${storedAt}" age_days="${ageDays}">\n${neutralizeInjection(args.text)}\n</membase-handoff>\nUse this only if the user is continuing the work it describes; it may already be finished.`
   );
 }
 
@@ -230,9 +230,6 @@ export function buildStaleHandoffNotice(args: {
   const now = args.nowMs ?? Date.now();
   const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 86_400_000);
   return (
-    `A Membase handoff from ${ageDays} day(s) ago exists for this ` +
-    "project but was not injected (stale). If the user wants to continue " +
-    "that work, recall it (search_memory for \"[HANDOFF]\", or read the " +
-    "local handoff file)."
+    `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]", or read the local handoff file).`
   );
 }

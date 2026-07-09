@@ -61,6 +61,10 @@ SECRET_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")
+INJECTION_TAG_RE = re.compile(
+    r"</?(membase-handoff|membase-context|system-reminder)\b",
+    re.IGNORECASE,
+)
 
 HEARTBEAT_CONTROL_PATTERNS = [
     re.compile(r"^heartbeat$", re.IGNORECASE),
@@ -84,12 +88,25 @@ def is_casual_chat(text: str) -> bool:
     return any(pattern.search(lower) for pattern in CASUAL_PATTERNS)
 
 
+def neutralize_injection(text: str) -> str:
+    """Port of capture-core's neutralizeInjection (golden-vector-bound).
+
+    Untrusted memory text interpolated into a <membase-context> block must not
+    be able to close the block early or forge a system-reminder tag. A
+    zero-width space after "<" keeps the text readable but the tag inert.
+    """
+    return INJECTION_TAG_RE.sub(lambda m: m.group(0)[0] + "​" + m.group(0)[1:], text)
+
+
 def sanitize_membase_text(raw: str) -> str:
     cleaned = raw
     cleaned = OPENCLAW_TIMESTAMP_PREFIX_RE.sub(" ", cleaned)
     cleaned = MEMBASE_CONTEXT_BLOCK_RE.sub(" ", cleaned)
     cleaned = METADATA_BLOCK_RE.sub(" ", cleaned)
     cleaned = SIMPLE_TAG_RE.sub(" ", cleaned)
+    # Pair-removal above misses standalone/unbalanced tags; neutralize the
+    # leftovers so they cannot terminate the provider's context block.
+    cleaned = neutralize_injection(cleaned)
     lines = [line.strip() for line in cleaned.splitlines()]
     lines = [line for line in lines if line]
     return "\n".join(lines).strip()

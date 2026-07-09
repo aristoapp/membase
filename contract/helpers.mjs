@@ -2,7 +2,7 @@
 // implementation source was read. Public entry points + black-box probing only.
 import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -78,7 +78,7 @@ export async function writeSpool(dataDir, records) {
       }),
     )
     .join("\n");
-  await writeFile(join(dataDir, "spool", "pending.jsonl"), lines + "\n");
+  await writeFile(join(dataDir, "spool", "pending.jsonl"), `${lines}\n`);
 }
 
 export function spoolPath(dataDir) {

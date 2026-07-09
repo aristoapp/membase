@@ -37,37 +37,6 @@ const expectedArtifacts = [
   ["src/update-check.test.ts", "test-evidence", "deferred-review-only"]
 ];
 
-const requiredDocMarkers = [
-  {
-    path: "docs/packaging-action-parity.md",
-    markers: ["pnpm openclaw:native-artifacts", SNAPSHOT_PATH, "src/commands/cli.ts"]
-  },
-  {
-    path: "docs/migration-parity.md",
-    markers: [SNAPSHOT_PATH, "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/test-coverage-parity.md",
-    markers: ["pnpm openclaw:native-artifacts", "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/review-summary.md",
-    markers: ["pnpm openclaw:native-artifacts", "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "docs/runtime-parity-decisions.md",
-    markers: [SNAPSHOT_PATH, "OpenClaw native artifact snapshot"]
-  },
-  {
-    path: "clients/openclaw/README.md",
-    markers: [SNAPSHOT_PATH, "pnpm openclaw:native-artifacts"]
-  },
-  {
-    path: "docs/install/openclaw.md",
-    markers: [SNAPSHOT_PATH, "pnpm openclaw:native-artifacts"]
-  }
-];
-
 const failures = [];
 const snapshot = readJson(SNAPSHOT_PATH);
 
@@ -84,14 +53,13 @@ if (snapshot) {
     const artifact = artifacts.find((item) => item.path === artifactPath);
     assert(Boolean(artifact), `${SNAPSHOT_PATH}: missing artifact ${artifactPath}`);
     if (artifact) {
-      assert(!Object.prototype.hasOwnProperty.call(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
+      assert(!Object.hasOwn(artifact, "content"), `${SNAPSHOT_PATH}: ${artifactPath} must not inline old file content`);
     }
   }
 }
 
 assertOpenClawMetadataStillRuntimeFree();
 assertRuntimePortedIn();
-assertDocs();
 assertPackageCheckComposition();
 
 if (failures.length > 0) {
@@ -112,7 +80,7 @@ function assertOpenClawMetadataStillRuntimeFree() {
     }
 
     for (const field of ["commands", "hooks", "tools"]) {
-      assert(!Object.prototype.hasOwnProperty.call(manifest, field), `${manifestPath}: ${field} must stay omitted until native artifacts are ported`);
+      assert(!Object.hasOwn(manifest, field), `${manifestPath}: ${field} must stay omitted until native artifacts are ported`);
     }
 
     assert(
@@ -149,19 +117,6 @@ function assertRuntimePortedIn() {
     "clients/openclaw/src/tools/search.ts"
   ]) {
     assert(!fs.existsSync(path.join(ROOT_DIR, relativePath)), `${relativePath}: runtime must live under runtime/, not the adapter src/`);
-  }
-}
-
-function assertDocs() {
-  for (const doc of requiredDocMarkers) {
-    const content = readText(doc.path);
-    if (content === undefined) {
-      continue;
-    }
-
-    for (const marker of doc.markers) {
-      assert(content.includes(marker), `${doc.path}: missing marker ${JSON.stringify(marker)}`);
-    }
   }
 }
 

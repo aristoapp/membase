@@ -1,3 +1,4 @@
+import { neutralizeInjection } from "@membase/capture-core";
 import type { EpisodeBundle, WikiDocument } from "../types.js";
 import { truncateText } from "../sanitize/index.js";
 
@@ -104,9 +105,11 @@ export function buildRecallContext(
     );
   }
   if (sections.length === 0) return "";
-  const full = `<membase-context>\n${intro}\n\n${sections.join(
-    "\n\n",
-  )}\n\n${disclaimer}\n</membase-context>`;
+  // Memory/wiki text is untrusted (it can arrive via Slack/Gmail/other-client
+  // captures); neutralize block/control tags so it can't close this context
+  // block early or forge a system-reminder.
+  const body = neutralizeInjection(sections.join("\n\n"));
+  const full = `<membase-context>\n${intro}\n\n${body}\n\n${disclaimer}\n</membase-context>`;
   return full.length > maxChars
     ? `${full.slice(0, maxChars - 14)}\n...</membase-context>`
     : full;

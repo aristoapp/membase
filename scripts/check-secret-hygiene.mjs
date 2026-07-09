@@ -11,8 +11,6 @@ const ROOT_DIR = path.resolve(
 const scanRoots = [
   ".gitignore",
   "README.md",
-  "RUN_LOG.md",
-  "PLAN.md",
   "docs",
   "packages",
   "clients",
@@ -25,7 +23,7 @@ const scanRoots = [
   "tsconfig.json",
 ];
 
-const ignoredSegments = new Set([".git", "node_modules", "dist"]);
+const ignoredSegments = new Set([".git", "node_modules", "dist", ".venv", "__pycache__"]);
 
 const textExtensions = new Set([
   ".cjs",

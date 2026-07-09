@@ -281,7 +281,15 @@ function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
   (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
-  (0, import_node_fs2.renameSync)(tmp, path);
+  try {
+    (0, import_node_fs2.renameSync)(tmp, path);
+  } catch (err) {
+    try {
+      (0, import_node_fs2.rmSync)(tmp, { force: true });
+    } catch {
+    }
+    throw err;
+  }
   try {
     (0, import_node_fs2.chmodSync)(path, mode);
   } catch {

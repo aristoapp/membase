@@ -142,7 +142,7 @@ async function main() {
     console.log(`export MEMBASE_MCP_CLIENT_ID="${client.client_id}"`);
   }
   console.error(`\nRun:  eval "$(node e2e/get-token.mjs 2>/dev/null)" && pnpm e2e:live`);
-  console.error(`Or:   MEMBASE_MCP_TOKEN=... pnpm e2e:live   (within ~15 min)`);
+  console.error("Or:   MEMBASE_MCP_TOKEN=... pnpm e2e:live   (within ~15 min)");
 }
 
 main().catch((error) => {

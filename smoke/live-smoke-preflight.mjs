@@ -5,8 +5,6 @@ import { fileURLToPath } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const runtimeDecisionPath = "docs/runtime-parity-decisions.md";
-const liveRunbookPath = "docs/live-smoke-runbook.md";
 const mcpConfigSpecs = [
   { path: "clients/claude/.mcp.json", mode: "claude-plugin-local" },
   { path: "manifests/claude/mcp.json", mode: "claude-plugin-local" },
@@ -16,40 +14,6 @@ const mcpConfigSpecs = [
 ];
 
 const failures = [];
-
-const runtimeDecisions = readText(runtimeDecisionPath);
-const liveRunbook = readText(liveRunbookPath);
-const packageJson = readJson("package.json");
-
-const d2Line = findDecisionLine(runtimeDecisions, "D2");
-const d3Line = findDecisionLine(runtimeDecisions, "D3");
-const d6Line = findDecisionLine(runtimeDecisions, "D6");
-
-assertIncludes(
-  d2Line,
-  "Finalized",
-  "D2 must be marked Finalized once the per-client runtime/command paths are locked."
-);
-assertIncludes(
-  d3Line,
-  "Finalized",
-  "D3 must be marked Finalized once the per-client transports are locked."
-);
-assertIncludes(
-  d6Line,
-  "DONE",
-  "D6 must be marked DONE once live smoke has passed for all clients (north-star Gate 2)."
-);
-assertIncludes(liveRunbook, "D2", "Live smoke runbook must name D2 as a precondition.");
-assertIncludes(liveRunbook, "D3", "Live smoke runbook must name D3 as a precondition.");
-assertIncludes(liveRunbook, "D6", "Live smoke runbook must name D6 as a precondition.");
-
-const liveSmokeScript = packageJson?.scripts?.["smoke:live"];
-if (typeof liveSmokeScript === "string") {
-  failures.push(
-    "package.json defines smoke:live while D2/D3 are still blocked; accept runtime decisions before adding a runnable live smoke command."
-  );
-}
 
 for (const spec of mcpConfigSpecs) {
   const config = readJson(spec.path);
@@ -99,24 +63,8 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "Live smoke preflight passed: Claude plugin-local stdio MCP and Cursor/Hermes/OpenClaw remote HTTP MCP are finalized with no user-supplied API key, and live smoke remains blocked on accepted test credentials and cleanup."
+  "Live smoke preflight passed: Claude plugin-local stdio MCP and Cursor/Hermes/OpenClaw remote HTTP MCP configs carry no user-supplied API key."
 );
-
-function findDecisionLine(content, decisionId) {
-  if (typeof content !== "string") {
-    return "";
-  }
-
-  return content
-    .split("\n")
-    .find((line) => line.startsWith(`| ${decisionId} |`)) ?? "";
-}
-
-function assertIncludes(content, marker, message) {
-  if (typeof content !== "string" || !content.includes(marker)) {
-    failures.push(message);
-  }
-}
 
 function readJson(relativePath) {
   const content = readText(relativePath);

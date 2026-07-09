@@ -48,7 +48,7 @@ pinned here so tests and server cannot drift silently)
 - `flushSpool(send)` failure signalling: the uploader signals failure by
   THROWING or by resolving `false`; any other resolution counts as uploaded.
 
-## Spool (source: docs/north-star-readiness.md "Both modes share one spool
+## Spool (source: the shared spool contract — "Both modes share one spool
 contract"; capture-core exported types `SpoolRecord`, `CaptureSpool`)
 
 - C-SPOOL-1 — `spool/pending.jsonl` is JSON-Lines; each line parses to an
@@ -58,16 +58,16 @@ contract"; capture-core exported types `SpoolRecord`, `CaptureSpool`)
 - C-SPOOL-2 — Secret redaction happens BEFORE the line is written: enqueue
   content containing a secret assignment (e.g. `API_KEY=dummyvalue123`) via
   any capture entry point → the secret value never appears anywhere in the
-  spool file. Source: north-star "secret redaction before the line is
+  spool file. Source: spool contract — "secret redaction before the line is
   written".
 - C-SPOOL-3 — Truncate-after-upload: after a successful flush, uploaded
   records are gone from `pending.jsonl` AND re-enqueueing the same content
   does not create a new record ("missing from cloud" ≡ "still in the
-  spool"). Source: north-star spool contract sentence.
+  spool"). Source: spool contract sentence.
 - C-SPOOL-4 — Failed upload loses nothing: if the API answers 403 for every
   ingest, the records remain in the spool afterward (observable via
-  `pendingSpoolCount()` or the file). Source: docs/implementation-overview
-  §7.5 quota section ("저장을 재시도하거나 스풀에 쌓아두는") + PR A contract.
+  `pendingSpoolCount()` or the file). Source: quota-handling design (retry
+  or keep records spooled on quota errors) + PR A contract.
 - C-SPOOL-5 — Concurrency: two processes enqueueing simultaneously never
   corrupt the file (every resulting line still parses; no record lost).
   Source: `CaptureSpool` JSDoc ("queue lives on disk with a lock file").
@@ -101,18 +101,17 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   exactly ONE `session_summary` record in the spool, attributed to the client
   source, then deletes the scratch. C-HOOK-2c: for a client with no end event
   (Codex) or a crash, the next `SessionStart` sweeps any scratch idle >30min
-  into a digest. Source: docs/north-star-readiness.md Pillar 1 "Session-digest
-  capture (dreaming v2)" decision.
+  into a digest. Source: the "Session-digest capture (dreaming v2)" design
+  decision.
 - C-HOOK-3 — Attribution follows `MEMBASE_CLIENT_SOURCE`: with `codex`, the
   session digest's text/display identifies Codex, not Claude Code; with the
   env unset, upload requests identify claude-code. Source: PR #27
-  description-level promise recorded in docs/runtime-parity-decisions.md D3
-  addendum ("MEMBASE_CLIENT_SOURCE ... source attribution").
+  description-level promise ("MEMBASE_CLIENT_SOURCE ... source attribution").
 - C-HOOK-4 — Capture opt-out is user-controlled: with
   `CLAUDE_PLUGIN_OPTION_captureMode=summary` in env BUT
   `{"captureMode":"off"}` in `<dataDir>/config.json`, PostToolUse adds
   NOTHING to the scratch or the spool. Env acts only as a default when disk
-  has no value. Source: north-star "auto-capture default" decision + #25
+  has no value. Source: the "auto-capture default" decision + #25
   ("default on when no config exists" — an explicit user off must win).
 - C-HOOK-5 — With credentials pointing at a stub API: `Stop` flushes pending
   records as authenticated POSTs whose JSON body carries
@@ -156,11 +155,11 @@ served by the shared hook bundle with MEMBASE_CLIENT_SOURCE=codex)
 - C-CDX-2 — Missing/empty handoff file → no handoff block in the output
   (the not-logged-in line may still appear); exit 0.
 - C-CDX-3 — STALE file (mtime older than 7 days): the output announces a
-  stale handoff exists but does NOT inject the file body. Source:
-  north-star pillar 2 injection policy (age/TTL framing).
+  stale handoff exists but does NOT inject the file body. Source: the
+  handoff injection policy (age/TTL framing).
 
-## Handoff tag round-trip (source: docs/implementation-overview §7.5 "[HANDOFF]
-접두사 관례가 전부"; skills/prompts describe the literal tag)
+## Handoff tag round-trip (source: the `[HANDOFF]` tag convention;
+skills/prompts describe the literal tag)
 
 - C-HDF-1 — A handoff stored per the documented convention has content
   beginning with the literal `[HANDOFF]` and, when recalled by name/summary,
@@ -174,8 +173,8 @@ served by the shared hook bundle with MEMBASE_CLIENT_SOURCE=codex)
   (per the wire schema above) an OLDER `[HANDOFF]` bundle first (higher
   relevance rank) and a NEWER one second, the single-JSON SessionStart
   output contains the newer handoff and not the older one. Non-handoff
-  bundles in the window are ignored. Source: north-star "always exactly the
-  latest one".
+  bundles in the window are ignored. Source: the handoff injection rule
+  "always exactly the latest one".
 
 ## Dream flush protocol (source: the four dream docs after #35)
 
