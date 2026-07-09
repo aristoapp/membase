@@ -1,6 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { rejectIfSensitive, toolResponse } from "../update-check";
+import { rejectIfSensitive, toolResponse } from "../tool-response";
 
 export function registerUpdateWikiTool(
   api: OpenClawPluginApi,
@@ -53,7 +53,11 @@ export function registerUpdateWikiTool(
             "At least one update field is required (title/content/collection).",
           );
         }
-        const rejection = await rejectIfSensitive(params.content, params.title);
+        const rejection = await rejectIfSensitive(
+          params.content,
+          params.title,
+          params.collection,
+        );
         if (rejection) return rejection;
 
         const doc = await client.updateWikiDocument(params.doc_id, {

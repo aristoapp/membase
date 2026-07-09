@@ -1,6 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { rejectIfSensitive, toolResponse } from "../update-check";
+import { rejectIfSensitive, toolResponse } from "../tool-response";
 
 const MAX_CONTENT_LENGTH = 50_000;
 
@@ -72,7 +72,11 @@ export function registerStoreTool(
             `Content too long (${params.content.length} chars). Maximum is ${MAX_CONTENT_LENGTH}.`,
           );
         }
-        const rejection = await rejectIfSensitive(params.content);
+        const rejection = await rejectIfSensitive(
+          params.content,
+          params.display_summary,
+          params.project,
+        );
         if (rejection) return rejection;
 
         const result = await client.ingest(params.content, {

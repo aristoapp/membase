@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from urllib.parse import quote
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -229,9 +230,9 @@ class MembaseClient:
 
         if response.status_code >= 400:
             raise MembaseApiError(
-                f"Membase API error ({response.status_code}): {response.text}",
+                f"Membase API error ({response.status_code}): {response.text[:300]}",
                 response.status_code,
-                response.text,
+                response.text[:300],
             )
         if not expect_json:
             return None
@@ -333,9 +334,11 @@ class MembaseClient:
         return payload if isinstance(payload, dict) else {}
 
     def delete_memory(self, episode_uuid: str) -> None:
+        # Model-supplied id: encode so it cannot smuggle path segments or a
+        # query string into the DELETE URL.
         self._request(
             "DELETE",
-            f"/memory/episodes/{episode_uuid}",
+            f"/memory/episodes/{quote(episode_uuid, safe='')}",
             expect_json=False,
         )
 
@@ -415,10 +418,12 @@ class MembaseClient:
     ) -> dict[str, Any]:
         payload = self._request(
             "PUT",
-            f"/wiki/documents/{doc_id}",
+            f"/wiki/documents/{quote(doc_id, safe='')}",
             json_body=updates,
         )
         return payload if isinstance(payload, dict) else {}
 
     def delete_wiki_document(self, doc_id: str) -> None:
-        self._request("DELETE", f"/wiki/documents/{doc_id}", expect_json=False)
+        self._request(
+            "DELETE", f"/wiki/documents/{quote(doc_id, safe='')}", expect_json=False
+        )

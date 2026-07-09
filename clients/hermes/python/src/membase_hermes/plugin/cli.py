@@ -77,6 +77,6 @@ def membase_command(args: argparse.Namespace) -> None:
 
 
 def register(ctx: Any) -> None:
-    """Compat shim — some hosts call plugin.cli.register(ctx) directly."""
-    if hasattr(ctx, "register_cli_command"):
-        return
+    """Intentional no-op. CLI wiring happens via register_cli/membase_command
+    above; this exists only because some hosts probe plugin.cli.register(ctx)
+    and expect the attribute to be present."""

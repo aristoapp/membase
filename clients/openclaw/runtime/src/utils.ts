@@ -1,13 +1,13 @@
 // OpenClaw-runtime text utilities, now composed from @membase/capture-core
-// (ADR 0002 / D1). OpenClaw-specific pieces stay here: the gateway timestamp
+// OpenClaw-specific pieces stay here: the gateway timestamp
 // prefix, heartbeat noise lines, the larger memory-keyword list, and event
 // extraction helpers.
 //
 // Redaction convergence (2026-07-05): the capture path now applies the full
 // capture-core secret redaction rule set before anything leaves the machine,
-// reconciling the D1 slice 1 divergence toward the Claude policy. The
+// reconciling the historical divergence toward the Claude policy. The
 // recall-query path keeps its narrower assignment-only redaction (basic
-// keyword set) — full recall reconciliation stays in D2.
+// keyword set) — full recall reconciliation is future work.
 import {
   buildSecretAssignmentRe,
   clampRecallQuery,
@@ -98,7 +98,7 @@ export function sanitizeMembaseText(raw: string): string {
  * Capture-path sanitizer: strip OpenClaw noise, then redact secrets with the
  * full capture-core rule set (private keys, assignments, bearer tokens, CLI
  * secret flags, provider token formats). Secrets must be filtered before the
- * text leaves the machine (ADR 0002 §3 hard client-side residue).
+ * text leaves the machine (credentials must never leave the client).
  */
 export function sanitizeCaptureText(raw: string): string {
   return redactSecrets(sanitizeMembaseText(raw));
@@ -121,18 +121,6 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     }),
   ]);
 }
-
-export {
-  HANDOFF_TAG,
-  handoffRecallQuery,
-  buildHandoffMemory,
-  buildHandoffDisplaySummary,
-  isHandoffMemory,
-  pickLatestHandoff,
-  selectReplaceableHandoffs,
-  sweepReplacedHandoffs,
-  HANDOFF_RECALL_LIMIT,
-} from "@membase/capture-core";
 
 export function extractLastUserMessage(event: Record<string, unknown>): string {
   const messages = event.messages;

@@ -1,6 +1,6 @@
 import type { MembaseClient } from "../client";
 import type { OpenClawPluginApi } from "../types";
-import { rejectIfSensitive, toolResponse } from "../update-check";
+import { rejectIfSensitive, toolResponse } from "../tool-response";
 
 export function registerAddWikiTool(
   api: OpenClawPluginApi,
@@ -46,7 +46,11 @@ export function registerAddWikiTool(
       },
     ) {
       try {
-        const rejection = await rejectIfSensitive(params.content, params.title);
+        const rejection = await rejectIfSensitive(
+          params.content,
+          params.title,
+          params.collection,
+        );
         if (rejection) return rejection;
         const doc = await client.createWikiDocument(
           params.title,

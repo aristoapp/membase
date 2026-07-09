@@ -22,23 +22,6 @@ def get_hermes_home() -> Path:
 DEFAULT_CONFIG_PATH = get_hermes_home() / "membase.json"
 DEFAULT_TOKEN_FILE_PATH = get_hermes_home() / "credentials" / "membase.json"
 
-KNOWN_KEYS = {
-    "apiUrl",
-    "clientId",
-    "tokenFile",
-    "accessToken",
-    "refreshToken",
-    "serviceClientId",
-    "serviceClientSecret",
-    "autoRecall",
-    "autoWikiRecall",
-    "autoCapture",
-    "maxRecallChars",
-    "debug",
-    "mirrorBuiltin",
-}
-
-
 @dataclass
 class TokenPair:
     access_token: str = ""
@@ -54,7 +37,7 @@ class MembaseConfig:
     refresh_token: str = ""
     # Admin-provisioned client_credentials service credentials (CI/headless).
     # When set (and no access token is supplied), the client mints a short-lived
-    # access token itself — no browser login, no token file. See membase#318.
+    # access token itself — no browser login, no token file.
     service_client_id: str = ""
     service_client_secret: str = ""
     auto_recall: bool = False
@@ -159,8 +142,21 @@ def read_json_file(path: Path) -> dict[str, Any]:
 
 
 def write_json_file(path: Path, payload: Mapping[str, Any]) -> None:
+    """Atomic 0600 write — membase.json can carry tokens on legacy setups."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"{json.dumps(payload, indent=2)}\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        delete=False,
+    ) as tmp:
+        tmp.write(f"{json.dumps(payload, indent=2)}\n")
+        temp_path = Path(tmp.name)
+    temp_path.replace(path)
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _env(name: str) -> str:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .sanitize import neutralize_injection
+
 MAX_MEMORY_TITLE_CHARS = 240
 MAX_MEMORY_SUMMARY_CHARS = 400
 MAX_MEMORY_FACTS = 4
@@ -129,7 +131,9 @@ def format_bundle(
         if uuid:
             lines.append(f"   UUID: {uuid}")
 
-    return "\n".join(lines)
+    # Memory text is untrusted (Slack/Gmail/other-client captures); neutralize
+    # block/control tags before it reaches model context via any tool result.
+    return neutralize_injection("\n".join(lines))
 
 
 def format_bundles(bundles: list[dict[str, Any]], *, include_uuid: bool = False) -> str:
@@ -163,7 +167,7 @@ def format_profile(profile: dict[str, Any] | None, bundles: list[dict[str, Any]]
         if instructions:
             fields.append(f"- Instructions: {instructions}")
         if fields:
-            sections.append("## User Profile\n" + "\n".join(fields))
+            sections.append(neutralize_injection("## User Profile\n" + "\n".join(fields)))
 
     if bundles:
         top_score = max((safe_score(bundle.get("relevance_score")) or 0 for bundle in bundles), default=0)
@@ -198,7 +202,9 @@ def format_wiki_document(doc: dict[str, Any], index: int) -> str:
     content = _text(doc.get("content"))
     if content:
         lines.append(f"   {content}")
-    return "\n".join(lines)
+    # Wiki documents are remotely writable long-form storage — neutralize like
+    # memory text.
+    return neutralize_injection("\n".join(lines))
 
 
 def format_wiki_documents(documents: list[dict[str, Any]]) -> str:

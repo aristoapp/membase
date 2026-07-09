@@ -27,25 +27,26 @@ Public connector APIs may describe capabilities and diagnostics, but they must
 not describe the private storage schema, graph model, embedding layout, ranking
 pipeline, or internal memory engine.
 
-## Public Capability Contract
+## Public Tool Surface
 
-The connector contract is deliberately small:
+Every client reaches the same hosted MCP tool set:
 
-- save a memory or observation (`remember`)
-- search memory (`search`)
-- request task context (`getContext`)
-- delete or forget a memory (`deleteOrForget`)
-- report client and install diagnostics
+- memory: `add_memory`, `search_memory`, `get_current_date`
+- wiki: `add_wiki`, `search_wiki`, `update_wiki`, `delete_wiki`
+
+Clients with native runtimes add client-side surface on top — session
+handoffs (`store_handoff` on Claude Code, `membase_handoff` on
+OpenClaw/Hermes), profile/forget tools, login/status commands, and the
+capture/recall hooks described below. The tool descriptions may describe
+capabilities and diagnostics, but never the private storage schema, graph
+model, embedding layout, or ranking pipeline.
 
 ## Adapter Contract
 
 Each client adapter defines:
 
-- install target paths
 - manifest shape
 - MCP server config shape
-- hook support
-- environment variable handling
 - smoke-test commands
 
 ## Repo Boundary
@@ -56,9 +57,9 @@ Client-specific behavior belongs in `clients/{claude,cursor,codex,hermes,opencla
 Generated or canonical examples belong in `manifests/`.
 
 `packages/core` owns the concrete runtime config primitives: connector
-identity, endpoint base URL and timeout, the API-key environment variable name,
-MCP server config generation, and redacted environment display for diagnostics.
-It may generate client-safe config objects, but it must not import or describe
+identity, endpoint base URL, and MCP server config generation. Auth is OAuth
+per client — there is no user-supplied API key anywhere in the kit. Core may
+generate client-safe config objects, but it must not import or describe
 Membase storage, ranking, graph, embedding, or governance internals.
 
 `packages/connector-sdk` owns the adapter-facing extension surface. Each adapter
@@ -68,17 +69,20 @@ declares smoke-test commands. Config-only MCP hosts can be added as a
 [Design decisions](#descriptors-not-adapters-for-config-only-hosts)).
 
 `packages/capture-core` owns the shared client-side capture runtime: secret
-sanitize, capture kinds, the disk spool, buffering/retry, recall assembly, and
-the OAuth-refreshing HTTP transport (see
-[Design decisions](#shared-capture-core-per-host-adapters)).
+sanitize, injection neutralization, capture kinds, the disk spool,
+buffering/retry, handoff tagging/selection, and the OAuth-refreshing HTTP
+transport (see [Design decisions](#shared-capture-core-per-host-adapters)).
+Recall-context assembly (grouping, budgets, headers) is per-client today; the
+neutralization primitive it must call lives in the core.
 
 ## Client Adapters
 
 - **Claude Code** (`clients/claude`) — implements the SDK `ClientAdapter`,
   emits a compact Claude plugin manifest, and generates a plugin-local (stdio)
   MCP config.
-- **Cursor** (`clients/cursor`) — implements the SDK adapter and uses the hosted
-  HTTP MCP endpoint at `https://mcp.membase.so/mcp` as the primary transport.
+- **Cursor** (`clients/cursor`) — a `defineMcpHostAgent()` descriptor over the
+  hosted HTTP MCP endpoint at `https://mcp.membase.so/mcp`, plus optional
+  local capture hooks that reuse the Claude runtime bundle.
 - **Codex CLI** (`clients/codex`) — points Codex directly at the streamable-HTTP
   MCP endpoint; auth via Codex-managed OAuth.
 - **Hermes Agent** (`clients/hermes`) — ships a native Python provider and
@@ -88,15 +92,7 @@ the OAuth-refreshing HTTP transport (see
 
 ## Design decisions
 
-The durable decisions that shaped the repo. Source comments cite them by
-number from the retired internal decision log:
-
-- **ADR 0001** → [Boundary](#boundary) and
-  [Public Capability Contract](#public-capability-contract) above
-- **ADR 0002** → [Shared capture core](#shared-capture-core-per-host-adapters)
-  and [Two languages, one behavior](#two-languages-one-behavior)
-- **ADR 0003** → [Descriptors, not adapters](#descriptors-not-adapters-for-config-only-hosts)
-- **ADR 0005** → [Failure-path spool and dreaming](#failure-path-spool-and-dreaming)
+The durable decisions that shaped the repo:
 
 ### Shared capture core, per-host adapters
 
@@ -135,14 +131,18 @@ data*. Runtime clients (Claude Code, OpenClaw, Hermes) have real client-side
 behavior and keep per-client runtimes. Config-only MCP hosts (Cursor, Codex)
 differ only in packaging data — config file path and format, install command —
 so each is a `defineMcpHostAgent()` descriptor rendered by one shared
-implementation, not a hand-written adapter.
+implementation, not a hand-written adapter. Their optional capture hooks
+(`runtime/hooks.json` templates) reuse the Claude runtime's stdio bundle
+rather than shipping a third runtime.
 
 ### Failure-path spool and dreaming
 
 Capture is RAM-first; disk is strictly the failure fallback. When a live
 upload fails, the record is written to the disk spool instead of being
 retained in RAM or dropped, so a process restart cannot lose it. The `dream`
-command flushes that spool. Flushing follows a claim/rename discipline (rename
+command (`/membase:dream` in Claude Code, `openclaw membase dream`,
+`hermes-membase dream`, the `/dream` prompt in Cursor/Codex) flushes that
+spool. Flushing follows a claim/rename discipline (rename
 `pending.jsonl` before uploading) so two concurrent flushers cannot send the
 same record, and secret-looking records are reported to the user — never
 uploaded, never silently deleted. Dreaming is flush-only; sweep/consolidation
@@ -161,16 +161,27 @@ architecture-relevant ones are:
   plugin/MCP artifacts against the committed files under `clients/*` and
   `manifests/*`, so reviewable examples stay aligned with the adapters.
 - **Client smoke harness** (`smoke/client-smoke.mjs`) imports the built adapters
-  and checks their public connector boundary — generated MCP config shape, API
-  key reference handling, redacted diagnostics, declared smoke commands, and the
-  public remember/search/context/forget flow through
-  `smoke/public-contract-stub.mjs` — without reaching private Membase internals.
+  and checks their public connector boundary — generated MCP config shape, no
+  leaked secrets in configs or diagnostics, and declared smoke commands —
+  without reaching private Membase internals.
 
 ## Secret Handling
 
-`packages/core` redacts diagnostic environment values for sensitive key names,
-the smoke harness verifies the redaction path with a fake sentinel secret, and
-`scripts/check-secret-hygiene.mjs` scans connector artifacts for raw
-secret-looking values. Connectors reference environment variables such as
-`${MEMBASE_API_KEY}` rather than values. See [security.md](security.md) for the
-full model.
+Auth is OAuth per client; no user-supplied API key exists and no committed
+config carries a credential. `packages/capture-core` redacts secret-shaped
+values on the capture path before anything reaches disk or the network, the
+smoke harness injects a fake sentinel secret and fails if any generated
+artifact echoes it, and `scripts/check-secret-hygiene.mjs` scans the tree for
+raw secret-looking values. See [security.md](security.md) for the full model.
+
+## Untrusted Content Neutralization
+
+Remembered content is untrusted: it can arrive via Slack/Gmail ingestion or
+another client's captures. Every render site that puts memory, wiki, profile,
+or handoff text into model context calls capture-core's `neutralizeInjection`
+(Hermes: `neutralize_injection`), which makes `<membase-*>` and
+`<system-reminder>` tags inert with a zero-width space. The rule is
+golden-vector-bound across both languages
+(`packages/capture-core/spec/sanitize-vectors.json`), and the capture path
+strips injected `<membase-context>`/`<membase-handoff>` blocks so harness
+output is not re-captured as memory.

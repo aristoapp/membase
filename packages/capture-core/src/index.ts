@@ -1,11 +1,12 @@
-// Shared client-side capture/recall primitives (ADR 0002, Group D1).
+// Shared client-side capture/recall primitives.
 //
 // Everything here was byte-duplicated (or trivially diverged) across the
 // Claude, OpenClaw, and Hermes runtimes. The core exports the shared
 // primitives; host-specific behavior (extra strip patterns, keyword lists,
 // empty-input policy) stays in each runtime as explicit parameters, so this
 // extraction changes NO runtime behavior. Divergences that look accidental
-// are documented at the parameter site and reconciled deliberately in D2.
+// are documented at the parameter site and preserved deliberately until the
+// rule sets are reconciled.
 //
 // The language-neutral golden vectors in ../spec/sanitize-vectors.json bind
 // this module and the Hermes Python port to the same semantics; both test
@@ -53,15 +54,19 @@ export function isCasualChat(
 
 export const MEMBASE_CONTEXT_BLOCK_RE =
   /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+export const MEMBASE_HANDOFF_BLOCK_RE =
+  /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
 export const METADATA_BLOCK_RE =
   /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
 export const SIMPLE_TAG_RE = /<\/?final>/gi;
 export const CODE_BLOCK_RE = /```[\s\S]*?```/g;
 
-/** Remove injected membase context, untrusted metadata blocks, and tags. */
+/** Remove injected membase context/handoff, untrusted metadata blocks, and
+ * tags — so harness-injected blocks aren't re-captured as memories. */
 export function stripContextBlocks(text: string): string {
   return text
     .replace(MEMBASE_CONTEXT_BLOCK_RE, " ")
+    .replace(MEMBASE_HANDOFF_BLOCK_RE, " ")
     .replace(METADATA_BLOCK_RE, " ")
     .replace(SIMPLE_TAG_RE, " ");
 }
@@ -82,8 +87,8 @@ export function normalizeLines(
 
 // ---------------------------------------------------------------------------
 // Secret redaction (the full rule set is the capture-path policy: Claude, and
-// since E1/PR #12 the OpenClaw capture path too. Recall-query paths in
-// OpenClaw/Hermes keep the basic assignment rule until D2.)
+// the OpenClaw capture path too. Recall-query paths in OpenClaw/Hermes
+// keep the basic assignment rule until the rule sets are reconciled.)
 // ---------------------------------------------------------------------------
 
 export const SECRET_ASSIGNMENT_KEYWORDS_FULL = [
@@ -175,7 +180,7 @@ export * from "./token-store.js";
 export * from "./handoff.js";
 
 // ---------------------------------------------------------------------------
-// OAuth HTTP transport (D1 slice 2)
+// OAuth HTTP transport
 //
 // The token-state + single-flight-refresh + retry-on-401 machinery was
 // byte-duplicated in the Claude and OpenClaw clients. Product API methods and
@@ -304,7 +309,8 @@ export class MembaseTransport {
     path: string,
     options: RequestInit = {},
   ): Promise<Response> {
-    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
+    // Log the path only — query strings can carry user-derived recall text.
+    this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
     let response = await this.rawFetch(path, options);
     if (response.status === 401 && this.tokens.refreshToken) {
       await response.body?.cancel();

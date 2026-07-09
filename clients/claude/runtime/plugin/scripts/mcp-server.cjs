@@ -2981,7 +2981,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a3 = root.localRefs) === null || _a3 === void 0 ? void 0 : _a3[ref];
         const { schemaId } = this.opts;
@@ -3008,7 +3008,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3639,7 +3639,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse4(baseURI, schemelessOptions), parse4(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3897,7 +3897,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve2,
+      resolve,
       resolveComponent,
       equal,
       serialize,
@@ -6890,6 +6890,532 @@ var require_dist = __commonJS({
 var import_node_fs6 = require("node:fs");
 var import_node_os2 = require("node:os");
 var import_node_path7 = require("node:path");
+
+// ../../../packages/capture-core/src/spool.ts
+var import_node_crypto = require("node:crypto");
+var import_node_fs2 = require("node:fs");
+var import_node_path2 = require("node:path");
+
+// ../../../packages/capture-core/src/token-store.ts
+var import_node_fs = require("node:fs");
+var import_node_path = require("node:path");
+function writeTextAtomic(path, text, mode = 384) {
+  (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(path), { recursive: true, mode: 448 });
+  const tmp = `${path}.tmp.${process.pid}`;
+  (0, import_node_fs.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
+  try {
+    (0, import_node_fs.renameSync)(tmp, path);
+  } catch (err) {
+    try {
+      (0, import_node_fs.rmSync)(tmp, { force: true });
+    } catch {
+    }
+    throw err;
+  }
+  try {
+    (0, import_node_fs.chmodSync)(path, mode);
+  } catch {
+  }
+}
+function writeJsonAtomic(path, value, mode = 384) {
+  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
+`, mode);
+}
+function createTokenStore(options) {
+  const filename = options.filename ?? "credentials.json";
+  function path() {
+    return (0, import_node_path.join)(options.dir(), filename);
+  }
+  function read() {
+    const file2 = path();
+    if (!(0, import_node_fs.existsSync)(file2)) return null;
+    let obj;
+    try {
+      obj = JSON.parse((0, import_node_fs.readFileSync)(file2, "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof obj !== "object" || obj === null) return null;
+    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
+      return null;
+    }
+    return {
+      clientId: obj.clientId,
+      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
+      accessToken: obj.accessToken,
+      refreshToken: obj.refreshToken,
+      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
+      scope: typeof obj.scope === "string" ? obj.scope : void 0
+    };
+  }
+  function write(tokens) {
+    writeJsonAtomic(path(), tokens);
+  }
+  function clear() {
+    try {
+      (0, import_node_fs.rmSync)(path(), { force: true });
+    } catch {
+    }
+  }
+  return { path, read, write, clear };
+}
+
+// ../../../packages/capture-core/src/spool.ts
+var LOCK_STALE_MS = 3e4;
+var LOCK_WAIT_MS = 2e3;
+var INFLIGHT_STALE_MS = 6e4;
+var SLEEP_BUFFER = new SharedArrayBuffer(4);
+var SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
+function sleepSync(ms) {
+  Atomics.wait(SLEEP_VIEW, 0, 0, ms);
+}
+function hash(input) {
+  return (0, import_node_crypto.createHash)("sha256").update(input).digest("hex");
+}
+function createCaptureSpool(options) {
+  const minContentLength = options.minContentLength ?? 20;
+  function spoolDir() {
+    const dir = (0, import_node_path2.join)(options.stateDir(), "spool");
+    (0, import_node_fs2.mkdirSync)(dir, { recursive: true, mode: 448 });
+    return dir;
+  }
+  function spoolPath() {
+    return (0, import_node_path2.join)(spoolDir(), "pending.jsonl");
+  }
+  function sentPath() {
+    return (0, import_node_path2.join)(spoolDir(), "sent.json");
+  }
+  function lockPath() {
+    return (0, import_node_path2.join)(spoolDir(), ".lock");
+  }
+  function inflightPath() {
+    return (0, import_node_path2.join)(spoolDir(), `inflight-${process.pid}-${Date.now()}.jsonl`);
+  }
+  function acquireLock(timeoutMs = LOCK_WAIT_MS) {
+    const path = lockPath();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const fd = (0, import_node_fs2.openSync)(path, "wx", 384);
+        return () => {
+          try {
+            (0, import_node_fs2.closeSync)(fd);
+          } catch {
+          }
+          try {
+            (0, import_node_fs2.rmSync)(path, { force: true });
+          } catch {
+          }
+        };
+      } catch (error51) {
+        if (error51.code !== "EEXIST") throw error51;
+        try {
+          if (Date.now() - (0, import_node_fs2.statSync)(path).mtimeMs > LOCK_STALE_MS) {
+            (0, import_node_fs2.rmSync)(path, { force: true });
+            continue;
+          }
+        } catch {
+        }
+        sleepSync(25);
+      }
+    }
+    throw new Error("Timed out waiting for Membase capture spool lock.");
+  }
+  function withSpoolLock(callback, timeoutMs = LOCK_WAIT_MS) {
+    const release = acquireLock(timeoutMs);
+    try {
+      return callback();
+    } finally {
+      release();
+    }
+  }
+  function captureId(args) {
+    return hash(
+      `${args.sessionId ?? "unknown"}:${args.captureKind}:${options.sanitize(
+        args.content
+      )}`
+    );
+  }
+  function readRecordsFromPath(path) {
+    if (!(0, import_node_fs2.existsSync)(path)) return [];
+    const raw = (0, import_node_fs2.readFileSync)(path, "utf-8").trim();
+    if (!raw) return [];
+    return raw.split(/\r?\n/).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    }).filter((record2) => Boolean(record2));
+  }
+  function readRecords() {
+    return readRecordsFromPath(spoolPath());
+  }
+  function writeRecordsToPath(path, records) {
+    writeTextAtomic(
+      path,
+      records.map((record2) => JSON.stringify(record2)).join("\n") + (records.length ? "\n" : "")
+    );
+  }
+  function writeRecords(records) {
+    writeRecordsToPath(spoolPath(), records);
+  }
+  function appendRecords(records) {
+    if (records.length === 0) return;
+    (0, import_node_fs2.appendFileSync)(
+      spoolPath(),
+      `${records.map((record2) => JSON.stringify(record2)).join("\n")}
+`,
+      {
+        encoding: "utf-8",
+        mode: 384
+      }
+    );
+  }
+  function readSentIds() {
+    const path = sentPath();
+    if (!(0, import_node_fs2.existsSync)(path)) return /* @__PURE__ */ new Set();
+    try {
+      const parsed = JSON.parse((0, import_node_fs2.readFileSync)(path, "utf-8"));
+      if (!Array.isArray(parsed)) return /* @__PURE__ */ new Set();
+      return new Set(
+        parsed.filter((value) => typeof value === "string")
+      );
+    } catch {
+      return /* @__PURE__ */ new Set();
+    }
+  }
+  function writeSentIds(ids) {
+    const values = Array.from(ids).slice(-2e3);
+    writeTextAtomic(sentPath(), `${JSON.stringify(values, null, 2)}
+`);
+  }
+  function inflightFiles() {
+    return (0, import_node_fs2.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path2.join)(spoolDir(), name));
+  }
+  function readInflightRecords() {
+    return inflightFiles().flatMap((path) => readRecordsFromPath(path));
+  }
+  function dedupeRecords(records, sentIds = readSentIds()) {
+    const seen = /* @__PURE__ */ new Set();
+    return records.filter((record2) => {
+      if (sentIds.has(record2.capture_id) || seen.has(record2.capture_id)) {
+        return false;
+      }
+      seen.add(record2.capture_id);
+      return true;
+    });
+  }
+  function appendPendingRecordsLocked(records) {
+    const sentIds = readSentIds();
+    const existingIds = new Set(
+      readRecords().map((record2) => record2.capture_id)
+    );
+    const next = records.filter((record2) => {
+      if (sentIds.has(record2.capture_id) || existingIds.has(record2.capture_id)) {
+        return false;
+      }
+      existingIds.add(record2.capture_id);
+      return true;
+    });
+    appendRecords(next);
+  }
+  function recoverStaleInflightLocked() {
+    const now = Date.now();
+    for (const path of inflightFiles()) {
+      try {
+        if (now - (0, import_node_fs2.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
+        appendPendingRecordsLocked(readRecordsFromPath(path));
+        (0, import_node_fs2.rmSync)(path, { force: true });
+      } catch {
+      }
+    }
+  }
+  function enqueueCapture(record2) {
+    const content = options.sanitize(record2.content);
+    if (!content || content.length < minContentLength) return null;
+    const next = {
+      capture_id: captureId({
+        sessionId: record2.sessionId,
+        captureKind: record2.capture_kind,
+        content
+      }),
+      capture_kind: record2.capture_kind,
+      content,
+      // Caller-supplied display_summary is raw hook/tool text — sanitize it
+      // like content so secrets can't reach disk via the summary field.
+      display_summary: record2.display_summary ? options.sanitize(record2.display_summary) : truncateText(content, 180),
+      project: record2.project,
+      metadata: record2.metadata,
+      created_at: (/* @__PURE__ */ new Date()).toISOString(),
+      attempts: 0
+    };
+    try {
+      return withSpoolLock(() => {
+        recoverStaleInflightLocked();
+        const existing = [...readRecords(), ...readInflightRecords()];
+        if (existing.some((item) => item.capture_id === next.capture_id)) {
+          return null;
+        }
+        if (readSentIds().has(next.capture_id)) return null;
+        appendRecords([next]);
+        return next;
+      });
+    } catch {
+      return null;
+    }
+  }
+  function pendingSpoolCount2() {
+    return withSpoolLock(() => {
+      recoverStaleInflightLocked();
+      return readRecords().length;
+    });
+  }
+  async function flushSpool(send, limit = 10) {
+    const drained = withSpoolLock(() => {
+      recoverStaleInflightLocked();
+      const sentIds = readSentIds();
+      const records = dedupeRecords(readRecords(), sentIds);
+      const batch = records.slice(0, limit);
+      const pending = records.slice(limit);
+      writeRecords(pending);
+      const path = batch.length > 0 ? inflightPath() : void 0;
+      if (path) writeRecordsToPath(path, batch);
+      return { batch, path };
+    });
+    if (drained.batch.length === 0) {
+      return { flushed: 0, remaining: pendingSpoolCount2() };
+    }
+    const failed = [];
+    let flushed = 0;
+    for (const record2 of drained.batch) {
+      try {
+        if (await send(record2) === false) {
+          throw new Error("uploader returned false");
+        }
+        withSpoolLock(() => {
+          const sentIds = readSentIds();
+          sentIds.add(record2.capture_id);
+          writeSentIds(sentIds);
+        });
+        flushed += 1;
+      } catch (error51) {
+        failed.push({
+          ...record2,
+          attempts: (record2.attempts ?? 0) + 1,
+          // Uploader errors can echo response bodies; sanitize and clamp
+          // before persisting to disk.
+          last_error: truncateText(
+            options.sanitize(
+              error51 instanceof Error ? error51.message : String(error51)
+            ),
+            300
+          )
+        });
+      }
+    }
+    const remaining = withSpoolLock(() => {
+      appendPendingRecordsLocked(failed);
+      if (drained.path) (0, import_node_fs2.rmSync)(drained.path, { force: true });
+      return readRecords().length;
+    });
+    return { flushed, remaining };
+  }
+  return { captureId, enqueueCapture, flushSpool, pendingSpoolCount: pendingSpoolCount2 };
+}
+
+// ../../../packages/capture-core/src/handoff.ts
+var HANDOFF_TAG = "[HANDOFF]";
+var HANDOFF_SUMMARY_MAX = 400;
+function handoffRecallQuery() {
+  return `${HANDOFF_TAG} session handoff summary`;
+}
+function taggedHandoff(args) {
+  const project = args.project?.trim().replace(/[()]/g, "");
+  const scope = project ? ` (${project})` : "";
+  return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
+}
+function buildHandoffMemory(args) {
+  return taggedHandoff(args);
+}
+function buildHandoffDisplaySummary(args) {
+  return taggedHandoff({
+    ...args,
+    summary: args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX)
+  });
+}
+function isHandoffMemory(text) {
+  return text.trimStart().startsWith(HANDOFF_TAG);
+}
+var HANDOFF_REPLACE_LIMIT = 10;
+var SCOPED_HANDOFF_RE = /^\s*\[HANDOFF\]\s*\(/;
+function selectReplaceableHandoffs(bundles, opts) {
+  const max = opts.max ?? HANDOFF_REPLACE_LIMIT;
+  return bundles.filter((b) => {
+    const name = b.episode.name ?? "";
+    if (!isHandoffMemory(name)) return false;
+    if (!opts.projectScoped && SCOPED_HANDOFF_RE.test(name)) return false;
+    return true;
+  }).slice(0, max);
+}
+async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
+  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => /^[0-9a-f-]{32,36}$/i.test(uuid3 ?? ""));
+  const results = await Promise.allSettled(
+    targets.map((uuid3) => deleteEpisode(uuid3))
+  );
+  return results.filter((r) => r.status === "fulfilled").length;
+}
+var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+function neutralizeInjection(text) {
+  return text.replace(
+    /<\/?(membase-[a-z-]+|system-reminder)\b/gi,
+    (m) => `${m[0]}\u200B${m.slice(1)}`
+  );
+}
+
+// ../../../packages/capture-core/src/index.ts
+var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+var MEMBASE_HANDOFF_BLOCK_RE = /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
+var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
+var SIMPLE_TAG_RE = /<\/?final>/gi;
+function stripContextBlocks(text) {
+  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(MEMBASE_HANDOFF_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
+}
+function normalizeLines(text, dropLine) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
+}
+var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
+  "API_KEY",
+  "TOKEN",
+  "SECRET",
+  "PASSWORD",
+  "PRIVATE_KEY"
+];
+function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
+  return new RegExp(
+    `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
+    "gi"
+  );
+}
+var SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
+var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
+var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
+var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
+var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+function redactSecrets(text) {
+  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
+}
+function patternTest(pattern, text) {
+  pattern.lastIndex = 0;
+  return pattern.test(text);
+}
+function looksSensitive(text) {
+  return patternTest(SECRET_ASSIGNMENT_FULL_RE, text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
+}
+function truncateText(value, max = 500) {
+  if (!value) return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+var MembaseTransport = class {
+  constructor(opts) {
+    this.opts = opts;
+    this.apiUrl = opts.apiUrl.replace(/\/$/, "");
+    this.tokens = opts.tokens;
+    this.timeoutMs = opts.timeoutMs ?? 15e3;
+  }
+  tokens;
+  refreshPromise = null;
+  apiUrl;
+  timeoutMs;
+  get currentTokens() {
+    return this.tokens;
+  }
+  isAuthenticated() {
+    return Boolean(this.tokens.accessToken && this.tokens.clientId);
+  }
+  rawFetch(path, options = {}) {
+    return fetch(`${this.apiUrl}${path}`, {
+      ...options,
+      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.tokens.accessToken}`,
+        "User-Agent": this.opts.userAgent,
+        ...options.headers ?? {}
+      }
+    });
+  }
+  async doRefresh() {
+    if (!this.tokens.refreshToken || !this.tokens.clientId) {
+      throw this.opts.createError(
+        this.opts.notAuthenticatedMessage ?? "Not authenticated",
+        401,
+        ""
+      );
+    }
+    this.opts.log?.("refreshing access token");
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: this.tokens.refreshToken,
+      client_id: this.tokens.clientId
+    });
+    const response = await fetch(`${this.apiUrl}/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": this.opts.userAgent
+      },
+      body,
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.refreshFailedMessage?.(response.status) ?? "Token refresh failed",
+        response.status,
+        text
+      );
+    }
+    const data = await response.json();
+    this.tokens = {
+      ...this.tokens,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
+      expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
+      scope: data.scope ?? this.tokens.scope
+    };
+    this.opts.log?.("token refreshed successfully");
+    this.opts.onTokenRefresh?.(this.tokens);
+  }
+  async refreshAccessToken() {
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.doRefresh().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    await this.refreshPromise;
+  }
+  /** Authenticated fetch with single-flight refresh and one retry on 401. */
+  async authorizedFetch(path, options = {}) {
+    this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
+    let response = await this.rawFetch(path, options);
+    if (response.status === 401 && this.tokens.refreshToken) {
+      await response.body?.cancel();
+      await this.refreshAccessToken();
+      response = await this.rawFetch(path, options);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw this.opts.createError(
+        this.opts.apiErrorMessage?.(response.status, text) ?? `Membase API error ${response.status}`,
+        response.status,
+        text
+      );
+    }
+    return response;
+  }
+};
 
 // ../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/v3/helpers/util.js
 var util;
@@ -23236,7 +23762,7 @@ __export(external_exports, {
   gt: () => _gt,
   gte: () => _gte,
   guid: () => guid2,
-  hash: () => hash,
+  hash: () => hash2,
   hex: () => hex2,
   hostname: () => hostname2,
   httpUrl: () => httpUrl,
@@ -23450,7 +23976,7 @@ __export(schemas_exports2, {
   float64: () => float64,
   function: () => _function,
   guid: () => guid2,
-  hash: () => hash,
+  hash: () => hash2,
   hex: () => hex2,
   hostname: () => hostname2,
   httpUrl: () => httpUrl,
@@ -24078,7 +24604,7 @@ function hostname2(_params) {
 function hex2(_params) {
   return _stringFormat(ZodCustomStringFormat, "hex", regexes_exports.hex, _params);
 }
-function hash(alg, params) {
+function hash2(alg, params) {
   const enc = params?.enc ?? "hex";
   const format = `${alg}_${enc}`;
   const regex = regexes_exports[format];
@@ -28834,7 +29360,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error51) {
@@ -28851,7 +29377,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve, reject) => {
       const earlyReject = (error51) => {
         reject(error51);
       };
@@ -28929,7 +29455,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve(parseResult.data);
           }
         } catch (error51) {
           reject(error51);
@@ -29190,12 +29716,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -30295,7 +30821,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -30944,531 +31470,14 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve2) => {
+    return new Promise((resolve) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve2();
+        resolve();
       } else {
-        this._stdout.once("drain", resolve2);
+        this._stdout.once("drain", resolve);
       }
     });
-  }
-};
-
-// ../../../packages/capture-core/src/spool.ts
-var import_node_crypto = require("node:crypto");
-var import_node_fs = require("node:fs");
-var import_node_path = require("node:path");
-var LOCK_STALE_MS = 3e4;
-var LOCK_WAIT_MS = 2e3;
-var INFLIGHT_STALE_MS = 6e4;
-var SLEEP_BUFFER = new SharedArrayBuffer(4);
-var SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
-function sleepSync(ms) {
-  Atomics.wait(SLEEP_VIEW, 0, 0, ms);
-}
-function hash2(input) {
-  return (0, import_node_crypto.createHash)("sha256").update(input).digest("hex");
-}
-function createCaptureSpool(options) {
-  const minContentLength = options.minContentLength ?? 20;
-  function spoolDir() {
-    const dir = (0, import_node_path.join)(options.stateDir(), "spool");
-    (0, import_node_fs.mkdirSync)(dir, { recursive: true, mode: 448 });
-    return dir;
-  }
-  function spoolPath() {
-    return (0, import_node_path.join)(spoolDir(), "pending.jsonl");
-  }
-  function sentPath() {
-    return (0, import_node_path.join)(spoolDir(), "sent.json");
-  }
-  function lockPath() {
-    return (0, import_node_path.join)(spoolDir(), ".lock");
-  }
-  function inflightPath() {
-    return (0, import_node_path.join)(spoolDir(), `inflight-${process.pid}-${Date.now()}.jsonl`);
-  }
-  function acquireLock(timeoutMs = LOCK_WAIT_MS) {
-    const path = lockPath();
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        const fd = (0, import_node_fs.openSync)(path, "wx", 384);
-        return () => {
-          try {
-            (0, import_node_fs.closeSync)(fd);
-          } catch {
-          }
-          try {
-            (0, import_node_fs.rmSync)(path, { force: true });
-          } catch {
-          }
-        };
-      } catch (error51) {
-        if (error51.code !== "EEXIST") throw error51;
-        try {
-          if (Date.now() - (0, import_node_fs.statSync)(path).mtimeMs > LOCK_STALE_MS) {
-            (0, import_node_fs.rmSync)(path, { force: true });
-            continue;
-          }
-        } catch {
-        }
-        sleepSync(25);
-      }
-    }
-    throw new Error("Timed out waiting for Membase capture spool lock.");
-  }
-  function withSpoolLock(callback, timeoutMs = LOCK_WAIT_MS) {
-    const release = acquireLock(timeoutMs);
-    try {
-      return callback();
-    } finally {
-      release();
-    }
-  }
-  function captureId(args) {
-    return hash2(
-      `${args.sessionId ?? "unknown"}:${args.captureKind}:${options.sanitize(
-        args.content
-      )}`
-    );
-  }
-  function readRecordsFromPath(path) {
-    if (!(0, import_node_fs.existsSync)(path)) return [];
-    const raw = (0, import_node_fs.readFileSync)(path, "utf-8").trim();
-    if (!raw) return [];
-    return raw.split(/\r?\n/).map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    }).filter((record2) => Boolean(record2));
-  }
-  function readRecords() {
-    return readRecordsFromPath(spoolPath());
-  }
-  function writeRecordsToPath(path, records) {
-    const tmp = `${path}.tmp`;
-    (0, import_node_fs.writeFileSync)(
-      tmp,
-      records.map((record2) => JSON.stringify(record2)).join("\n") + (records.length ? "\n" : ""),
-      { encoding: "utf-8", mode: 384 }
-    );
-    (0, import_node_fs.renameSync)(tmp, path);
-  }
-  function writeRecords(records) {
-    writeRecordsToPath(spoolPath(), records);
-  }
-  function appendRecords(records) {
-    if (records.length === 0) return;
-    (0, import_node_fs.appendFileSync)(
-      spoolPath(),
-      `${records.map((record2) => JSON.stringify(record2)).join("\n")}
-`,
-      {
-        encoding: "utf-8",
-        mode: 384
-      }
-    );
-  }
-  function readSentIds() {
-    const path = sentPath();
-    if (!(0, import_node_fs.existsSync)(path)) return /* @__PURE__ */ new Set();
-    try {
-      const parsed = JSON.parse((0, import_node_fs.readFileSync)(path, "utf-8"));
-      if (!Array.isArray(parsed)) return /* @__PURE__ */ new Set();
-      return new Set(
-        parsed.filter((value) => typeof value === "string")
-      );
-    } catch {
-      return /* @__PURE__ */ new Set();
-    }
-  }
-  function writeSentIds(ids) {
-    const values = Array.from(ids).slice(-2e3);
-    const path = sentPath();
-    const tmp = `${path}.tmp`;
-    (0, import_node_fs.writeFileSync)(tmp, `${JSON.stringify(values, null, 2)}
-`, {
-      encoding: "utf-8",
-      mode: 384
-    });
-    (0, import_node_fs.renameSync)(tmp, path);
-  }
-  function inflightFiles() {
-    return (0, import_node_fs.readdirSync)(spoolDir()).filter((name) => name.startsWith("inflight-") && name.endsWith(".jsonl")).map((name) => (0, import_node_path.join)(spoolDir(), name));
-  }
-  function readInflightRecords() {
-    return inflightFiles().flatMap((path) => readRecordsFromPath(path));
-  }
-  function dedupeRecords(records, sentIds = readSentIds()) {
-    const seen = /* @__PURE__ */ new Set();
-    return records.filter((record2) => {
-      if (sentIds.has(record2.capture_id) || seen.has(record2.capture_id)) {
-        return false;
-      }
-      seen.add(record2.capture_id);
-      return true;
-    });
-  }
-  function appendPendingRecordsLocked(records) {
-    const sentIds = readSentIds();
-    const existingIds = new Set(
-      readRecords().map((record2) => record2.capture_id)
-    );
-    const next = records.filter((record2) => {
-      if (sentIds.has(record2.capture_id) || existingIds.has(record2.capture_id)) {
-        return false;
-      }
-      existingIds.add(record2.capture_id);
-      return true;
-    });
-    appendRecords(next);
-  }
-  function recoverStaleInflightLocked() {
-    const now = Date.now();
-    for (const path of inflightFiles()) {
-      try {
-        if (now - (0, import_node_fs.statSync)(path).mtimeMs < INFLIGHT_STALE_MS) continue;
-        appendPendingRecordsLocked(readRecordsFromPath(path));
-        (0, import_node_fs.rmSync)(path, { force: true });
-      } catch {
-      }
-    }
-  }
-  function enqueueCapture(record2) {
-    const content = options.sanitize(record2.content);
-    if (!content || content.length < minContentLength) return null;
-    const next = {
-      capture_id: captureId({
-        sessionId: record2.sessionId,
-        captureKind: record2.capture_kind,
-        content
-      }),
-      capture_kind: record2.capture_kind,
-      content,
-      display_summary: record2.display_summary ?? truncateText(content, 180),
-      project: record2.project,
-      metadata: record2.metadata,
-      created_at: (/* @__PURE__ */ new Date()).toISOString(),
-      attempts: 0
-    };
-    try {
-      return withSpoolLock(() => {
-        recoverStaleInflightLocked();
-        const existing = [...readRecords(), ...readInflightRecords()];
-        if (existing.some((item) => item.capture_id === next.capture_id)) {
-          return null;
-        }
-        if (readSentIds().has(next.capture_id)) return null;
-        appendRecords([next]);
-        return next;
-      });
-    } catch {
-      return null;
-    }
-  }
-  function pendingSpoolCount2() {
-    return withSpoolLock(() => {
-      recoverStaleInflightLocked();
-      return readRecords().length;
-    });
-  }
-  async function flushSpool(send, limit = 10) {
-    const drained = withSpoolLock(() => {
-      recoverStaleInflightLocked();
-      const sentIds = readSentIds();
-      const records = dedupeRecords(readRecords(), sentIds);
-      const batch = records.slice(0, limit);
-      const pending = records.slice(limit);
-      writeRecords(pending);
-      const path = batch.length > 0 ? inflightPath() : void 0;
-      if (path) writeRecordsToPath(path, batch);
-      return { batch, path };
-    });
-    if (drained.batch.length === 0) {
-      return { flushed: 0, remaining: pendingSpoolCount2() };
-    }
-    const failed = [];
-    let flushed = 0;
-    for (const record2 of drained.batch) {
-      try {
-        if (await send(record2) === false) {
-          throw new Error("uploader returned false");
-        }
-        withSpoolLock(() => {
-          const sentIds = readSentIds();
-          sentIds.add(record2.capture_id);
-          writeSentIds(sentIds);
-        });
-        flushed += 1;
-      } catch (error51) {
-        failed.push({
-          ...record2,
-          attempts: (record2.attempts ?? 0) + 1,
-          last_error: error51 instanceof Error ? error51.message : String(error51)
-        });
-      }
-    }
-    const remaining = withSpoolLock(() => {
-      appendPendingRecordsLocked(failed);
-      if (drained.path) (0, import_node_fs.rmSync)(drained.path, { force: true });
-      return readRecords().length;
-    });
-    return { flushed, remaining };
-  }
-  return { captureId, enqueueCapture, flushSpool, pendingSpoolCount: pendingSpoolCount2 };
-}
-
-// ../../../packages/capture-core/src/token-store.ts
-var import_node_fs2 = require("node:fs");
-var import_node_path2 = require("node:path");
-function writeTextAtomic(path, text, mode = 384) {
-  (0, import_node_fs2.mkdirSync)((0, import_node_path2.dirname)(path), { recursive: true, mode: 448 });
-  const tmp = `${path}.tmp.${process.pid}`;
-  (0, import_node_fs2.writeFileSync)(tmp, text, { encoding: "utf-8", mode });
-  try {
-    (0, import_node_fs2.renameSync)(tmp, path);
-  } catch (err) {
-    try {
-      (0, import_node_fs2.rmSync)(tmp, { force: true });
-    } catch {
-    }
-    throw err;
-  }
-  try {
-    (0, import_node_fs2.chmodSync)(path, mode);
-  } catch {
-  }
-}
-function writeJsonAtomic(path, value, mode = 384) {
-  writeTextAtomic(path, `${JSON.stringify(value, null, 2)}
-`, mode);
-}
-function createTokenStore(options) {
-  const filename = options.filename ?? "credentials.json";
-  function path() {
-    return (0, import_node_path2.join)(options.dir(), filename);
-  }
-  function read() {
-    const file2 = path();
-    if (!(0, import_node_fs2.existsSync)(file2)) return null;
-    let obj;
-    try {
-      obj = JSON.parse((0, import_node_fs2.readFileSync)(file2, "utf-8"));
-    } catch {
-      return null;
-    }
-    if (typeof obj !== "object" || obj === null) return null;
-    if (typeof obj.clientId !== "string" || typeof obj.accessToken !== "string" || typeof obj.refreshToken !== "string") {
-      return null;
-    }
-    return {
-      clientId: obj.clientId,
-      clientSecret: typeof obj.clientSecret === "string" ? obj.clientSecret : void 0,
-      accessToken: obj.accessToken,
-      refreshToken: obj.refreshToken,
-      expiresAt: typeof obj.expiresAt === "number" ? obj.expiresAt : void 0,
-      scope: typeof obj.scope === "string" ? obj.scope : void 0
-    };
-  }
-  function write(tokens) {
-    writeJsonAtomic(path(), tokens);
-  }
-  function clear() {
-    try {
-      (0, import_node_fs2.rmSync)(path(), { force: true });
-    } catch {
-    }
-  }
-  return { path, read, write, clear };
-}
-
-// ../../../packages/capture-core/src/handoff.ts
-var HANDOFF_TAG = "[HANDOFF]";
-var HANDOFF_SUMMARY_MAX = 400;
-function handoffRecallQuery() {
-  return `${HANDOFF_TAG} session handoff summary`;
-}
-function taggedHandoff(args) {
-  const project = args.project?.trim();
-  const scope = project ? ` (${project})` : "";
-  return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
-}
-function buildHandoffMemory(args) {
-  return taggedHandoff(args);
-}
-function buildHandoffDisplaySummary(args) {
-  return taggedHandoff({
-    ...args,
-    summary: args.summary.trim().slice(0, HANDOFF_SUMMARY_MAX)
-  });
-}
-function isHandoffMemory(text) {
-  return text.trimStart().startsWith(HANDOFF_TAG);
-}
-var HANDOFF_REPLACE_LIMIT = 10;
-var SCOPED_HANDOFF_RE = /^\s*\[HANDOFF\]\s*\(/;
-function selectReplaceableHandoffs(bundles, opts) {
-  const max = opts.max ?? HANDOFF_REPLACE_LIMIT;
-  return bundles.filter((b) => {
-    const name = b.episode.name ?? "";
-    if (!isHandoffMemory(name)) return false;
-    if (!opts.projectScoped && SCOPED_HANDOFF_RE.test(name)) return false;
-    return true;
-  }).slice(0, max);
-}
-async function sweepReplacedHandoffs(bundles, deleteEpisode, opts) {
-  const targets = selectReplaceableHandoffs(bundles, opts).map((b) => b.episode.uuid).filter((uuid3) => Boolean(uuid3));
-  const results = await Promise.allSettled(
-    targets.map((uuid3) => deleteEpisode(uuid3))
-  );
-  return results.filter((r) => r.status === "fulfilled").length;
-}
-var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
-
-// ../../../packages/capture-core/src/index.ts
-var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
-var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
-var SIMPLE_TAG_RE = /<\/?final>/gi;
-function stripContextBlocks(text) {
-  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
-}
-function normalizeLines(text, dropLine) {
-  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
-}
-var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
-  "API_KEY",
-  "TOKEN",
-  "SECRET",
-  "PASSWORD",
-  "PRIVATE_KEY"
-];
-function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
-  return new RegExp(
-    `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
-    "gi"
-  );
-}
-var SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
-var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
-var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
-var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
-var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-function redactSecrets(text) {
-  return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
-}
-function patternTest(pattern, text) {
-  pattern.lastIndex = 0;
-  return pattern.test(text);
-}
-function looksSensitive(text) {
-  return patternTest(SECRET_ASSIGNMENT_FULL_RE, text) || patternTest(BEARER_TOKEN_RE, text) || patternTest(CLI_SECRET_FLAG_RE, text) || patternTest(COMMON_TOKEN_RE, text) || patternTest(PRIVATE_KEY_RE, text) || /\.env(\.|$|\s)/i.test(text);
-}
-function truncateText(value, max = 500) {
-  if (!value) return "";
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
-}
-var MembaseTransport = class {
-  constructor(opts) {
-    this.opts = opts;
-    this.apiUrl = opts.apiUrl.replace(/\/$/, "");
-    this.tokens = opts.tokens;
-    this.timeoutMs = opts.timeoutMs ?? 15e3;
-  }
-  tokens;
-  refreshPromise = null;
-  apiUrl;
-  timeoutMs;
-  get currentTokens() {
-    return this.tokens;
-  }
-  isAuthenticated() {
-    return Boolean(this.tokens.accessToken && this.tokens.clientId);
-  }
-  rawFetch(path, options = {}) {
-    return fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.tokens.accessToken}`,
-        "User-Agent": this.opts.userAgent,
-        ...options.headers ?? {}
-      }
-    });
-  }
-  async doRefresh() {
-    if (!this.tokens.refreshToken || !this.tokens.clientId) {
-      throw this.opts.createError(
-        this.opts.notAuthenticatedMessage ?? "Not authenticated",
-        401,
-        ""
-      );
-    }
-    this.opts.log?.("refreshing access token");
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: this.tokens.refreshToken,
-      client_id: this.tokens.clientId
-    });
-    const response = await fetch(`${this.apiUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": this.opts.userAgent
-      },
-      body,
-      signal: AbortSignal.timeout(this.timeoutMs)
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw this.opts.createError(
-        this.opts.refreshFailedMessage?.(response.status) ?? "Token refresh failed",
-        response.status,
-        text
-      );
-    }
-    const data = await response.json();
-    this.tokens = {
-      ...this.tokens,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
-      expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
-      scope: data.scope ?? this.tokens.scope
-    };
-    this.opts.log?.("token refreshed successfully");
-    this.opts.onTokenRefresh?.(this.tokens);
-  }
-  async refreshAccessToken() {
-    if (!this.refreshPromise) {
-      this.refreshPromise = this.doRefresh().finally(() => {
-        this.refreshPromise = null;
-      });
-    }
-    await this.refreshPromise;
-  }
-  /** Authenticated fetch with single-flight refresh and one retry on 401. */
-  async authorizedFetch(path, options = {}) {
-    this.opts.log?.(`${options.method ?? "GET"} ${path}`);
-    let response = await this.rawFetch(path, options);
-    if (response.status === 401 && this.tokens.refreshToken) {
-      await response.body?.cancel();
-      await this.refreshAccessToken();
-      response = await this.rawFetch(path, options);
-    }
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw this.opts.createError(
-        this.opts.apiErrorMessage?.(response.status, text) ?? `Membase API error ${response.status}`,
-        response.status,
-        text
-      );
-    }
-    return response;
   }
 };
 
@@ -31569,9 +31578,6 @@ var MembaseClient = class {
   }
   async getProfile() {
     return this.request("/user/settings");
-  }
-  async getRecentMemories(limit = 10) {
-    return this.searchMemory({ query: "", limit });
   }
   async searchWiki(args) {
     const params = new URLSearchParams({
@@ -31895,8 +31901,8 @@ async function registerClient(apiUrl, redirectUri) {
   }
   return await response.json();
 }
-function listenForCallback() {
-  return new Promise((resolve2, reject) => {
+function listenForCallback(expectedState) {
+  return new Promise((resolve, reject) => {
     const server = (0, import_node_http.createServer)((req, res) => {
       try {
         const url2 = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -31907,16 +31913,16 @@ function listenForCallback() {
         }
         const code = url2.searchParams.get("code");
         const state = url2.searchParams.get("state") ?? void 0;
-        if (!code) {
+        if (!code || state !== expectedState) {
           res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end("Missing OAuth code.");
+          res.end("Invalid OAuth callback.");
           return;
         }
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(
           "<html><body><h1>Membase connected</h1><p>You can return to Claude Code.</p></body></html>"
         );
-        server.emit("membase-code", { code, state });
+        server.emit("membase-code", { code });
       } catch (error51) {
         res.writeHead(500, { "Content-Type": "text/plain" });
         res.end(String(error51));
@@ -31929,15 +31935,13 @@ function listenForCallback() {
         reject(new Error("Could not allocate OAuth callback port"));
         return;
       }
-      const codePromise = new Promise(
-        (res) => {
-          server.once(
-            "membase-code",
-            (payload) => res(payload)
-          );
-        }
-      );
-      resolve2({
+      const codePromise = new Promise((res) => {
+        server.once(
+          "membase-code",
+          (payload) => res(payload)
+        );
+      });
+      resolve({
         redirectUri: `http://127.0.0.1:${address.port}/callback`,
         codePromise,
         close: () => {
@@ -31951,11 +31955,11 @@ function listenForCallback() {
   });
 }
 async function loginWithOAuth(apiUrl) {
-  const callback = await listenForCallback();
+  const state = base64Url((0, import_node_crypto2.randomBytes)(16));
+  const callback = await listenForCallback(state);
   try {
     const verifier = base64Url((0, import_node_crypto2.randomBytes)(32));
     const challenge = base64Url((0, import_node_crypto2.createHash)("sha256").update(verifier).digest());
-    const state = base64Url((0, import_node_crypto2.randomBytes)(16));
     const client = await registerClient(apiUrl, callback.redirectUri);
     const params = new URLSearchParams({
       response_type: "code",
@@ -31970,14 +31974,11 @@ async function loginWithOAuth(apiUrl) {
     openBrowser(authorizeUrl);
     console.error(`If the browser did not open, visit:
 ${authorizeUrl}`);
-    const { code, state: returnedState } = await withTimeout(
+    const { code } = await withTimeout(
       callback.codePromise,
       CALLBACK_TIMEOUT_MS,
       "OAuth login timed out before the browser callback completed."
     );
-    if (returnedState !== state) {
-      throw new Error("OAuth state mismatch");
-    }
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
@@ -31998,7 +31999,7 @@ ${authorizeUrl}`);
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       throw new Error(
-        `OAuth token exchange failed: ${response.status} ${text}`
+        `OAuth token exchange failed: ${response.status} ${text.slice(0, 300)}`
       );
     }
     const data = await response.json();
@@ -32018,9 +32019,13 @@ ${authorizeUrl}`);
 // src/sanitize/index.ts
 var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
 function sanitizeMembaseText(raw) {
-  const cleaned = redactSecrets(
-    stripContextBlocks(raw.replace(PRIVATE_BLOCK_RE, " "))
-  );
+  let stripped = raw;
+  let previous;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(PRIVATE_BLOCK_RE, " ");
+  } while (stripped !== previous);
+  const cleaned = redactSecrets(stripContextBlocks(stripped));
   return normalizeLines(cleaned);
 }
 var looksSensitive2 = looksSensitive;
@@ -32044,8 +32049,10 @@ function formatBundle(bundle, index) {
   const facts = (bundle.edges ?? []).map((edge) => edge.fact).filter((fact) => Boolean(fact)).slice(0, 3).map((fact) => `    - ${truncateText2(fact, 180)}`).join("\n");
   const header = `${index + 1}. ${truncateText2(episode.name || episode.summary || "Memory", 180)}${score}${source}${when ? ` at=${when}` : ""}`;
   const summary = episode.summary ? `   summary: ${truncateText2(episode.summary, 240)}` : "";
-  return [header, summary, facts ? `   related facts:
-${facts}` : ""].filter(Boolean).join("\n");
+  return neutralizeInjection(
+    [header, summary, facts ? `   related facts:
+${facts}` : ""].filter(Boolean).join("\n")
+  );
 }
 function formatMemorySearchResults(bundles, options = {}) {
   if (bundles.length === 0) return "No memories found.";
@@ -32060,11 +32067,13 @@ ${bundles.map(formatBundle).join("\n\n")}`;
 function formatWikiDocument(doc, index) {
   const score = typeof doc.similarity === "number" ? ` score=${doc.similarity.toFixed(3)}` : "";
   const collection = doc.collection_name ? ` collection=${doc.collection_name}` : "";
-  return [
-    `${index + 1}. ${truncateText2(doc.title, 180)}${score}${collection}`,
-    `   id: ${doc.id}`,
-    `   ${truncateText2(doc.content, 700)}`
-  ].join("\n");
+  return neutralizeInjection(
+    [
+      `${index + 1}. ${truncateText2(doc.title, 180)}${score}${collection}`,
+      `   id: ${doc.id}`,
+      `   ${truncateText2(doc.content, 700)}`
+    ].join("\n")
+  );
 }
 
 // src/profile/index.ts
@@ -32169,7 +32178,7 @@ async function fetchLatestVersion(fetchImpl = fetch) {
     if (!response.ok) return null;
     const body = await response.json();
     const plugin = Array.isArray(body.plugins) ? body.plugins.find((entry) => entry.name === PLUGIN_NAME2) : void 0;
-    return typeof plugin?.version === "string" ? plugin.version : null;
+    return typeof plugin?.version === "string" && /^\d+\.\d+\.\d+$/.test(plugin.version) ? plugin.version : null;
   } catch {
     return null;
   } finally {
@@ -32487,11 +32496,11 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive2(args.content)) {
+      if (looksSensitive2(args.content) || args.metadata && looksSensitive2(JSON.stringify(args.metadata))) {
         throw new Error("Refusing to store content that looks like a secret.");
       }
       const result = await client.ingestMemory({
-        content: args.content,
+        content: sanitizeMembaseText(args.content),
         metadata: {
           ...args.metadata ?? {},
           plugin: INGEST_PLUGIN_LABEL,
@@ -32530,7 +32539,7 @@ async function main() {
         throw new Error("Refusing to store content that looks like a secret.");
       }
       const { status, replaced } = await replaceHandoff(client, {
-        summary: args.summary,
+        summary: sanitizeMembaseText(args.summary),
         project: args.project,
         metadata: {
           plugin: INGEST_PLUGIN_LABEL,
@@ -32646,7 +32655,7 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (looksSensitive2(args.content)) {
+      if (looksSensitive2(args.content) || looksSensitive2(args.title)) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret."
         );
@@ -32675,7 +32684,7 @@ async function main() {
     },
     async (args) => {
       const { client } = requireClient();
-      if (typeof args.content === "string" && looksSensitive2(args.content)) {
+      if (typeof args.content === "string" && looksSensitive2(args.content) || typeof args.title === "string" && looksSensitive2(args.title)) {
         throw new Error(
           "Refusing to store wiki content that looks like a secret."
         );
@@ -32771,11 +32780,11 @@ async function main() {
     },
     async () => {
       const { client } = requireClient();
-      const recent = await client.getRecentMemories(10);
+      const recent = await client.searchMemory({ query: "", limit: 10 });
       const lines = ["# Membase Recent Memories", ""];
       for (const [index, item] of recent.entries()) {
         lines.push(
-          `${index + 1}. ${truncateText2(item.episode.summary || item.episode.name, 240)}`
+          `${index + 1}. ${neutralizeInjection(truncateText2(item.episode.summary || item.episode.name, 240))}`
         );
       }
       return {

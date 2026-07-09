@@ -21,17 +21,18 @@ which includes notes on translating the MCP JSON example into Hermes'
 
 ## Capabilities
 
-Through the shared Membase Context API, the connector exposes: `remember`,
-`search`, `getContext`, and `deleteOrForget`. No internal Membase memory
-details are exposed.
+The Python provider registers `membase_search`, `membase_store`,
+`membase_profile`, `membase_forget`, `membase_handoff`, and the four wiki
+tools (`membase_add_wiki`, `membase_search_wiki`, `membase_update_wiki`,
+`membase_delete_wiki`), plus auto-capture and prefetch recall. No Membase server
+internals are exposed.
 
 ## For contributors
 
 ```bash
 pnpm --filter @membase/client-hermes typecheck
 pnpm hermes:python-parity   # validates the Python package + provider boundary
-pnpm hermes:native-artifacts # verifies clients/hermes/native-artifacts.json snapshot
-pnpm public-surface         # ensures no internal Membase terms leak
+pnpm public-surface         # lints the public API surface
 ```
 
 Run the Python test suite with:

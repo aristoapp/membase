@@ -1,4 +1,4 @@
-"""Behavioral tests for the Hermes failure-path spool (ADR 0005 / DR-2).
+"""Behavioral tests for the Hermes failure-path spool.
 
 Vector parity with the TS spool lives in test_spool_vectors.py; this exercises
 the flush lifecycle (durable write, secret redaction, empties on success, keeps

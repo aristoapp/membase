@@ -55,17 +55,25 @@ describe("handoff helpers", () => {
   });
 
   test("sweepReplacedHandoffs deletes in parallel and counts failures out", async () => {
+    const ok = "11111111-1111-4111-8111-111111111111";
+    const failing = "22222222-2222-4222-8222-222222222222";
     const deleted: string[] = [];
     const replaced = await sweepReplacedHandoffs(
-      [bundle("[HANDOFF] one"), bundle("[HANDOFF] two"), bundle("noise")],
+      [
+        { episode: { uuid: ok, name: "[HANDOFF] one" } },
+        { episode: { uuid: failing, name: "[HANDOFF] two" } },
+        // Non-uuid-shaped ids never reach the DELETE call.
+        { episode: { uuid: "../oops?x=1", name: "[HANDOFF] three" } },
+        { episode: { uuid: "u-noise", name: "noise" } },
+      ],
       async (uuid) => {
-        if (uuid.includes("two")) throw new Error("403");
+        if (uuid === failing) throw new Error("403");
         deleted.push(uuid);
       },
       { projectScoped: true },
     );
     expect(replaced).toBe(1);
-    expect(deleted).toHaveLength(1);
+    expect(deleted).toEqual([ok]);
   });
 
   test("display summary clamps long input but keeps the tag first", () => {
@@ -78,7 +86,7 @@ describe("handoff helpers", () => {
   });
 });
 
-// Golden vectors shared with the Hermes Python port (ADR 0002) — see
+// Golden vectors shared with the Hermes Python port — see
 // clients/hermes/python/tests/test_handoff_vectors.py for the other consumer.
 interface EpisodeFields {
   name?: string;

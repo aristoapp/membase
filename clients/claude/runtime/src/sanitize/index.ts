@@ -1,5 +1,5 @@
 // Claude-runtime sanitize surface, now composed from @membase/capture-core
-// (ADR 0002 / D1). Public API and behavior are unchanged; only the shared
+// Public API and behavior are unchanged; only the shared
 // primitives moved to the core. Claude-specific pieces stay here: the
 // <private> block, the smaller memory-keyword list, empty-input-is-casual,
 // and the operational heartbeat patterns.
@@ -49,9 +49,16 @@ const OPERATIONAL_PATTERNS = [
 ];
 
 export function sanitizeMembaseText(raw: string): string {
-  const cleaned = redactSecrets(
-    stripContextBlocks(raw.replace(PRIVATE_BLOCK_RE, " ")),
-  );
+  // Iterate private-block removal to a fixed point: a single pass leaves the
+  // outer remainder of nested blocks (<private><private>x</private>Y</private>)
+  // exposed.
+  let stripped = raw;
+  let previous: string;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(PRIVATE_BLOCK_RE, " ");
+  } while (stripped !== previous);
+  const cleaned = redactSecrets(stripContextBlocks(stripped));
   return normalizeLines(cleaned);
 }
 

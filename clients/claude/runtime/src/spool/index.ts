@@ -1,5 +1,5 @@
 // Claude-runtime spool surface, now backed by the disk spool in
-// @membase/capture-core (ADR 0002 / D1 slice 3). Public API and on-disk
+// @membase/capture-core. Public API and on-disk
 // layout are unchanged (same spool/ dir, pending.jsonl, sent.json, .lock,
 // inflight files). Claude-specific pieces stay here: the state dir, the
 // sanitize function, the CaptureRecord kind union, and the ingest mapping.

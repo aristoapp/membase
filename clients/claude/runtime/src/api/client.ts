@@ -1,5 +1,5 @@
 // Transport (token state, single-flight refresh, retry-on-401) lives in
-// @membase/capture-core (ADR 0002 / D1 slice 2); this class keeps the Claude
+// @membase/capture-core; this class keeps the Claude
 // product API surface, response parsing, and TokenState persistence shape.
 import { MembaseTransport } from "@membase/capture-core";
 import { MEMORY_SOURCE, USER_AGENT } from "../constants.js";
@@ -102,10 +102,6 @@ export class MembaseClient {
 
   async getProfile(): Promise<Record<string, unknown>> {
     return this.request("/user/settings");
-  }
-
-  async getRecentMemories(limit = 10): Promise<EpisodeBundle[]> {
-    return this.searchMemory({ query: "", limit });
   }
 
   async searchWiki(args: {

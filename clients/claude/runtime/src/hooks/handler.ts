@@ -19,6 +19,7 @@ import {
   isCasualChat,
   isOperationalMessage,
   looksSensitive,
+  sanitizeMembaseText,
   sanitizeRecallQuery,
   truncateText,
 } from "../sanitize/index.js";
@@ -42,7 +43,6 @@ import {
   pickLatestHandoff,
 } from "./session-start.js";
 import {
-  buildSessionCaptureCandidate,
   extractToolObservation,
 } from "./summary.js";
 import { buildSessionDigest } from "./digest.js";
@@ -65,7 +65,7 @@ const ASYNC_FLUSH_LIMIT = 3;
 // after one JSON payload, but if one doesn't (or the stream errors), resolve
 // with whatever arrived after a short deadline instead of waiting for EOF.
 const STDIN_IDLE_MS = 2_000;
-// ponytail: 8MB ceiling — beyond it the payload is dropped rather than
+// 8MB ceiling — beyond it the payload is dropped rather than
 // summarized; raise or chunk if real hook payloads ever exceed this.
 const STDIN_MAX_BYTES = 8_388_608;
 
@@ -220,7 +220,7 @@ async function fetchRecallMemoryGroup(
 
 async function handleSessionStart(input: HookInput): Promise<void> {
   const config = loadConfig();
-  // Dreaming v2 sweep: enqueue digests for sessions that ended without an end
+  // Digest sweep: enqueue digests for sessions that ended without an end
   // event (Codex) or crashed. Runs before the spool count/flush below so a
   // swept digest is part of this session-start's flush (logged in) or announced
   // backlog (HTTP mode). Enqueue only — sending is the flush/announce that
@@ -346,7 +346,7 @@ async function fetchCloudHandoff(
  * sources. Cursor is excluded — its Rules auto-load already injects the
  * rolling .mdc file, and doubling it here would inject twice.
  *
- * Order: a FRESH local file wins (pillar 2: same-client continuation is
+ * Order: a FRESH local file wins (same-client continuation is
  * local, no quota); otherwise the cloud is consulted (cross-client fallback),
  * and only if the cloud has nothing does a stale local file degrade to a
  * one-line notice — a stale local baton never suppresses a fresher cloud one.
@@ -439,7 +439,7 @@ async function handleUserPromptSubmit(input: HookInput): Promise<void> {
   outputAdditionalContext(context);
 }
 
-// Dreaming v2: tool observations are NOT uploaded per batch (that produced
+// Tool observations are NOT uploaded per batch (that produced
 // dozens of contentless "used N tool(s)" memories per session). Instead each
 // meaningful tool call is appended to the per-session scratch, and one digest
 // is uploaded at session end (or the next SessionStart sweep). Same filter and
@@ -561,7 +561,7 @@ async function spoolSessionSummary(
   const project = resolveProjectSlug(input.cwd, config);
   const raw =
     typeof input.compact_summary === "string" ? input.compact_summary : "";
-  const content = buildSessionCaptureCandidate(raw);
+  const content = sanitizeMembaseText(raw);
   if (!content || looksSensitive(content)) return;
   enqueueCapture({
     capture_kind: captureKind,

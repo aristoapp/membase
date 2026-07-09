@@ -88,7 +88,7 @@ describe("capture spool contract", () => {
   });
 });
 
-// Golden vectors binding this spool to the Hermes Python port (ADR 0005).
+// Golden vectors binding this spool to the Hermes Python port.
 // The Python suite (tests/test_spool_vectors.py) consumes the SAME file, so
 // capture_id hashing and the enqueue drop rules can't drift between languages.
 describe("spool golden vectors (spec/spool-vectors.json)", () => {

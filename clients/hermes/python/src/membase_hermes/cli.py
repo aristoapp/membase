@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from pathlib import Path
@@ -17,8 +16,7 @@ from .config import (
     save_membase_config_file,
     write_token_file,
 )
-from .mirror import atomic_write_text
-from .star_prompt import maybe_prompt_github_star
+from .mirror import atomic_write_text, content_hash
 
 if TYPE_CHECKING:
     from .client import MembaseClient
@@ -166,11 +164,6 @@ def _cmd_login(args: argparse.Namespace, config_path: Path) -> int:
         config_path,
     )
     print("OAuth login complete. Credentials saved.")
-    try:
-        maybe_prompt_github_star()
-    except Exception:
-        # Best-effort UX only; never fail login flow.
-        pass
     return 0
 
 
@@ -195,7 +188,7 @@ def _cmd_status(config_path: Path) -> int:
 
 
 def _cmd_dream(config_path: Path) -> int:
-    """Upload captures that failed to sync and are waiting on disk (ADR 0005)."""
+    """Upload captures that failed to sync and are waiting on disk."""
     from .spool import default_capture_spool
 
     spool = default_capture_spool()
@@ -250,10 +243,6 @@ def _cmd_logout(config_path: Path) -> int:
     return 0
 
 
-def _content_hash(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
 def _extract_memory_entries(memory_file: Path) -> list[str]:
     if not memory_file.exists():
         return []
@@ -291,7 +280,7 @@ def _cmd_resync(args: argparse.Namespace, config_path: Path) -> int:
     try:
         if client.is_authenticated():
             for entry in entries:
-                digest = _content_hash(entry)
+                digest = content_hash(entry)
                 try:
                     matches = client.search(entry, limit=3)
                 except MembaseApiError:
@@ -311,7 +300,7 @@ def _cmd_resync(args: argparse.Namespace, config_path: Path) -> int:
                             break
                 index[digest] = uuid
         else:
-            index = {_content_hash(entry): "resynced" for entry in entries}
+            index = {content_hash(entry): "resynced" for entry in entries}
     finally:
         client.close()
 

@@ -25,16 +25,17 @@ config or manifest:
 | Client | Transport | Auth |
 | --- | --- | --- |
 | Cursor | Remote MCP URL (`https://mcp.membase.so/mcp`) | In-client OAuth browser flow; no committed token. |
-| Claude Code | Bundled stdio MCP server (`node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs`) | Plugin-managed login. |
+| Codex CLI | Remote MCP URL (`https://mcp.membase.so/mcp`) | Codex-managed OAuth (`codex mcp login membase`). |
+| Claude Code | Hosted HTTP MCP or the bundled stdio server (`node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs`) | Plugin-managed login (`/membase:login`). |
 | Hermes Agent | Native `hermes-membase` pip package (or remote MCP URL) | OAuth flow. |
-| OpenClaw | Native plugin (or remote MCP URL) | OAuth access/refresh tokens cached in a `tokenFile`. |
+| OpenClaw | Native plugin (or remote MCP URL) | OAuth access/refresh tokens cached in a `tokenFile` (default `~/.openclaw/membase/tokens.json`, written 0600). |
 
 Supported public configuration values:
 
 | Value | Required | Purpose |
 | --- | --- | --- |
 | `apiUrl` / `MEMBASE_API_BASE_URL` | No | API endpoint override. Defaults to `https://api.membase.so`. |
-| `MEMBASE_PROFILE` | No | Optional profile label for client/runtime scoping. |
+| `MEMBASE_PROFILE` | No | Optional free-form label a client can attach to scope its runtime config. |
 | OAuth tokens (`accessToken`, `refreshToken`, `tokenFile`) | Client-managed | Held by the client runtime; never committed. |
 
 ## Local Setup
@@ -53,19 +54,21 @@ contain real credentials.
 
 ## Redaction Guarantees
 
-`packages/core` owns the shared diagnostic redaction path:
+`packages/capture-core` owns the shared capture-path redaction (best-effort by
+design — key-name and token-shape heuristics, golden-vector-bound across the
+TS and Python runtimes):
 
-- keys matching `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` are redacted by
-  `redactEnvironment`
+- secret assignments (`API_KEY`/`TOKEN`/`SECRET`/`PASSWORD`-style keys) and
+  common token shapes are redacted before a capture is buffered, spooled to
+  disk, or uploaded
 - generated MCP config documents carry no embedded credentials: remote-URL
   configs use empty headers, and the bundled Claude server config carries only
-  a non-secret plugin flag
-- `pnpm core:contract` validates environment-reference generation and
-  diagnostic redaction at the shared core boundary
+  a non-secret plugin flag (`pnpm core:contract` validates this at the shared
+  core boundary)
 - `smoke/client-smoke.mjs` injects a fake sentinel secret and fails if adapter
   diagnostics or MCP config include that raw value
-- `scripts/check-secret-hygiene.mjs` scans committed connector artifacts for
-  raw secret-looking values and validates sensitive MCP env entries
+- `scripts/check-secret-hygiene.mjs` scans committed artifacts — including
+  `.github/`, `e2e/`, and `contract/` — for raw secret-looking values
 
 ## Live MCP Smoke Prerequisites
 
@@ -76,21 +79,9 @@ pnpm smoke:dry-run
 pnpm smoke:execute
 ```
 
-Live client-to-MCP smoke tests should stay pending until the remaining
-client-specific runtime behavior and live test inputs are accepted. Claude
-plugin-local stdio, Cursor HTTP MCP config, Hermes provider register behavior,
-and OpenClaw native entrypoint metadata are preserved, but live exercise still
-needs explicit test credentials, endpoint/profile, and cleanup policy.
-When live smoke is added, it should:
-
-- authenticate through the client's OAuth or plugin login flow, never an
-  embedded credential
-- default to a test profile or test endpoint, not a user's production context
-- create a clearly tagged test memory
-- verify remember, search, context, and forget behavior
-- delete or forget the test memory before exiting
-- log only redacted environment diagnostics, generated config shape, ids, and
-  short summaries
+Live end-to-end coverage runs separately in CI (`e2e/run-e2e.mjs`, staging
+tiers — see `e2e/README.md`); the smoke harness itself stays offline by
+design.
 
 ## If A Secret Leaks
 
@@ -99,5 +90,5 @@ If a real token is committed or printed by a check:
 1. Revoke or rotate the token first.
 2. Remove the raw value from the working tree.
 3. Re-run `pnpm check`.
-4. Before publishing this repo, remove the value from git history or restart
-   from a clean history.
+4. Purge the value from git history (e.g. `git filter-repo`) — removing it
+   from the working tree alone is not enough.

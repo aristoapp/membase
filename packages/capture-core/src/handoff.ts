@@ -7,16 +7,16 @@
  *
  * The tag MUST live on a field the search bundle exposes — the episode name /
  * summary — not just the ingested content body: the bundle carries `name` and
- * `summary` but not the raw body (see NodeResponse in clients/openclaw/runtime/src/types.ts). The backend
- * derives the episode name from `display_summary` (graph_sync.py:298 →
- * build_safe_episode_name(display_title or display_summary or content)), so
- * `buildHandoffDisplaySummary` prefixes the tag there and `isHandoffMemory`
- * matches against `episode.name`/`episode.summary`.
+ * `summary` but not the raw body (see NodeResponse in
+ * clients/openclaw/runtime/src/types.ts). The backend derives the episode
+ * name from `display_summary` (a server-side behavior, not verifiable
+ * locally), so `buildHandoffDisplaySummary` prefixes the tag there and
+ * `isHandoffMemory` matches against `episode.name`/`episode.summary`.
  */
 export const HANDOFF_TAG = "[HANDOFF]";
 
-// display_summary max_length on the backend (models/ingest.py) is 500; the tag
-// + scope is short, so clamp the user summary to leave headroom.
+// The backend caps display_summary at 500 chars; the tag + scope is short,
+// so clamp the user summary to leave headroom.
 const HANDOFF_SUMMARY_MAX = 400;
 
 /** Recall/replace search window: relevance can outrank the real handoff,
@@ -28,7 +28,9 @@ export function handoffRecallQuery(): string {
 }
 
 function taggedHandoff(args: { summary: string; project?: string }): string {
-  const project = args.project?.trim();
+  // Parens delimit the scope marker (see SCOPED_HANDOFF_RE); strip them from
+  // the slug so a crafted project name can't corrupt scope parsing.
+  const project = args.project?.trim().replace(/[()]/g, "");
   const scope = project ? ` (${project})` : "";
   return `${HANDOFF_TAG}${scope} ${args.summary.trim()}`.trim();
 }
@@ -85,11 +87,14 @@ export function pickLatestHandoff<
   // A missing/unparseable timestamp means "unknown", not "oldest" — treating
   // it as epoch 0 would let a real but older timestamped handoff beat an
   // actually-newer untimed one. Untimed bundles instead keep their relevance
-  // rank relative to each other via the tie-break below.
+  // rank relative to each other via the tie-break below. Timestamps are
+  // clamped to now: a far-future valid_at (plantable via any ingestion path)
+  // must not permanently win "latest".
+  const now = Date.now();
   const time = (b: T): number | null => {
     const raw = b.episode.valid_at ?? b.episode.created_at ?? "";
     const t = Date.parse(raw);
-    return Number.isNaN(t) ? null : t;
+    return Number.isNaN(t) ? null : Math.min(t, now);
   };
   return handoffs.reduce((latest, b) => {
     const bTime = time(b);
@@ -160,9 +165,11 @@ export async function sweepReplacedHandoffs<
   deleteEpisode: (uuid: string) => Promise<void>,
   opts: { projectScoped: boolean; max?: number },
 ): Promise<number> {
+  // Server-supplied uuids feed an authenticated DELETE; require uuid shape so
+  // a crafted value can't redirect the request path.
   const targets = selectReplaceableHandoffs(bundles, opts)
     .map((b) => b.episode.uuid)
-    .filter((uuid): uuid is string => Boolean(uuid));
+    .filter((uuid): uuid is string => /^[0-9a-f-]{32,36}$/i.test(uuid ?? ""));
   const results = await Promise.allSettled(
     targets.map((uuid) => deleteEpisode(uuid)),
   );
@@ -184,18 +191,20 @@ export function isHandoffFresh(storedAtMs: number, nowMs?: number): boolean {
 }
 
 // Untrusted memory/handoff text is interpolated into harness-injected blocks
-// (<membase-handoff>, <membase-context>) and can come from low-trust sources —
-// a checked-in repo file, Slack/Gmail ingestion, another client's captures —
-// so it must not be able to close a block early or forge a hook control tag.
-// Neutralize the block delimiters and the harness's system-reminder tag by
-// inserting a zero-width space; the text stays readable, the tags inert.
-// Applied at render time (every client's recall/handoff renderer calls this)
-// so write-time gaps in other ingestion paths can't bypass it.
+// (<membase-handoff>, <membase-context>, <membase-session>, …) and can come
+// from low-trust sources — a checked-in repo file, Slack/Gmail ingestion,
+// another client's captures — so it must not be able to close a block early
+// or forge a hook control tag. Neutralize every membase-* tag plus the
+// harness's system-reminder tag by inserting a zero-width space (U+200B);
+// the text stays readable, the tags inert. Idempotent: a neutralized tag no
+// longer matches. Applied at render time (every client's memory/wiki/handoff
+// renderer calls this) so write-time gaps in other ingestion paths can't
+// bypass it.
 // Golden-vector-bound to the Hermes Python port (spec/sanitize-vectors.json).
 export function neutralizeInjection(text: string): string {
   return text.replace(
-    /<\/?(membase-handoff|membase-context|system-reminder)\b/gi,
-    (m) => `${m[0]}​${m.slice(1)}`,
+    /<\/?(membase-[a-z-]+|system-reminder)\b/gi,
+    (m) => `${m[0]}\u200b${m.slice(1)}`,
   );
 }
 

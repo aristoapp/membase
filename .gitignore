@@ -17,7 +17,7 @@ automation/*.log
 .codegraph/
 *.egg-info/
 
-# Local-only scratch / internal working artifacts (keep out of the public repo)
+# Local scratch and generated working artifacts
 repomix*.md
 /review/
 /batch-review/

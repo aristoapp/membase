@@ -10,7 +10,7 @@ import {
   spoolFailedCapture,
 } from "./spool";
 
-// ADR 0005 / DR-1: failed captures persist to a disk spool; `dream`
+// Failed captures persist to a disk spool; `dream`
 // (flushCaptureSpool) uploads them. These exercise the real capture-core spool
 // via an isolated MEMBASE_DATA_DIR.
 

@@ -54,3 +54,10 @@ see [clients/codex](../../clients/codex).
 
 - Membase docs — https://docs.membase.so
 - Codex CLI — https://developers.openai.com/codex/cli
+
+## For contributors
+
+Codex is a descriptor-only client: `.codex-plugin/plugin.json` and `.mcp.json`
+are generated from `clients/codex/src/index.ts` (`pnpm generate`), and
+`pnpm generated-artifacts` keeps them in sync. There is no per-client runtime
+to test beyond the shared stdio bundle covered by the Claude runtime suite.

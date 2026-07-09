@@ -88,7 +88,7 @@ function assertClaudePluginManifest(manifest) {
   }
 
   const description = String(manifest.description ?? "").toLowerCase();
-  for (const marker of ["remember", "search", "task context", "forget"]) {
+  for (const marker of ["memory", "search", "wiki", "handoff"]) {
     if (!description.includes(marker)) {
       failures.push(`${CLIENT_PLUGIN_PATH}: description must mention public capability ${JSON.stringify(marker)}`);
     }
@@ -151,9 +151,17 @@ function runClaudePluginValidation() {
   });
 
   if (version.error) {
-    failures.push(
-      "Claude Code CLI is required for claude:plugin-parity. Install @anthropic-ai/claude-code or run this check on a Claude Code review machine."
-    );
+    // CI must have the CLI; a local clone without it still gets the static
+    // manifest checks above, just not live plugin validation.
+    if (process.env.CI) {
+      failures.push(
+        "Claude Code CLI is required for claude:plugin-parity in CI. Install @anthropic-ai/claude-code."
+      );
+    } else {
+      console.warn(
+        "claude:plugin-parity: Claude Code CLI not found — skipping live plugin validation (static manifest checks still ran)."
+      );
+    }
     return;
   }
 

@@ -1,7 +1,7 @@
 """Golden-vector tests binding the Hermes sanitize port to capture-core.
 
 The vectors live in packages/capture-core/spec/sanitize-vectors.json and are
-consumed by BOTH the TS capture-core test suite and this file (ADR 0002), so
+consumed by BOTH the TS capture-core test suite and this file, so
 behavioral drift between the two languages fails CI. Hermes implements the
 OpenClaw-variant surface, so it runs the groups that surface implements:
 basic secret-assignment redaction (recall path), context-block stripping, and
@@ -21,6 +21,7 @@ from membase_hermes.sanitize import (
     SIMPLE_TAG_RE,
     is_casual_chat,
     neutralize_injection,
+    MEMBASE_HANDOFF_BLOCK_RE,
     sanitize_membase_text,
 )
 
@@ -52,7 +53,10 @@ class SanitizeVectorTests(unittest.TestCase):
             got = SIMPLE_TAG_RE.sub(
                 " ",
                 METADATA_BLOCK_RE.sub(
-                    " ", MEMBASE_CONTEXT_BLOCK_RE.sub(" ", case["in"])
+                    " ",
+                    MEMBASE_HANDOFF_BLOCK_RE.sub(
+                        " ", MEMBASE_CONTEXT_BLOCK_RE.sub(" ", case["in"])
+                    ),
                 ),
             )
             self.assertEqual(got, case["out"], case["in"])
