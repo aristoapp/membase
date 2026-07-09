@@ -41,19 +41,10 @@ export interface CursorConnectorArtifacts {
   mcp: McpConfigDocument;
 }
 
-/** ADR 0003 descriptor — Cursor is packaging data over the shared MCP host agent. */
+/** Cursor is packaging data over the shared MCP host agent. */
 export const cursorAgent = defineMcpHostAgent<CursorPluginManifest>({
   id: CURSOR_CLIENT_ID,
   displayName: CURSOR_DISPLAY_NAME,
-  install: [
-    { kind: "deeplink", source: "Membase dashboard → Add to Cursor" },
-    { kind: "config-file" },
-  ],
-  configFile: {
-    path: "~/.cursor/mcp.json",
-    format: "json",
-    key: "mcpServers.membase",
-  },
   manifest: {
     dir: ".cursor-plugin",
     template: ({ version }) => ({
@@ -69,7 +60,6 @@ export const cursorAgent = defineMcpHostAgent<CursorPluginManifest>({
       keywords: ["agent-memory", "context", "mcp", "cursor", "membase"],
     }),
   },
-  extras: ["rules", "skills", "assets"],
 });
 
 export function defineCursorRuntimeConfig(
