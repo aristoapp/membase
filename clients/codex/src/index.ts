@@ -45,31 +45,18 @@ export interface CodexConnectorArtifacts {
   mcp: McpConfigDocument;
 }
 
-/** ADR 0003 descriptor — Codex is packaging data over the shared MCP host agent. */
+/** Codex is packaging data over the shared MCP host agent. */
 export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
   id: CODEX_CLIENT_ID,
   displayName: CODEX_DISPLAY_NAME,
-  install: [
-    {
-      kind: "cli",
-      command: "codex mcp add membase --url https://mcp.membase.so/mcp",
-    },
-    { kind: "config-file" },
-  ],
-  configFile: {
-    path: "~/.codex/config.toml",
-    format: "toml",
-    key: "mcp_servers.membase",
-  },
   manifest: {
     dir: ".codex-plugin",
-    mcpConfigRef: CODEX_MCP_CONFIG_FILE,
     template: ({ version }) => ({
       // Codex requires a kebab-case plugin name.
       name: "membase",
       version,
       description:
-        "Connect Codex CLI to Membase context APIs for remember, search, task context, and forget actions.",
+        "Connect Codex CLI to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
       author: { ...MEMBASE_PUBLISHER },
       homepage: MEMBASE_HOMEPAGE,
       repository: MEMBASE_REPOSITORY,

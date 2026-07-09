@@ -187,15 +187,14 @@ OAuth prompt on first use:
 
 ## Tools
 
-Every connector exposes the same small, stable capability set — nothing about
+Every connector reaches the same hosted MCP tool set — nothing about
 Membase's internal memory engine leaks through:
 
-| Capability | What it does |
-| --- | --- |
-| `remember` | Save a memory or observation to your Membase store |
-| `search` | Retrieve the most relevant memories for a query |
-| `getContext` | Pull task-relevant context for the current work |
-| `deleteOrForget` | Remove or forget a memory |
+`add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` · `delete_wiki` · `get_current_date`
+
+Clients with native runtimes (Claude Code, OpenClaw, Hermes) add session
+handoff, profile, and login/status tools on top, plus the auto-capture and
+recall hooks described in each client's install guide.
 
 You won't call these directly — memory works through natural language, and the
 agent calls the tools for you:

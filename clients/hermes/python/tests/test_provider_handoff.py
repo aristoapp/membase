@@ -6,22 +6,12 @@ from __future__ import annotations
 
 import unittest
 from typing import Any
-from unittest import mock
 
 from membase_hermes.provider import TOOL_MEMBASE_HANDOFF, MembaseMemoryProvider
 
 
 class HandoffTestCase(unittest.TestCase):
-    def setUp(self) -> None:
-        # _success_text consults the update-check state (a live PyPI fetch plus
-        # a $HOME state file when unprimed); neutralize it so assertions are
-        # hermetic and order-independent.
-        patcher = mock.patch(
-            "membase_hermes.provider.consume_update_notice",
-            return_value=None,
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    pass
 
 
 def bundle(uuid: str, name: str, **episode: Any) -> dict[str, Any]:
@@ -35,9 +25,9 @@ class HandoffClient:
         self.ingested: list[dict[str, Any]] = []
         self.search_calls: list[dict[str, Any]] = []
         self.bundles = bundles if bundles is not None else [
-            bundle("u-old-1", "[HANDOFF] old one"),
-            bundle("u-noise", "we chose postgres"),
-            bundle("u-old-2", "[HANDOFF] old two"),
+            bundle("aaaaaaaa-0000-4000-8000-000000000001", "[HANDOFF] old one"),
+            bundle("aaaaaaaa-0000-4000-8000-00000000000f", "we chose postgres"),
+            bundle("aaaaaaaa-0000-4000-8000-000000000002", "[HANDOFF] old two"),
         ]
         # None = same bundles for every search; list = per-call results.
         self.bundles_per_call: list[list[dict[str, Any]]] | None = None
@@ -81,7 +71,7 @@ class HandoffStoreTests(HandoffTestCase):
         client = HandoffClient()
         # Summary-only tag lookalike must NOT be deleted (sweep is name-only).
         client.bundles.append(
-            {"episode": {"uuid": "u-lookalike", "name": "notes", "summary": "[HANDOFF] echoed"}},
+            {"episode": {"uuid": "aaaaaaaa-0000-4000-8000-0000000000aa", "name": "notes", "summary": "[HANDOFF] echoed"}},
         )
         provider = make_provider(client)
 
@@ -92,7 +82,7 @@ class HandoffStoreTests(HandoffTestCase):
 
         self.assertEqual(client.calls[0], "search")
         self.assertEqual(client.calls[1], "ingest")
-        self.assertEqual(sorted(client.deleted), ["u-old-1", "u-old-2"])
+        self.assertEqual(sorted(client.deleted), ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000002"])
         self.assertEqual(client.search_calls[0]["project"], "p")
         self.assertEqual(client.search_calls[0]["limit"], 20)
         self.assertTrue(client.ingested[0]["display_summary"].startswith("[HANDOFF] (p) "))
@@ -143,15 +133,15 @@ class HandoffStoreTests(HandoffTestCase):
     def test_unscoped_store_does_not_delete_project_scoped_handoffs(self) -> None:
         client = HandoffClient(
             bundles=[
-                bundle("u-scoped", "[HANDOFF] (proj) scoped"),
-                bundle("u-free", "[HANDOFF] unscoped"),
+                bundle("bbbbbbbb-0000-4000-8000-000000000001", "[HANDOFF] (proj) scoped"),
+                bundle("bbbbbbbb-0000-4000-8000-000000000002", "[HANDOFF] unscoped"),
             ],
         )
         provider = make_provider(client)
 
         result = provider.handle_tool_call(TOOL_MEMBASE_HANDOFF, {"mode": "store", "summary": "state"})
 
-        self.assertEqual(client.deleted, ["u-free"])
+        self.assertEqual(client.deleted, ["bbbbbbbb-0000-4000-8000-000000000002"])
         self.assertIn("replaced 1 older handoff(s)", result)
 
     def test_delete_failure_is_non_fatal_and_partially_counted(self) -> None:
@@ -194,7 +184,7 @@ class HandoffRecallTests(HandoffTestCase):
     def test_recall_picks_latest_by_time_over_relevance_order(self) -> None:
         client = HandoffClient(
             bundles=[
-                bundle("u-noise", "we chose postgres", valid_at="2026-07-06T00:00:00Z"),
+                bundle("aaaaaaaa-0000-4000-8000-00000000000f", "we chose postgres", valid_at="2026-07-06T00:00:00Z"),
                 bundle("u-old", "[HANDOFF] older state", valid_at="2026-07-01T00:00:00Z"),
                 bundle("u-untimed", "[HANDOFF] untimed state"),
                 bundle("u-new", "[HANDOFF] newest state", valid_at="2026-07-05T00:00:00Z"),
@@ -254,7 +244,7 @@ class HandoffRecallTests(HandoffTestCase):
         self.assertNotIn("[truncated]", result)
 
     def test_recall_without_any_handoff(self) -> None:
-        client = HandoffClient(bundles=[bundle("u-noise", "we chose postgres")])
+        client = HandoffClient(bundles=[bundle("aaaaaaaa-0000-4000-8000-00000000000f", "we chose postgres")])
         provider = make_provider(client)
 
         result = provider.handle_tool_call(TOOL_MEMBASE_HANDOFF, {"mode": "recall"})

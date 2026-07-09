@@ -70,6 +70,6 @@ test("recall hook neutralizes injection tags in memory text", async () => {
   expect(context.endsWith("</membase-context>")).toBe(true);
   expect(context).not.toContain("<system-reminder>");
   // Neutralized text survives (readable, tag inert).
-  expect(context).toContain("<​/membase-context>");
-  expect(context).toContain("<​system-reminder>");
+  expect(context).toContain("<\u200b/membase-context>");
+  expect(context).toContain("<\u200bsystem-reminder>");
 });

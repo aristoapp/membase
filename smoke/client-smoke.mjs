@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createPublicContractStub } from "./public-contract-stub.mjs";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FAKE_SECRET = "membase-smoke-secret-do-not-print";
@@ -50,8 +49,6 @@ const { validateConnectorConfig } = await importModule("packages/core/dist/index
 let checkedClients = 0;
 let declaredCommands = 0;
 
-await verifyPublicContractStub();
-
 for (const spec of clientSpecs) {
   const adapterModule = await importModule(spec.modulePath);
   const adapter = adapterModule[spec.adapterExport];
@@ -88,52 +85,6 @@ for (const spec of clientSpecs) {
 console.log(
   `Client smoke harness passed (${checkedClients} clients, ${declaredCommands} declared commands, ${executeCommands ? "executed" : "dry-run"}).`
 );
-
-async function verifyPublicContractStub() {
-  const client = createPublicContractStub();
-  const sentinel = "client smoke sentinel";
-  const remembered = await client.remember({
-    content: `Membase ${sentinel}`,
-    visibility: "private",
-    provenance: {
-      sourceSystem: "smoke",
-      sourceId: "client-smoke",
-      observedAt: "2026-06-28T00:00:00.000Z"
-    },
-    tags: ["smoke"]
-  });
-
-  assert(typeof remembered.id === "string", "remember did not return an id");
-
-  const searchResults = await client.search({
-    query: sentinel,
-    limit: 5
-  });
-  assert(
-    searchResults.some((result) => result.id === remembered.id),
-    "search did not return the remembered item"
-  );
-
-  const contextResults = await client.getContext({
-    task: "Validate Membase client smoke harness"
-  });
-  assert(
-    contextResults.some((result) => result.id === remembered.id),
-    "getContext did not return the remembered item"
-  );
-
-  const forgotten = await client.deleteOrForget({
-    memoryId: remembered.id,
-    reason: "smoke cleanup"
-  });
-  assert(forgotten.ok === true, "deleteOrForget did not confirm cleanup");
-
-  const afterDeleteResults = await client.search({
-    query: sentinel,
-    limit: 5
-  });
-  assert(afterDeleteResults.length === 0, "deleteOrForget left stale search results");
-}
 
 // Finalized transport model: Claude uses a bundled stdio server with only a
 // non-secret plugin flag; Cursor, Hermes, and OpenClaw use the remote HTTP MCP

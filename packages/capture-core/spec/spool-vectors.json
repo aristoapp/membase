@@ -1,5 +1,5 @@
 {
-  "$comment": "Language-neutral golden vectors binding the TS capture-core disk spool (packages/capture-core/src/spool.ts) and the Hermes Python port (clients/hermes/python/src/membase_hermes/spool.py), per ADR 0002 / ADR 0005. Both test suites consume this file so the on-disk contract — capture_id hashing and the enqueue drop rules — cannot drift between languages. The file-locking/retry mechanics are per-language and intentionally NOT vectorized. Content in capture_id cases is ALREADY sanitized (sanitize itself is covered by sanitize-vectors.json), so these isolate the hash computation.",
+  "$comment": "Language-neutral golden vectors binding the TS capture-core disk spool (packages/capture-core/src/spool.ts) and the Hermes Python port (clients/hermes/python/src/membase_hermes/spool.py). Both test suites consume this file so the on-disk contract — capture_id hashing and the enqueue drop rules — cannot drift between languages. The file-locking/retry mechanics are per-language and intentionally NOT vectorized. Content in capture_id cases is ALREADY sanitized (sanitize itself is covered by sanitize-vectors.json), so these isolate the hash computation.",
   "capture_id": {
     "$comment": "sha256(\"{session_id||'unknown'}:{capture_kind}:{sanitized_content}\") as lowercase hex. Verifies TS captureId and Python compute_capture_id agree byte-for-byte.",
     "cases": [
@@ -33,7 +33,7 @@
     ]
   },
   "dedupe": {
-    "$comment": "Enqueuing the same (session_id, capture_kind, content) twice keeps only the first; the second returns null.",
+    "$comment": "Enqueuing the same (session_id, capture_kind, content) twice keeps only the first; the second returns null. Consumed by the Python suite; the TS side covers dedupe behaviorally in spool.test.ts.",
     "session_id": "sess-dup",
     "capture_kind": "conversation",
     "content": "a duplicate capture enqueued twice",

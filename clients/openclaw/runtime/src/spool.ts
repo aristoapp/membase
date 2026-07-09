@@ -1,6 +1,6 @@
-// Failure-path capture spool for OpenClaw (ADR 0005 / DR-1).
+// Failure-path capture spool for OpenClaw.
 //
-// The normal capture path stays in-memory (hooks/capture.ts) — ADR 0002's
+// The normal capture path stays in-memory (hooks/capture.ts) — the shared
 // "don't force the disk abstraction on the long-lived gateway". This spool is
 // used ONLY when a live upload fails: instead of retaining the batch in RAM
 // (lost on gateway restart), enqueue it here so a later `membase dream` (or the
@@ -49,9 +49,10 @@ export function spoolFailedCapture(content: string, channelKey?: string): boolea
  * rename) and tracks sent ids, so a record is never uploaded twice.
  * Returns counts for the caller to report.
  */
+const FLUSH_BATCH_LIMIT = 50;
+
 export async function flushCaptureSpool(
   client: MembaseClient,
-  limit = 50,
 ): Promise<{ flushed: number; remaining: number }> {
   return getCaptureSpool().flushSpool(async (record) => {
     // ingest throws on non-ok HTTP (transport rejects any !response.ok), and an
@@ -63,7 +64,7 @@ export async function flushCaptureSpool(
       project: record.project,
     });
     if (result?.status === "error") return false;
-  }, limit);
+  }, FLUSH_BATCH_LIMIT);
 }
 
 /** For tests: drop the memoized instance so a new stateDir takes effect. */

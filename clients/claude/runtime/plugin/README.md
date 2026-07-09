@@ -48,7 +48,14 @@ The login flow uses browser OAuth. After login, verify the account shown by
 /membase:wiki add <title> -- <markdown>
 /membase:index-project
 /membase:project-config <slug|auto|off>
+/membase:dream
+/membase:handoff
 ```
+
+`/membase:dream` uploads local captures the cloud is missing (the capture
+spool) and optionally consolidates duplicated memories. `/membase:handoff`
+stores a session-state summary so the next session — in this or another
+client — picks up where this one left off.
 
 ## Configuration
 
@@ -101,5 +108,5 @@ fallback.
 ## Links
 
 - Membase: https://membase.so
-- Repository: https://github.com/aristoapp/claude-membase
+- Repository: https://github.com/aristoapp/membase-plugin-mcp
 - Support: support@membase.so

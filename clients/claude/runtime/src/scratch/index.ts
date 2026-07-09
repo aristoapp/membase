@@ -1,4 +1,4 @@
-// Per-session tool-observation scratch (dreaming v2). This is NOT the upload
+// Per-session tool-observation scratch. This is NOT the upload
 // spool: nothing here is ever a memory on its own. Each session appends its
 // meaningful tool observations to `scratch/<session_id>.jsonl` during the
 // session; at session end (or, for a session with no end event, the next
@@ -39,7 +39,7 @@ export const SCRATCH_IDLE_MS = 30 * 60 * 1000; // 30 minutes
 
 // A scratch file older than this is deleted on sweep even if it can't be
 // digested (corrupt/empty), so crash-orphans can't accumulate without bound.
-// ponytail: bounds the common crash-orphan case; a machine that turns capture
+// Bounds the common crash-orphan case; a machine that turns capture
 // off forever keeps at most its final summary-mode session's files (sweep runs
 // only in summary mode) — acceptable, not worth an unconditional prune pass.
 export const SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -48,7 +48,7 @@ export const SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // pathological 10k-tool run would otherwise accumulate megabytes that every
 // takeSession/sweep must read whole; the digest only ever shows the first
 // MAX_FILES/MAX_COMMANDS anyway, so older lines past the cap add nothing.
-// ponytail: fixed ceiling; a windowed ring buffer is overkill for a digest.
+// Fixed ceiling; a windowed ring buffer is overkill for a digest.
 export const SCRATCH_MAX_OBSERVATIONS = 2000;
 
 interface ScratchMeta {
@@ -187,7 +187,7 @@ function flatten(value: string): string {
 // one this call resolved — so a moved session appends a refreshed header rather
 // than staying pinned to its first project. Best-effort: any read error means
 // "assume unchanged" (don't spam headers on a transient failure).
-// ponytail: reads the scratch once per append to find the latest project/cwd.
+// Reads the scratch once per append to find the latest project/cwd.
 // One read per hook process (PostToolUse is its own process; a PostToolBatch
 // reads once per call) — same order as the digest read, and the file is capped
 // by overCap. A tail-only read is the upgrade if a huge-session profile flags it.

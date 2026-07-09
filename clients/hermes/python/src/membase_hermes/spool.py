@@ -1,7 +1,7 @@
-"""Failure-path capture spool for Hermes (ADR 0005 / DR-2).
+"""Failure-path capture spool for Hermes.
 
 Python port of the TS @membase/capture-core disk spool. The normal capture
-path stays in-memory (capture.py's worker queue) — ADR 0002's "don't force the
+path stays in-memory (capture.py's worker queue) — the shared design's "don't force the
 disk abstraction on the long-lived host". This spool is used ONLY when a live
 upload fails after retries: instead of dropping the batch (lost forever), it is
 written to disk so a later `hermes-membase dream` (or a startup drain) uploads
@@ -9,7 +9,7 @@ it.
 
 The on-disk contract — record schema and `capture_id` hashing — is bound to the
 TS spool by golden vectors (spec/spool-vectors.json), so the two languages can't
-silently drift (same mechanism as sanitize/handoff, ADR 0002). The file-locking
+silently drift (same mechanism as sanitize/handoff). The file-locking
 and retry mechanics are per-language by design and are not vectorized.
 """
 
@@ -285,7 +285,7 @@ class CaptureSpool:
                     {
                         **record,
                         "attempts": int(record.get("attempts", 0)) + 1,
-                        "last_error": str(error),
+                        "last_error": str(error)[:300],
                     }
                 )
                 continue

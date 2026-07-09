@@ -1,8 +1,8 @@
-// Disk-persisted capture spool (ADR 0002 / D1 slice 3).
+// Disk-persisted capture spool.
 //
 // Extracted from the Claude runtime. This design exists for hosts whose hook
 // handlers are SHORT-LIVED SPAWNED PROCESSES (Claude Code today, Cursor's
-// hooks.json processes in D3): captures must survive across invocations, so
+// hooks.json processes): captures must survive across invocations, so
 // the queue lives on disk with a lock file, crash-safe inflight handoff, and
 // a sent-id ledger for dedupe. Long-lived hosts (OpenClaw gateway, Hermes)
 // keep their in-process queues — this is deliberately NOT one abstraction
@@ -16,13 +16,12 @@ import {
   openSync,
   readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { truncateText } from "./index.js";
+import { writeTextAtomic } from "./token-store.js";
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 2_000;
@@ -175,14 +174,11 @@ export function createCaptureSpool(
   }
 
   function writeRecordsToPath(path: string, records: SpoolRecord[]): void {
-    const tmp = `${path}.tmp`;
-    writeFileSync(
-      tmp,
+    writeTextAtomic(
+      path,
       records.map((record) => JSON.stringify(record)).join("\n") +
         (records.length ? "\n" : ""),
-      { encoding: "utf-8", mode: 0o600 },
     );
-    renameSync(tmp, path);
   }
 
   function writeRecords(records: SpoolRecord[]): void {
@@ -217,13 +213,7 @@ export function createCaptureSpool(
 
   function writeSentIds(ids: Set<string>): void {
     const values = Array.from(ids).slice(-2000);
-    const path = sentPath();
-    const tmp = `${path}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(values, null, 2)}\n`, {
-      encoding: "utf-8",
-      mode: 0o600,
-    });
-    renameSync(tmp, path);
+    writeTextAtomic(sentPath(), `${JSON.stringify(values, null, 2)}\n`);
   }
 
   function inflightFiles(): string[] {
@@ -291,7 +281,11 @@ export function createCaptureSpool(
       }),
       capture_kind: record.capture_kind,
       content,
-      display_summary: record.display_summary ?? truncateText(content, 180),
+      // Caller-supplied display_summary is raw hook/tool text — sanitize it
+      // like content so secrets can't reach disk via the summary field.
+      display_summary: record.display_summary
+        ? options.sanitize(record.display_summary)
+        : truncateText(content, 180),
       project: record.project,
       metadata: record.metadata,
       created_at: new Date().toISOString(),
@@ -359,7 +353,14 @@ export function createCaptureSpool(
         failed.push({
           ...record,
           attempts: (record.attempts ?? 0) + 1,
-          last_error: error instanceof Error ? error.message : String(error),
+          // Uploader errors can echo response bodies; sanitize and clamp
+          // before persisting to disk.
+          last_error: truncateText(
+            options.sanitize(
+              error instanceof Error ? error.message : String(error),
+            ),
+            300,
+          ),
         });
       }
     }

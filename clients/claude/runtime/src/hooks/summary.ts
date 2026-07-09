@@ -1,8 +1,4 @@
-import {
-  looksSensitive,
-  sanitizeMembaseText,
-  truncateText,
-} from "../sanitize/index.js";
+import { looksSensitive, truncateText } from "../sanitize/index.js";
 
 const IMPORTANT_BASH_RE =
   /\b(bun|npm|pnpm|yarn|uv|pytest|cargo|go\s+test|make|docker|gcloud|vercel|wrangler|supabase|psql|prisma|drizzle|alembic|terraform|kubectl)\b|\bgit\s+(commit|merge|rebase|checkout|switch|push|pull|tag|reset|clean)\b|(?:^|\s)(rm|mv|cp|chmod|chown|mkdir|touch)\b/i;
@@ -13,13 +9,6 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : {};
-}
-
-// Only compact_summary flows through here today; sanitize the raw compact
-// summary for capture. (Kept as a named seam in case other kinds need
-// candidate shaping later.)
-export function buildSessionCaptureCandidate(raw: string): string {
-  return sanitizeMembaseText(raw);
 }
 
 // One structured observation drawn from a single tool call — the raw material

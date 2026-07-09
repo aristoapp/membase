@@ -10,6 +10,7 @@ const npmPackagePaths = [
   "packages/core/package.json",
   "packages/connector-sdk/package.json",
   "clients/claude/package.json",
+  "clients/codex/package.json",
   "clients/cursor/package.json",
   "clients/hermes/package.json",
   "clients/openclaw/package.json"
@@ -137,7 +138,7 @@ function assertNoUnexpectedVersionFields(relativePath) {
   const manifest = readJson(relativePath);
   if (manifest !== undefined && Object.hasOwn(manifest, "version")) {
     failures.push(
-      `${relativePath}: do not add a manifest version until OpenClaw version ownership is accepted`
+      `${relativePath}: the OpenClaw manifest intentionally carries no version field — the package.json is the version source`
     );
   }
 }

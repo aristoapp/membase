@@ -44,7 +44,7 @@ jobs:
 
       - run: pnpm check
 
-      # Runtime unit tests (copied in with the Group B runtimes). The parity
+      # Runtime unit tests. The parity
       # checks above are source-inspection only; these actually import and
       # exercise the runtimes.
       - name: Install Hermes runtime deps

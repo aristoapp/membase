@@ -1,7 +1,7 @@
 import type { MembaseClient } from "../client";
 import { formatBundles } from "../format";
 import type { OpenClawPluginApi } from "../types";
-import { toolResponse } from "../update-check";
+import { toolResponse } from "../tool-response";
 
 const MEMORY_SOURCES = [
   "cursor",

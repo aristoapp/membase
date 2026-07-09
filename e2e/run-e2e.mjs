@@ -103,7 +103,7 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const EXPECTED_RESOURCE_URIS = ["membase://profile", "membase://recent"];
 // The literal tag every client's handoff store/recall convention shares.
 const HANDOFF_TAG = "[HANDOFF]";
-// The client source values pillar-1 hook capture tags memories with.
+// The client source values hook capture tags memories with.
 const CAPTURE_SOURCES = ["cursor", "codex", "claude-code", "hermes", "openclaw"];
 
 // Tier 3 quality gates (env-tunable). Defaults sit well above observed staging
@@ -140,7 +140,7 @@ const unregisterCleanup = (sentinel) => {
 };
 
 // The API enforces a MONTHLY search quota on OAuth/MCP GET /memory/search
-// (free plan: 1000/month, apps/api config free_search_monthly_limit; Pro
+// (free plan: 1000/month; Pro
 // unlimited). Once the ci-e2e account exhausts it, every search returns 403
 // ("Monthly MCP/API search quota reached") until the period resets — which
 // this suite's 5s recall polls did on 2026-07-07 21:06 after Tier 3 started
@@ -673,7 +673,7 @@ async function evalFilters(entry, url, roles) {
 // tags a handoff with a literal "[HANDOFF]" prefix and, on recall, filters
 // search results by that prefix on the episode NAME/SUMMARY (the bundle does
 // not carry the raw content body). The backend derives the episode name from
-// display_summary (graph_sync build_safe_episode_name), so the tag MUST be
+// display_summary (a server-side behavior), so the tag MUST be
 // placed on display_summary — not just the content — or recall silently finds
 // nothing. This test asserts that contract end-to-end against the live REST
 // path the runtime actually uses. Runs once per endpoint under --tier3.
@@ -756,8 +756,8 @@ async function evalHandoff(entry) {
 // only proves store+recall, never that a second store deletes the first.
 // That gap existed because the MCP tool surface has no delete tool (see
 // evalNegative/evalLiveDeep's "forget" warnings) — but the runtime's real
-// delete path is a REST call, `DELETE /memory/episodes/{episode_uuid}`
-// (apps/api/src/api/routes/memory.py), the same one Claude/OpenClaw/Hermes's
+// delete path is a REST call, `DELETE /memory/episodes/{episode_uuid}`,
+// the same one Claude/OpenClaw/Hermes's
 // deleteEpisode/deleteMemory call. This test drives that exact contract:
 // ingest A -> search finds A's episode.uuid -> DELETE that uuid -> ingest B
 // (replacement) -> search confirms A is gone and B is present. Scoped to a

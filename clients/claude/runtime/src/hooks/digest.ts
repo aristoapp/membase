@@ -1,4 +1,4 @@
-// Session digest builder (dreaming v2). One digest per session, aggregated
+// Session digest builder. One digest per session, aggregated
 // from the tool observations spooled to the per-session scratch during the
 // session — replacing the old per-tool-batch upload that produced dozens of
 // contentless "used N tool(s)" memories. Privacy boundary is unchanged: only

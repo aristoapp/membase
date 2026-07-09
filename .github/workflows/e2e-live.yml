@@ -23,8 +23,8 @@ jobs:
           node-version: 22
 
       # Auth (preferred): MEMBASE_SERVICE_CLIENT_ID/SECRET — static
-      # client_credentials service credentials (aristoapp/membase#318),
-      # provisioned via apps/api/scripts/create_service_client.py. No
+      # client_credentials service credentials,
+      # provisioned by a Membase backend admin. No
       # rotation, no PAT needed; revoke by deleting the service client.
       #
       # Fallback: MEMBASE_MCP_REFRESH_TOKEN/MEMBASE_MCP_CLIENT_ID refresh

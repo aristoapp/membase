@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for taking the time to file a bug! Please **do not include
         secrets, tokens, or private memory content** in this report. For
-        security issues, see [SECURITY.md](../blob/main/SECURITY.md) instead.
+        security issues, see [SECURITY.md](https://github.com/aristoapp/membase-plugin-mcp/blob/main/SECURITY.md) instead.
   - type: dropdown
     id: client
     attributes:

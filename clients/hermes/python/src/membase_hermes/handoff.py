@@ -7,6 +7,9 @@ Every client agrees on one literal tag, one display-summary rule, and one
 from __future__ import annotations
 
 import re
+import time
+
+import re
 from typing import Any, Callable
 
 from .format import _episode, _parse_datetime
@@ -59,7 +62,8 @@ def is_handoff_memory(text: str) -> bool:
 def _episode_time(bundle: dict[str, Any]) -> float | None:
     """Event/capture time, or None when missing/unparseable ("unknown", not
     "oldest" — an epoch-0 default would let an older timestamped handoff beat
-    an actually-newer untimed one)."""
+    an actually-newer untimed one). Clamped to now: a far-future valid_at
+    (plantable via any ingestion path) must not permanently win "latest"."""
     episode = _episode(bundle)
     raw = episode.get("valid_at")
     if raw is None:
@@ -67,7 +71,9 @@ def _episode_time(bundle: dict[str, Any]) -> float | None:
     if not isinstance(raw, str) or not raw:
         return None
     parsed = _parse_datetime(raw)
-    return parsed.timestamp() if parsed else None
+    if not parsed:
+        return None
+    return min(parsed.timestamp(), time.time())
 
 
 def pick_latest_handoff(bundles: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -127,12 +133,14 @@ def sweep_replaced_handoffs(
     """Delete the replaceable old handoffs; per-uuid failures are non-fatal
     (leftovers are swept by the next successful store). Returns how many were
     actually deleted."""
-    # ponytail: sequential deletes (batch is capped at 10); parallelize if the
+    # Sequential deletes (batch is capped at 10); parallelize if the
     # sweep ever becomes latency-critical.
     deleted = 0
     for bundle in select_replaceable_handoffs(bundles, project_scoped=project_scoped):
         uuid = str(_episode(bundle).get("uuid") or "").strip()
-        if not uuid:
+        # Server-supplied uuids feed an authenticated DELETE; require uuid
+        # shape so a crafted value can't redirect the request path.
+        if not re.fullmatch(r"[0-9a-f-]{32,36}", uuid, re.IGNORECASE):
             continue
         try:
             delete_episode(uuid)
