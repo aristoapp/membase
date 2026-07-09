@@ -31,6 +31,7 @@ details are exposed.
 pnpm --filter @membase/client-openclaw typecheck
 pnpm --filter @membase/client-openclaw build
 pnpm openclaw:native-parity   # typecheck + build gate; verifies the built entrypoint imports
+pnpm openclaw:native-artifacts # verifies clients/openclaw/native-artifacts.json snapshot
 pnpm public-surface           # ensures no internal Membase terms leak
 ```
 

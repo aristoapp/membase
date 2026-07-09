@@ -50,6 +50,12 @@ you:
 `add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` ·
 `delete_wiki` · `get_current_date`
 
+## For contributors
+
+`clients/openclaw/native-artifacts.json` is the review-only snapshot of the
+OpenClaw-native plugin files; `pnpm openclaw:native-artifacts` asserts it stays
+in sync with the runtime under `clients/openclaw`.
+
 ## Help
 
 - Membase docs — https://docs.membase.so

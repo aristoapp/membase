@@ -38,6 +38,13 @@ directly, Claude uses them for you:
 `add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` ·
 `delete_wiki` · `get_current_date`
 
+## For contributors
+
+`clients/claude/native-artifacts.json` is the review-only snapshot of the
+old Claude command, hook, and skill files now copied into
+`clients/claude/runtime`. `pnpm claude:native-artifacts` asserts the two stay
+in sync.
+
 ## Help
 
 - Membase docs — https://docs.membase.so

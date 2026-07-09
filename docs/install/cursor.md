@@ -50,6 +50,12 @@ Behind the scenes Membase gives Cursor these tools — Cursor calls them for you
 Real-time auto-capture and session handoff are available through Cursor hooks —
 see [clients/cursor](../../clients/cursor).
 
+## For contributors
+
+`pnpm cursor:transport-parity` verifies that Cursor's remote HTTP MCP config
+here matches the finalized `https://mcp.membase.so/mcp` transport and stays on
+the public connector surface.
+
 ## Help
 
 - Membase docs — https://docs.membase.so

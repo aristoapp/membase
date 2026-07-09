@@ -40,8 +40,14 @@ details are exposed.
 ```bash
 pnpm --filter @membase/client-claude typecheck
 pnpm claude:plugin-parity     # validates the plugin manifest with the Claude Code CLI
+pnpm claude:native-artifacts  # verifies clients/claude/native-artifacts.json snapshot
 pnpm public-surface           # ensures no internal Membase terms leak
 ```
+
+`pnpm claude:native-artifacts` verifies that
+`clients/claude/native-artifacts.json` — the review-only snapshot of the old
+Claude command, hook, and skill files — matches the runtime copied in under
+`clients/claude/runtime`.
 
 Plugin metadata lives in `.claude-plugin/plugin.json`; the plugin-local MCP
 config lives in `.mcp.json`. Both are generated — edit the adapter in

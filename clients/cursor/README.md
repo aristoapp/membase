@@ -33,6 +33,7 @@ details are exposed.
 ```bash
 pnpm --filter @membase/client-cursor typecheck
 pnpm cursor:transport-parity   # ensures the HTTP MCP endpoint stays the primary transport
+pnpm cursor:native-artifacts   # verifies clients/cursor/native-artifacts.json snapshot
 pnpm public-surface            # ensures no internal Membase terms leak
 ```
 

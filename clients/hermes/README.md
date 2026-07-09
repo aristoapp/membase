@@ -30,6 +30,7 @@ details are exposed.
 ```bash
 pnpm --filter @membase/client-hermes typecheck
 pnpm hermes:python-parity   # validates the Python package + provider boundary
+pnpm hermes:native-artifacts # verifies clients/hermes/native-artifacts.json snapshot
 pnpm public-surface         # ensures no internal Membase terms leak
 ```
 
