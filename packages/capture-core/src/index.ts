@@ -5,8 +5,8 @@
 // primitives; host-specific behavior (extra strip patterns, keyword lists,
 // empty-input policy) stays in each runtime as explicit parameters, so this
 // extraction changes NO runtime behavior. Divergences that look accidental
-// are documented at the parameter site; the divergences are deliberate,
-// preserved until the rule sets are reconciled.
+// are documented at the parameter site and preserved deliberately until the
+// rule sets are reconciled.
 //
 // The language-neutral golden vectors in ../spec/sanitize-vectors.json bind
 // this module and the Hermes Python port to the same semantics; both test

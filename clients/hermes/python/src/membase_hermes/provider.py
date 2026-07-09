@@ -820,6 +820,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         return "Membase is disconnected. Run 'hermes membase login'."
 
     def _success_text(self, text: str) -> str:
+        """Single seam for decorating successful tool responses."""
         return text
 
     def _profile_text(self, client: MembaseClient) -> str:
