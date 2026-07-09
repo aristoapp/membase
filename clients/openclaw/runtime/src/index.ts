@@ -106,7 +106,7 @@ export default {
         try {
           writeTokenFile(effectiveTokenFile, oldTokens);
           api.logger.info(
-            `membase: moved token file from extensions/ to credentials/ (safe from updates)`,
+            "membase: moved token file from extensions/ to credentials/ (safe from updates)",
           );
         } catch (err) {
           api.logger.error(

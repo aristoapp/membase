@@ -1,8 +1,7 @@
 # Architecture
 
-The accepted architecture decision is
-[`docs/adr/0001-integrated-connector-repo.md`](adr/0001-integrated-connector-repo.md).
-This document summarizes the resulting shape.
+This document describes the repo's shape and records the design decisions
+behind it.
 
 ## Positioning
 
@@ -51,7 +50,8 @@ Each client adapter defines:
 
 ## Repo Boundary
 
-Shared behavior belongs in `packages/core` and `packages/connector-sdk`.
+Shared behavior belongs in `packages/core`, `packages/connector-sdk`, and
+`packages/capture-core`.
 Client-specific behavior belongs in `clients/{claude,cursor,codex,hermes,openclaw}`.
 Generated or canonical examples belong in `manifests/`.
 
@@ -65,7 +65,12 @@ Membase storage, ranking, graph, embedding, or governance internals.
 receives a `ConnectorRuntimeConfig`, emits a client manifest or MCP config, and
 declares smoke-test commands. Config-only MCP hosts can be added as a
 `defineMcpHostAgent()` descriptor rather than a hand-written adapter (see
-[ADR 0003](adr/0003-agents-as-descriptors.md)).
+[Design decisions](#descriptors-not-adapters-for-config-only-hosts)).
+
+`packages/capture-core` owns the shared client-side capture runtime: secret
+sanitize, capture kinds, the disk spool, buffering/retry, recall assembly, and
+the OAuth-refreshing HTTP transport (see
+[Design decisions](#shared-capture-core-per-host-adapters)).
 
 ## Client Adapters
 
@@ -80,6 +85,68 @@ declares smoke-test commands. Config-only MCP hosts can be added as a
   generates a shared MCP config example for Hermes config translation.
 - **OpenClaw** (`clients/openclaw`) — ships a native TypeScript extension
   entrypoint and generates a shared MCP config example.
+
+## Design decisions
+
+The durable decisions that shaped the repo. Source comments cite them by
+number from the retired internal decision log:
+
+- **ADR 0001** → [Boundary](#boundary) and
+  [Public Capability Contract](#public-capability-contract) above
+- **ADR 0002** → [Shared capture core](#shared-capture-core-per-host-adapters)
+  and [Two languages, one behavior](#two-languages-one-behavior)
+- **ADR 0003** → [Descriptors, not adapters](#descriptors-not-adapters-for-config-only-hosts)
+- **ADR 0005** → [Failure-path spool and dreaming](#failure-path-spool-and-dreaming)
+
+### Shared capture core, per-host adapters
+
+Client-side capture logic is split by "what" vs "when". `packages/capture-core`
+owns the WHAT: sanitize, capture kinds, spool, buffering/retry, recall
+assembly, and the OAuth transport. Each client keeps a thin adapter that owns
+only the WHEN — registering for its host's events (Claude/Cursor spawned hook
+processes, OpenClaw gateway events, Hermes provider callbacks) and translating
+payloads. Adapters carry no business logic; shared behavior is pushed down
+into the core, never merged sideways between adapters.
+
+Buffering shape stays per-host: Claude/Cursor/Codex hooks are short-lived
+spawned processes and need the disk-persisted, file-locked spool; OpenClaw is
+a long-lived gateway and buffers in memory; Hermes uses a bounded worker
+queue. These are deliberate shapes fitting three host lifetimes, not
+accidental duplication — one abstraction is not forced over them.
+
+### Two languages, one behavior
+
+Hosts dictate languages: OpenClaw loads TypeScript in-process, Hermes loads
+Python in-process. The shared core is therefore TypeScript, and Hermes keeps a
+minimal Python shim. The two languages are bound by golden vectors:
+`packages/capture-core/spec/*.json` holds language-neutral fixtures (sanitize
+inputs → redacted outputs, spool semantics, handoff tags), and the TS and
+Python test suites consume the same files, so behavioral drift fails CI
+instead of surfacing as a per-client bug later.
+
+Two things always stay client-side, in both languages: **sanitize** (secrets
+must be filtered before data leaves the machine) and the **offline spool** (a
+server cannot buffer for a client that is offline).
+
+### Descriptors, not adapters, for config-only hosts
+
+Separate what *behaves* differently; collapse into data what only *differs in
+data*. Runtime clients (Claude Code, OpenClaw, Hermes) have real client-side
+behavior and keep per-client runtimes. Config-only MCP hosts (Cursor, Codex)
+differ only in packaging data — config file path and format, install command —
+so each is a `defineMcpHostAgent()` descriptor rendered by one shared
+implementation, not a hand-written adapter.
+
+### Failure-path spool and dreaming
+
+Capture is RAM-first; disk is strictly the failure fallback. When a live
+upload fails, the record is written to the disk spool instead of being
+retained in RAM or dropped, so a process restart cannot lose it. The `dream`
+command flushes that spool. Flushing follows a claim/rename discipline (rename
+`pending.jsonl` before uploading) so two concurrent flushers cannot send the
+same record, and secret-looking records are reported to the user — never
+uploaded, never silently deleted. Dreaming is flush-only; sweep/consolidation
+is deliberately out of scope.
 
 ## Verification
 

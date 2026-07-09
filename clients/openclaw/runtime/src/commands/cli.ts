@@ -768,10 +768,9 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
               return;
             }
             api.logger.info(
-              `Dream complete: uploaded ${flushed} capture(s)` +
-                (remaining > 0
+              `Dream complete: uploaded ${flushed} capture(s)${remaining > 0
                   ? `, ${remaining} still pending (run 'membase dream' again to retry).`
-                  : "."),
+                  : "."}`,
             );
           } catch (error) {
             api.logger.error(

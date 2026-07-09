@@ -51,7 +51,7 @@ export function defineClaudeRuntimeConfig(
     client: {
       id: CLAUDE_CLIENT_ID,
       displayName: CLAUDE_DISPLAY_NAME,
-      version: version ?? "0.0.0"
+      version: version ?? "0.1.0"
     }
   });
 }
@@ -63,7 +63,7 @@ export function generateClaudePluginManifest(
     name: "membase",
     description:
       "Connect Claude Code to Membase context APIs for remember, search, task context, and forget actions.",
-    version: config.client.version ?? "0.0.0",
+    version: config.client.version ?? "0.1.0",
     author: {
       name: "Membase",
       url: "https://membase.so"

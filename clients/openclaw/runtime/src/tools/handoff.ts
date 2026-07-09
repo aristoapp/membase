@@ -101,9 +101,7 @@ export function registerHandoffTool(
           // Echo the stored summary so the user sees the handoff directly, as
           // the tool description promises.
           return await toolResponse(
-            `Handoff stored in Membase (${result.status})` +
-              (replaced ? `; replaced ${replaced} older handoff(s).` : ".") +
-              `\n\n${params.summary.trim()}`,
+            `Handoff stored in Membase (${result.status})${replaced ? `; replaced ${replaced} older handoff(s).` : "."}\n\n${params.summary.trim()}`,
           );
         }
 

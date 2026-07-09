@@ -187,7 +187,7 @@ export async function consumeUpdateFooter(
   const now = deps.now?.() ?? new Date();
 
   const state = await load();
-  if (!state || !state.latest_version) return null;
+  if (!state?.latest_version) return null;
   if (state.current_version !== current) return null;
   if (!isNewerVersion(state.latest_version, current)) return null;
   if (isSameUtcDay(state.shown_at, now)) return null;
@@ -204,9 +204,7 @@ export async function consumeUpdateFooter(
 
 export function buildFooter(current: string, latest: string): string {
   return (
-    "\n\n---\n" +
-    `Membase plugin update available: ${current} → ${latest}\n` +
-    "Run: openclaw plugins update openclaw-membase"
+    `\n\n---\nMembase plugin update available: ${current} → ${latest}\nRun: openclaw plugins update openclaw-membase`
   );
 }
 

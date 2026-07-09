@@ -184,8 +184,7 @@ const restFetch = (path, init) =>
     },
   });
 const restSearch = async (query, project) => {
-  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles` +
-    (project ? `&project=${encodeURIComponent(project)}` : "");
+  const qs = `query=${encodeURIComponent(query)}&limit=20&format=bundles${project ? `&project=${encodeURIComponent(project)}` : ""}`;
   const res = await restFetch(`/memory/search?${qs}`);
   if (res.status >= 400) {
     noteQuota(await res.text(), res.status);
@@ -750,7 +749,7 @@ async function evalHandoff(entry) {
 }
 
 // ---------- Tier 3: handoff replace-on-store (REST ingest/search/delete) ----------
-// North-star pillar 2 policy (exactly ONE handoff per project — replace-on-
+// Handoff policy (exactly ONE per project — replace-on-
 // store, see packages/capture-core/src/handoff.ts's sweepReplacedHandoffs):
 // storing a new [HANDOFF] must search for the prior one, then DELETE it. This
 // is the one piece of that contract evalHandoff (above) never exercises — it
@@ -878,7 +877,7 @@ async function evalHandoffReplace(entry) {
 }
 
 // ---------- Tier 3: hook-capture source tagging (REST ingest, per client) ----------
-// North-star pillar 1 (hook-based passive capture): every client's hook
+// Hook-based passive capture: every client's hook
 // eventually flushes its spool via a real POST to the same REST ingest
 // endpoint this harness already drives (packages/capture-core/src/spool.ts
 // flushSpool -> client.ingest). This suite cannot fire an actual hook process
@@ -887,9 +886,8 @@ async function evalHandoffReplace(entry) {
 // tagged with a given client's `source` is accepted, and `sources=[...]`
 // filtering actually isolates one client's captures from another's. If this
 // contract breaks, every client's hook capture breaks silently right along
-// with it, so it is the highest-leverage piece of pillar 1 a network-only
-// harness can verify. Client-side hook firing itself needs a live per-app
-// run (see docs/implementation-overview.html §7.5-style gap notes).
+// with it, so it is the highest-leverage piece of hook capture a network-only
+// harness can verify. Client-side hook firing itself needs a live per-app run.
 async function evalCaptureSourceTags(entry) {
   const stamp = Date.now();
   const project = `e2e-capture-src-${stamp}`;

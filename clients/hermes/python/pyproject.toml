@@ -4,8 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-membase"
-version = "0.0.0"
+version = "0.1.0"
 description = "Membase memory provider package for Hermes Agent"
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -36,6 +36,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # claude:bundle-provenance (inside pnpm check) rebuilds the plugin
+      # bundles with bun and diffs them against the committed files.
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm lint
+
       - run: pnpm check
 
       # Runtime unit tests (copied in with the Group B runtimes). The parity
@@ -45,8 +51,6 @@ jobs:
         run: python3 -m pip install httpx pyyaml
 
       - run: pnpm hermes:test
-
-      - uses: oven-sh/setup-bun@v2
 
       - run: pnpm openclaw:runtime-test
 
@@ -85,8 +89,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
-      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+      MEMBASE_AUTH_BASE: ${{ vars.MEMBASE_STAGING_AUTH_BASE }}
+      MEMBASE_MCP_URL: ${{ vars.MEMBASE_STAGING_MCP_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -129,8 +133,8 @@ jobs:
     # with zero diagnostics.
     timeout-minutes: 15
     env:
-      MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
-      MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
+      MEMBASE_AUTH_BASE: ${{ vars.MEMBASE_STAGING_AUTH_BASE }}
+      MEMBASE_MCP_URL: ${{ vars.MEMBASE_STAGING_MCP_URL }}
     steps:
       - uses: actions/checkout@v4
 
