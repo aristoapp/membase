@@ -28,3 +28,4 @@ repomix*.md
 # iCloud-synced folders and must never be committed
 * 2
 * 2.*
+uv.lock
