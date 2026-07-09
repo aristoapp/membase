@@ -388,7 +388,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             for doc in wiki_docs:
                 if not isinstance(doc, dict):
                     continue
-                title = str(doc.get("title", "") or "").strip()
+                title = sanitize_membase_text(str(doc.get("title", "") or "")).strip()
                 content = sanitize_membase_text(str(doc.get("content", "") or ""))
                 line = f"- {title}: {content[:180]}".strip(": ")
                 if not line or used + len(line) > budget:

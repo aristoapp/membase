@@ -53,15 +53,19 @@ export function isCasualChat(
 
 export const MEMBASE_CONTEXT_BLOCK_RE =
   /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+export const MEMBASE_HANDOFF_BLOCK_RE =
+  /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
 export const METADATA_BLOCK_RE =
   /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
 export const SIMPLE_TAG_RE = /<\/?final>/gi;
 export const CODE_BLOCK_RE = /```[\s\S]*?```/g;
 
-/** Remove injected membase context, untrusted metadata blocks, and tags. */
+/** Remove injected membase context/handoff, untrusted metadata blocks, and
+ * tags — so harness-injected blocks aren't re-captured as memories. */
 export function stripContextBlocks(text: string): string {
   return text
     .replace(MEMBASE_CONTEXT_BLOCK_RE, " ")
+    .replace(MEMBASE_HANDOFF_BLOCK_RE, " ")
     .replace(METADATA_BLOCK_RE, " ")
     .replace(SIMPLE_TAG_RE, " ");
 }

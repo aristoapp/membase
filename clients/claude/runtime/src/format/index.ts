@@ -8,6 +8,10 @@ export interface RecallMemoryGroup {
   capped?: boolean;
 }
 
+// Memory/wiki text is untrusted (it can arrive via Slack/Gmail/other-client
+// captures), so every formatter neutralizes block/control tags before its
+// output reaches model context — tool results and resources included, not
+// just the recall hook.
 export function formatBundle(bundle: EpisodeBundle, index: number): string {
   const episode = bundle.episode;
   const score =
@@ -26,9 +30,11 @@ export function formatBundle(bundle: EpisodeBundle, index: number): string {
   const summary = episode.summary
     ? `   summary: ${truncateText(episode.summary, 240)}`
     : "";
-  return [header, summary, facts ? `   related facts:\n${facts}` : ""]
-    .filter(Boolean)
-    .join("\n");
+  return neutralizeInjection(
+    [header, summary, facts ? `   related facts:\n${facts}` : ""]
+      .filter(Boolean)
+      .join("\n"),
+  );
 }
 
 export function formatMemorySearchResults(
@@ -68,11 +74,13 @@ export function formatWikiDocument(doc: WikiDocument, index: number): string {
   const collection = doc.collection_name
     ? ` collection=${doc.collection_name}`
     : "";
-  return [
-    `${index + 1}. ${truncateText(doc.title, 180)}${score}${collection}`,
-    `   id: ${doc.id}`,
-    `   ${truncateText(doc.content, 700)}`,
-  ].join("\n");
+  return neutralizeInjection(
+    [
+      `${index + 1}. ${truncateText(doc.title, 180)}${score}${collection}`,
+      `   id: ${doc.id}`,
+      `   ${truncateText(doc.content, 700)}`,
+    ].join("\n"),
+  );
 }
 
 export function buildRecallContext(

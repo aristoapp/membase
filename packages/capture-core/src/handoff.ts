@@ -184,18 +184,20 @@ export function isHandoffFresh(storedAtMs: number, nowMs?: number): boolean {
 }
 
 // Untrusted memory/handoff text is interpolated into harness-injected blocks
-// (<membase-handoff>, <membase-context>) and can come from low-trust sources —
-// a checked-in repo file, Slack/Gmail ingestion, another client's captures —
-// so it must not be able to close a block early or forge a hook control tag.
-// Neutralize the block delimiters and the harness's system-reminder tag by
-// inserting a zero-width space; the text stays readable, the tags inert.
-// Applied at render time (every client's recall/handoff renderer calls this)
-// so write-time gaps in other ingestion paths can't bypass it.
+// (<membase-handoff>, <membase-context>, <membase-session>, …) and can come
+// from low-trust sources — a checked-in repo file, Slack/Gmail ingestion,
+// another client's captures — so it must not be able to close a block early
+// or forge a hook control tag. Neutralize every membase-* tag plus the
+// harness's system-reminder tag by inserting a zero-width space (U+200B);
+// the text stays readable, the tags inert. Idempotent: a neutralized tag no
+// longer matches. Applied at render time (every client's memory/wiki/handoff
+// renderer calls this) so write-time gaps in other ingestion paths can't
+// bypass it.
 // Golden-vector-bound to the Hermes Python port (spec/sanitize-vectors.json).
 export function neutralizeInjection(text: string): string {
   return text.replace(
-    /<\/?(membase-handoff|membase-context|system-reminder)\b/gi,
-    (m) => `${m[0]}​${m.slice(1)}`,
+    /<\/?(membase-[a-z-]+|system-reminder)\b/gi,
+    (m) => `${m[0]}\u200b${m.slice(1)}`,
   );
 }
 

@@ -1,3 +1,4 @@
+import { neutralizeInjection } from "@membase/capture-core";
 import type { EpisodeBundle, WikiSearchDocument } from "./types";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -98,7 +99,9 @@ export function formatBundle(
     lines.push(`   Facts: ${facts.join("; ")}`);
   }
 
-  return lines.join("\n");
+  // Memory text is untrusted (Slack/Gmail/other-client captures); neutralize
+  // block/control tags before it reaches model context via any tool result.
+  return neutralizeInjection(lines.join("\n"));
 }
 
 export function formatBundles(bundles: EpisodeBundle[]): string {
@@ -134,7 +137,7 @@ export function formatProfile(
       fields.push(`- Instructions: ${profile.instructions}`);
 
     if (fields.length > 0) {
-      sections.push(`## User Profile\n${fields.join("\n")}`);
+      sections.push(neutralizeInjection(`## User Profile\n${fields.join("\n")}`));
     }
   }
 
@@ -173,7 +176,9 @@ export function formatWikiDocument(
   if (doc.content) {
     lines.push(`   ${doc.content}`);
   }
-  return lines.join("\n");
+  // Wiki documents are remotely writable long-form storage — neutralize like
+  // memory text.
+  return neutralizeInjection(lines.join("\n"));
 }
 
 export function formatWikiDocuments(documents: WikiSearchDocument[]): string {

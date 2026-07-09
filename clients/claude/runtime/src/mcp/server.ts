@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { neutralizeInjection } from "@membase/capture-core";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -618,7 +619,7 @@ async function main(): Promise<void> {
       const lines = ["# Membase Recent Memories", ""];
       for (const [index, item] of recent.entries()) {
         lines.push(
-          `${index + 1}. ${truncateText(item.episode.summary || item.episode.name, 240)}`,
+          `${index + 1}. ${neutralizeInjection(truncateText(item.episode.summary || item.episode.name, 240))}`,
         );
       }
       return {

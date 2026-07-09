@@ -21,6 +21,7 @@ from membase_hermes.sanitize import (
     SIMPLE_TAG_RE,
     is_casual_chat,
     neutralize_injection,
+    MEMBASE_HANDOFF_BLOCK_RE,
     sanitize_membase_text,
 )
 
@@ -52,7 +53,10 @@ class SanitizeVectorTests(unittest.TestCase):
             got = SIMPLE_TAG_RE.sub(
                 " ",
                 METADATA_BLOCK_RE.sub(
-                    " ", MEMBASE_CONTEXT_BLOCK_RE.sub(" ", case["in"])
+                    " ",
+                    MEMBASE_HANDOFF_BLOCK_RE.sub(
+                        " ", MEMBASE_CONTEXT_BLOCK_RE.sub(" ", case["in"])
+                    ),
                 ),
             )
             self.assertEqual(got, case["out"], case["in"])

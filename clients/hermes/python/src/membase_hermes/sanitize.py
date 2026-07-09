@@ -51,6 +51,7 @@ METADATA_BLOCK_RE = re.compile(
     re.IGNORECASE,
 )
 MEMBASE_CONTEXT_BLOCK_RE = re.compile(r"<membase-context>[\s\S]*?</membase-context>\s*", re.IGNORECASE)
+MEMBASE_HANDOFF_BLOCK_RE = re.compile(r"<membase-handoff\b[^>]*>[\s\S]*?</membase-handoff>\s*", re.IGNORECASE)
 SIMPLE_TAG_RE = re.compile(r"</?final>", re.IGNORECASE)
 OPENCLAW_TIMESTAMP_PREFIX_RE = re.compile(
     r"^\[[A-Za-z]{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+GMT[+-]\d+\]\s*",
@@ -62,7 +63,7 @@ SECRET_ASSIGNMENT_RE = re.compile(
 )
 CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")
 INJECTION_TAG_RE = re.compile(
-    r"</?(membase-handoff|membase-context|system-reminder)\b",
+    r"</?(membase-[a-z-]+|system-reminder)\b",
     re.IGNORECASE,
 )
 
@@ -92,16 +93,18 @@ def neutralize_injection(text: str) -> str:
     """Port of capture-core's neutralizeInjection (golden-vector-bound).
 
     Untrusted memory text interpolated into a <membase-context> block must not
-    be able to close the block early or forge a system-reminder tag. A
-    zero-width space after "<" keeps the text readable but the tag inert.
+    be able to close the block early or forge a membase-*/system-reminder tag.
+    A zero-width space (U+200B) after "<" keeps the text readable but the tag
+    inert; idempotent because a neutralized tag no longer matches.
     """
-    return INJECTION_TAG_RE.sub(lambda m: m.group(0)[0] + "​" + m.group(0)[1:], text)
+    return INJECTION_TAG_RE.sub(lambda m: m.group(0)[0] + "\u200b" + m.group(0)[1:], text)
 
 
 def sanitize_membase_text(raw: str) -> str:
     cleaned = raw
     cleaned = OPENCLAW_TIMESTAMP_PREFIX_RE.sub(" ", cleaned)
     cleaned = MEMBASE_CONTEXT_BLOCK_RE.sub(" ", cleaned)
+    cleaned = MEMBASE_HANDOFF_BLOCK_RE.sub(" ", cleaned)
     cleaned = METADATA_BLOCK_RE.sub(" ", cleaned)
     cleaned = SIMPLE_TAG_RE.sub(" ", cleaned)
     # Pair-removal above misses standalone/unbalanced tags; neutralize the

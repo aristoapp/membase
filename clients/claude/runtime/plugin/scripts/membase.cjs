@@ -340,13 +340,20 @@ function createTokenStore(options) {
 
 // ../../../packages/capture-core/src/handoff.ts
 var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+function neutralizeInjection(text) {
+  return text.replace(
+    /<\/?(membase-[a-z-]+|system-reminder)\b/gi,
+    (m) => `${m[0]}\u200B${m.slice(1)}`
+  );
+}
 
 // ../../../packages/capture-core/src/index.ts
 var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+var MEMBASE_HANDOFF_BLOCK_RE = /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
 var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
 var SIMPLE_TAG_RE = /<\/?final>/gi;
 function stripContextBlocks(text) {
-  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
+  return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(MEMBASE_HANDOFF_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
 }
 function normalizeLines(text, dropLine) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
@@ -963,17 +970,21 @@ function formatBundle(bundle, index) {
   const facts = (bundle.edges ?? []).map((edge) => edge.fact).filter((fact) => Boolean(fact)).slice(0, 3).map((fact) => `    - ${truncateText2(fact, 180)}`).join("\n");
   const header = `${index + 1}. ${truncateText2(episode.name || episode.summary || "Memory", 180)}${score}${source}${when ? ` at=${when}` : ""}`;
   const summary = episode.summary ? `   summary: ${truncateText2(episode.summary, 240)}` : "";
-  return [header, summary, facts ? `   related facts:
-${facts}` : ""].filter(Boolean).join("\n");
+  return neutralizeInjection(
+    [header, summary, facts ? `   related facts:
+${facts}` : ""].filter(Boolean).join("\n")
+  );
 }
 function formatWikiDocument(doc, index) {
   const score = typeof doc.similarity === "number" ? ` score=${doc.similarity.toFixed(3)}` : "";
   const collection = doc.collection_name ? ` collection=${doc.collection_name}` : "";
-  return [
-    `${index + 1}. ${truncateText2(doc.title, 180)}${score}${collection}`,
-    `   id: ${doc.id}`,
-    `   ${truncateText2(doc.content, 700)}`
-  ].join("\n");
+  return neutralizeInjection(
+    [
+      `${index + 1}. ${truncateText2(doc.title, 180)}${score}${collection}`,
+      `   id: ${doc.id}`,
+      `   ${truncateText2(doc.content, 700)}`
+    ].join("\n")
+  );
 }
 
 // src/project/index.ts
