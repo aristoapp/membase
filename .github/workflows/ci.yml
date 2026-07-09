@@ -123,7 +123,11 @@ jobs:
        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
                 github.event.pull_request.author_association))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Healthy Tier 3 is ~7 min; one exhausted 180s recall poll pushes past 10.
+    # 15 keeps the run alive long enough to finish + print its report (and run
+    # the leftover sweep) while the staging backlog drains, instead of dying
+    # with zero diagnostics.
+    timeout-minutes: 15
     env:
       MEMBASE_AUTH_BASE: https://api-staging-1005302025416.us-west1.run.app
       MEMBASE_MCP_URL: https://mcp-staging-1005302025416.us-west1.run.app/mcp
