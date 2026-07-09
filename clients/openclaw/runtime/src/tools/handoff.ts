@@ -72,7 +72,10 @@ export function registerHandoffTool(
               "Store failed: summary is required for mode='store'.",
             );
           }
-          const rejection = await rejectIfSensitive(params.summary);
+          const rejection = await rejectIfSensitive(
+            params.summary,
+            params.project,
+          );
           if (rejection) return rejection;
           // Cloud policy: exactly ONE handoff per project — capture old
           // handoffs BEFORE ingesting so the fresh one can't be in the

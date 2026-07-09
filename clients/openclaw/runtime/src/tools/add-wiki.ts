@@ -46,7 +46,11 @@ export function registerAddWikiTool(
       },
     ) {
       try {
-        const rejection = await rejectIfSensitive(params.content, params.title);
+        const rejection = await rejectIfSensitive(
+          params.content,
+          params.title,
+          params.collection,
+        );
         if (rejection) return rejection;
         const doc = await client.createWikiDocument(
           params.title,

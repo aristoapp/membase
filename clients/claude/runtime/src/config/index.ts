@@ -172,7 +172,10 @@ export function clearTokens(): void {
 export function logDebug(config: PluginConfig, message: string): void {
   if (!config.debug) return;
   const logPath = join(ensureDataDir(), "debug.log");
+  // Debug lines may echo memory content or API responses — keep it 0600 like
+  // every other artifact in the data dir.
   writeFileSync(logPath, `[${new Date().toISOString()}] ${message}\n`, {
     flag: "a",
+    mode: 0o600,
   });
 }

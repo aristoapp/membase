@@ -35,6 +35,7 @@ from .mirror import MirrorAction, MirrorStore, MirrorWorker
 from .sanitize import (
     is_casual_chat,
     is_operational_message,
+    sanitize_capture_text,
     sanitize_membase_text,
     sanitize_recall_query,
 )
@@ -483,7 +484,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
     ) -> None:
         if self._agent_context != "primary":
             return
-        safe_text = sanitize_membase_text(user_content or "")
+        # Capture path: redact secrets before the text ever enters the upload
+        # buffer, not only when it falls back to the disk spool.
+        safe_text = sanitize_capture_text(user_content or "")
         if is_operational_message(safe_text):
             return
         if len(safe_text) < 10:

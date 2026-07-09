@@ -195,7 +195,9 @@ function createCaptureSpool(options) {
       }),
       capture_kind: record.capture_kind,
       content,
-      display_summary: record.display_summary ?? truncateText(content, 180),
+      // Caller-supplied display_summary is raw hook/tool text — sanitize it
+      // like content so secrets can't reach disk via the summary field.
+      display_summary: record.display_summary ? options.sanitize(record.display_summary) : truncateText(content, 180),
       project: record.project,
       metadata: record.metadata,
       created_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -254,7 +256,14 @@ function createCaptureSpool(options) {
         failed.push({
           ...record,
           attempts: (record.attempts ?? 0) + 1,
-          last_error: error instanceof Error ? error.message : String(error)
+          // Uploader errors can echo response bodies; sanitize and clamp
+          // before persisting to disk.
+          last_error: truncateText(
+            options.sanitize(
+              error instanceof Error ? error.message : String(error)
+            ),
+            300
+          )
         });
       }
     }
