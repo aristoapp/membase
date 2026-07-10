@@ -46,6 +46,8 @@ pnpm generated-artifacts   # keeps adapter output in sync with committed manifes
 pnpm public-surface        # lints the public API surface
 ```
 
-Plugin metadata lives in `.codex-plugin/plugin.json` and the MCP config in
-`.mcp.json`. Both are generated — edit the adapter in `src/index.ts` and run
-`pnpm generate` (a root script) rather than hand-editing them.
+Plugin metadata lives in the generated root `.plugin/plugin.json`, which
+carries the MCP config INLINE (installers translate it to `.codex-plugin/`;
+the root `.mcp.json` belongs to the Claude stdio server). Edit the adapter in
+`src/index.ts` and run `pnpm generate` (a root script) rather than
+hand-editing it.

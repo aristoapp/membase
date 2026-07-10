@@ -76,11 +76,12 @@ docs(install): clarify Hermes MCP-to-YAML translation
 
 A few principles keep this repo maintainable. Please follow them:
 
-- **The public contract is small and fixed.** Connectors expose only
-  `remember`, `search`, `getContext`, and `deleteOrForget`, plus
-  manifest/config generation and smoke tests. Internal Membase terms (storage
-  schema, graph, embeddings, ranking, governance) must never appear in
-  `packages/core` or `packages/connector-sdk` — a CI guard enforces this.
+- **The public contract is small and fixed.** Connectors expose the hosted
+  MCP tool set and each client's runtime tools, plus manifest/config
+  generation and smoke tests. Internal Membase terms (storage schema, graph,
+  embeddings, ranking, governance) must never appear in `packages/core` or
+  `packages/connector-sdk` — a CI guard bans those internal terms (it checks
+  vocabulary, not the tool API).
 - **Descriptor over adapter.** For a config-only MCP host, add a
   `defineMcpHostAgent()` descriptor plus a regen — not a hand-written adapter.
   Reserve full adapters for clients with genuinely different runtime behavior.

@@ -8,8 +8,8 @@ the installer.
 Layout:
 
 - `pyproject.toml` — package `hermes-membase`, console scripts
-  `hermes-membase` (CLI) and `hermes-membase-install` (installer). Version is
-  pinned to the repo-wide `0.0.0` until publishing is decided.
+  `hermes-membase` (CLI) and `hermes-membase-install` (installer). The version
+  is synced repo-wide by `check-version-parity.mjs`.
 - `src/membase_hermes/plugin/plugin.yaml` must stay byte-equal to the
   generator-owned `clients/hermes/plugin/plugin.yaml`.
 - `src/membase_hermes/provider.py` and `src/membase_hermes/plugin/__init__.py`
