@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw",
-    "check": "pnpm generated-artifacts && pnpm core:contract && pnpm capture-core:typecheck && node smoke/client-smoke.mjs && pnpm smoke:live:preflight && pnpm version-parity && pnpm claude:plugin-parity && pnpm bundle-provenance && pnpm stdio-runtime:typecheck && pnpm cursor:transport-parity && pnpm hermes:python-parity && pnpm openclaw:native-parity && pnpm openclaw:runtime-typecheck && pnpm secret-hygiene && pnpm public-surface",
+    "check": "pnpm generated-artifacts && pnpm core:contract && pnpm capture-core:typecheck && node smoke/client-smoke.mjs && pnpm smoke:live:preflight && pnpm version-parity && pnpm claude:plugin-parity && pnpm bundle-provenance && pnpm stdio-runtime:typecheck && pnpm cursor:transport-parity && pnpm hermes:python-parity && pnpm openclaw:native-parity && pnpm openclaw:runtime-typecheck && pnpm secret-hygiene && pnpm docs-markers && pnpm public-surface",
     "claude:plugin-parity": "node scripts/check-claude-plugin-parity.mjs",
     "bundle-provenance": "node scripts/check-bundle-provenance.mjs",
     "stdio-runtime:typecheck": "pnpm --filter @membase/stdio-runtime typecheck",
@@ -31,6 +31,7 @@
     "openclaw:runtime-test": "cd clients/openclaw/runtime && bun test",
     "public-surface": "scripts/check-public-surface.sh",
     "secret-hygiene": "node scripts/check-secret-hygiene.mjs",
+    "docs-markers": "node scripts/check-docs-markers.mjs",
     "test": "pnpm capture-core:test && pnpm stdio-runtime:test && pnpm openclaw:runtime-test && pnpm cursor:runtime-test && pnpm hermes:test && pnpm contract:test",
     "lint": "biome lint .",
     "smoke:dry-run": "pnpm typecheck && node smoke/client-smoke.mjs",
