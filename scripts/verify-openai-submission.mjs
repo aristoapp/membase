@@ -27,12 +27,16 @@ async function verify() {
   console.log("\n3️⃣  Logo Verification");
   checkLogo();
 
-  // 4. MCP server connectivity (async)
-  console.log("\n4️⃣  MCP Server Connectivity");
+  // 4. Documentation completeness
+  console.log("\n4️⃣  Documentation Completeness");
+  checkDocumentation();
+
+  // 5. MCP server connectivity (async)
+  console.log("\n5️⃣  MCP Server Connectivity");
   await checkMcpServer();
 
-  // 5. URL accessibility
-  console.log("\n5️⃣  URL Accessibility");
+  // 6. URL accessibility
+  console.log("\n6️⃣  URL Accessibility");
   await checkUrls();
 
   // Summary
@@ -129,6 +133,29 @@ function checkLogo() {
     }
   } catch (error) {
     checks.failed.push(`Logo file missing: ${error.message}`);
+  }
+}
+
+function checkDocumentation() {
+  const required = [
+    "docs/OPENAI-TEST-CASES.md",
+    "docs/OPENAI-STARTER-PROMPTS.md",
+    "docs/OPENAI-DOMAIN-VERIFICATION.md",
+    "docs/OPENAI-TOOL-METADATA.md"
+  ];
+
+  for (const doc of required) {
+    const docPath = path.join(ROOT_DIR, doc);
+    try {
+      const stat = fs.statSync(docPath);
+      if (stat.isFile()) {
+        checks.passed.push(`${doc} exists`);
+      } else {
+        checks.failed.push(`${doc} is not a file`);
+      }
+    } catch (error) {
+      checks.failed.push(`${doc} missing`);
+    }
   }
 }
 
