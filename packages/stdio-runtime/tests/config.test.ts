@@ -92,6 +92,23 @@ describe("captureMode plugin option", () => {
       });
     });
   });
+
+  it("MEMBASE_CAPTURE_MODE=summary enables capture and outranks the Claude option name", () => {
+    withTempConfig(() => {
+      const prev = process.env.MEMBASE_CAPTURE_MODE;
+      process.env.MEMBASE_CAPTURE_MODE = "summary";
+      try {
+        expect(loadConfig().captureMode).toBe("summary");
+        // Neutral env wins over the legacy Claude-branded name.
+        withCaptureModeOption("off", () => {
+          expect(loadConfig().captureMode).toBe("summary");
+        });
+      } finally {
+        if (prev === undefined) delete process.env.MEMBASE_CAPTURE_MODE;
+        else process.env.MEMBASE_CAPTURE_MODE = prev;
+      }
+    });
+  });
 });
 
 describe("getDataDir", () => {

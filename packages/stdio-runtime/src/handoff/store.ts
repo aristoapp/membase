@@ -5,16 +5,12 @@ import {
   sweepReplacedHandoffs,
 } from "@membase/capture-core";
 import type { MembaseClient } from "../api/client.js";
+import { clientDescriptor } from "../clients.js";
 import { MEMORY_SOURCE } from "../constants.js";
 import { normalizeProjectSlug } from "../project/index.js";
 import { writeHandoffFile } from "./file.js";
 
 const REPLACE_SEARCH_WINDOW = 20;
-
-// Clients whose SessionStart injection reads the per-project file this write
-// produces. Codex reads its own .codex/membase-handoff.md and Cursor reads a
-// .mdc Rules file, so writing the data-dir file for them is dead/orphaned.
-const FILE_FIRST_CLIENTS = new Set(["claude-code"]);
 
 /**
  * Store a handoff and enforce the cloud policy: exactly ONE handoff per
@@ -49,7 +45,11 @@ export async function replaceHandoff(
     metadata: args.metadata,
     project,
   });
-  if (FILE_FIRST_CLIENTS.has(MEMORY_SOURCE)) {
+  // Only for clients whose SessionStart injection reads the per-project file
+  // this write produces (descriptor flag) — for the others the data-dir file
+  // would be dead/orphaned (codex reads .codex/membase-handoff.md, cursor a
+  // .mdc Rules file).
+  if (clientDescriptor(MEMORY_SOURCE).fileFirstHandoff) {
     try {
       // Same-client continuation is file-first (no quota, no network). Key the
       // file by the NORMALIZED slug so it matches resolveProjectSlug on the

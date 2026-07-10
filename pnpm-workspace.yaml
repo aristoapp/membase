@@ -1,7 +1,6 @@
 packages:
   - "packages/*"
   - "clients/*"
-  - "clients/claude/runtime"
   - "clients/openclaw/runtime"
   - "smoke/*"
 # Dependencies of the openclaw peer dep pulled in for runtime typechecking;
@@ -10,8 +9,8 @@ allowBuilds:
   # biome's postinstall places its platform binary.
   '@biomejs/biome': true
   '@google/genai': false
-  # esbuild's postinstall fetches its platform binary — needed by the claude
-  # runtime bundle build (scripts/build.ts).
+  # esbuild's postinstall fetches its platform binary — needed by the
+  # stdio-runtime bundle build (scripts/build.ts).
   esbuild: true
   openclaw: false
   protobufjs: false

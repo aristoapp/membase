@@ -2,8 +2,18 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const repoRoot = process.cwd();
-const pluginRoot = join(repoRoot, "plugin");
+// The Claude plugin package lives with the claude client; this suite checks
+// that its shipped prompts/manifest stay wired to the runtime's behavior.
+const packageRoot = process.cwd();
+const pluginRoot = join(
+  packageRoot,
+  "..",
+  "..",
+  "clients",
+  "claude",
+  "runtime",
+  "plugin",
+);
 
 describe("Claude plugin runtime wiring", () => {
   it("lets Claude load the default hooks file only once", () => {

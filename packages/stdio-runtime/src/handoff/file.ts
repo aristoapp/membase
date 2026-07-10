@@ -5,6 +5,7 @@ import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isHandoffFresh, writeTextAtomic } from "@membase/capture-core";
+import { clientDescriptor } from "../clients.js";
 import { ensureDataDir, getDataDir } from "../config/index.js";
 
 export interface LocalHandoff {
@@ -38,21 +39,22 @@ function readAt(path: string): LocalHandoff | null {
   }
 }
 
-export function codexCandidates(cwd?: string): string[] {
+export function dotDirCandidates(dotDir: string, cwd?: string): string[] {
   if (process.env.MEMBASE_HANDOFF_FILE) return [process.env.MEMBASE_HANDOFF_FILE];
   // Prefer the live HOME env over os.homedir() (which some runtimes snapshot
-  // at startup): the codex hook is launched with a fresh HOME, and this keeps
+  // at startup): the hook is launched with a fresh HOME, and this keeps
   // the home candidate in step with it.
   const home = process.env.HOME || homedir();
   return [
-    join(cwd ?? process.cwd(), ".codex", "membase-handoff.md"),
-    join(home, ".codex", "membase-handoff.md"),
+    join(cwd ?? process.cwd(), dotDir, "membase-handoff.md"),
+    join(home, dotDir, "membase-handoff.md"),
   ];
 }
 
 /**
- * Client-specific lookup. Codex keeps its established workspace-scoped file
- * convention (written by the /handoff prompt); Claude uses the per-project
+ * Client-specific lookup, driven by the client descriptor: a client with a
+ * handoffDotDir (codex) keeps its established workspace-scoped file
+ * convention (written by its /handoff prompt); the rest use the per-project
  * file under the plugin data dir (written by store_handoff).
  *
  * The first FRESH candidate wins so a stale project file cannot shadow a
@@ -64,10 +66,10 @@ export function readLocalHandoff(args: {
   cwd?: string;
   projectSlug?: string;
 }): LocalHandoff | null {
-  const candidates =
-    args.clientSource === "codex"
-      ? codexCandidates(args.cwd)
-      : [handoffFilePath(args.projectSlug)];
+  const dotDir = clientDescriptor(args.clientSource).handoffDotDir;
+  const candidates = dotDir
+    ? dotDirCandidates(dotDir, args.cwd)
+    : [handoffFilePath(args.projectSlug)];
   let newestStale: LocalHandoff | null = null;
   for (const candidate of candidates) {
     const found = readAt(candidate);
