@@ -26,27 +26,23 @@ config or manifest:
 | --- | --- | --- |
 | Cursor | Remote MCP URL (`https://mcp.membase.so/mcp`) | In-client OAuth browser flow; no committed token. |
 | Codex CLI | Remote MCP URL (`https://mcp.membase.so/mcp`) | Codex-managed OAuth (`codex mcp login membase`). |
-| Claude Code | Hosted HTTP MCP or the bundled stdio server (`node ${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs`) | Plugin-managed login (`/membase:login`). |
+| Claude Code | Hosted HTTP MCP or the bundled stdio server (`node ${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs`) | Plugin-managed login (`/membase:login`). |
 | Hermes Agent | Native `hermes-membase` pip package (or remote MCP URL) | OAuth flow. |
-| OpenClaw | Native plugin (or remote MCP URL) | OAuth access/refresh tokens cached in a `tokenFile` (default `~/.openclaw/membase/tokens.json`, written 0600). |
+| OpenClaw | Native plugin (or remote MCP URL) | OAuth access/refresh tokens cached in a `tokenFile` (default `~/.openclaw/credentials/openclaw-membase.json`, written 0600). |
 
 Supported public configuration values:
 
 | Value | Required | Purpose |
 | --- | --- | --- |
-| `apiUrl` / `MEMBASE_API_BASE_URL` | No | API endpoint override. Defaults to `https://api.membase.so`. |
-| `MEMBASE_PROFILE` | No | Optional free-form label a client can attach to scope its runtime config. |
+| `apiUrl` (plugin option) / `MEMBASE_API_URL` (Hermes) | No | API endpoint override where the client supports one. Defaults to `https://api.membase.so`. |
+| `MEMBASE_DATA_DIR` | No | Overrides the local state directory for the stdio hook runtime. |
+| `MEMBASE_CAPTURE_MODE` | No | `off`/`summary` capture default for the stdio hook runtime (disk config wins). |
 | OAuth tokens (`accessToken`, `refreshToken`, `tokenFile`) | Client-managed | Held by the client runtime; never committed. |
 
 ## Local Setup
 
 Real credentials are obtained through each client's OAuth or plugin login flow,
-not exported as shell variables. Only the optional endpoint override is a plain
-value:
-
-```bash
-export MEMBASE_API_BASE_URL="https://api.membase.so"
-```
+not exported as shell variables.
 
 Local env files and OAuth token caches are ignored by this repo. Only
 `.env.example`-style placeholder files may be committed, and they must not

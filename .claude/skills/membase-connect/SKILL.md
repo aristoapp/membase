@@ -108,7 +108,7 @@ Requires openclaw >= 2026.6 (the plugin manifest declares `contracts.tools`).
 3. Auth: `openclaw membase login` (browser OAuth; token lands in tokenFile).
 4. Restart the gateway (`openclaw gateway restart`, or the platform service).
 5. VERIFY: `openclaw membase status` prints "Membase connection: OK", and an
-   agent session lists the eight `membase_*` tools and can run membase_search.
+   agent session lists the nine `membase_*` tools and can run membase_search.
 
 ## all
 
