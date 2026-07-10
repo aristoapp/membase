@@ -1,20 +1,10 @@
-# Membase Plugin/MCP
+<p align="center">
+  <a href="https://membase.so">
+    <img src="docs/assets/banner.png" alt="Membase Plugin/MCP — the official connector kit for plugging Membase into your AI clients" width="100%">
+  </a>
+</p>
 
-**The official connector kit for plugging [Membase](https://membase.so) into your AI clients.**
-
-[![CI](https://github.com/aristoapp/membase-plugin-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/aristoapp/membase-plugin-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/vHgtDd6UTK)
-
-Membase is a persistent memory layer for AI agents — a shared store that
-survives across sessions, tools, and platforms so your agents remember what
-matters. This repository is the **integration surface**: it gives editors,
-CLIs, and MCP-capable agents a consistent, secure way to connect to Membase.
-
-[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9)
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=membase&config=%7B%22type%22%3A%20%22http%22%2C%20%22url%22%3A%20%22https%3A%2F%2Fmcp.membase.so%2Fmcp%22%7D)
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9) [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=membase&config=%7B%22type%22%3A%20%22http%22%2C%20%22url%22%3A%20%22https%3A%2F%2Fmcp.membase.so%2Fmcp%22%7D) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?logo=opensourceinitiative&logoColor=white)](./LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github&logoColor=white)](./CONTRIBUTING.md) [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/vHgtDd6UTK)
 
 ## Use cases
 
@@ -34,26 +24,22 @@ With Membase, your agents share one persistent memory:
 
 ## Installation
 
-The quickest path installs the plugin into every detected client (Claude
-Code, Cursor, Codex) at once:
+One command, every detected client (Claude Code, Cursor, Codex):
 
 ```bash
 npx plugins add aristoapp/membase-plugin-mcp
 ```
 
-Claude Code can also install it as a marketplace plugin directly:
+Or Claude Code alone, via its plugin marketplace:
 
 ```bash
 claude plugin marketplace add aristoapp/membase-plugin-mcp
 claude plugin install membase@membase-plugins
 ```
 
-Per-client manual setup below. Every client connects to the same hosted MCP server:
-`https://mcp.membase.so/mcp`. **No API key needed** — the first time your
-client calls Membase, it opens a Membase OAuth login in your browser. Approve
-it once and you're connected; no tokens are stored in any config file.
-Headless/CI environments use a `client_credentials` service token via
-environment variables instead.
+Per-client manual setup below. 
+Every client connects to the same hosted MCP server:
+`https://mcp.membase.so/mcp`.
 
 <details>
 <summary><b>Claude Code</b></summary>
@@ -201,17 +187,17 @@ OAuth prompt on first use:
 
 ## Tools
 
-Every connector reaches the same hosted MCP tool set — nothing about
-Membase's internal memory engine leaks through:
+Every connector reaches the same hosted MCP tool set:
 
 `add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` · `delete_wiki` · `get_current_date`
 
-Clients with native runtimes (Claude Code, OpenClaw, Hermes) add session
-handoff, profile, and login/status tools on top, plus the auto-capture and
-recall hooks described in each client's install guide.
+Clients with a native runtime (Claude Code, OpenClaw, Hermes) make memory
+automatic: 
+just work, and your sessions are captured, recalled, and handed off for you. 
+Details in each client's install guide.
 
-You won't call these directly — memory works through natural language, and the
-agent calls the tools for you:
+Anything important, save it yourself and pull it back later — plain language
+is enough, the agent calls the tools for you:
 
 ```txt
 Remember that we deploy from the release branch, never from main.
@@ -227,9 +213,7 @@ Save this: the staging database resets every night at 02:00 UTC.
 
 ## How it works
 
-Connectors talk to a stable Membase Context API. Membase owns storage, ranking,
-freshness, provenance, and governance behind that API — this repo never exposes
-those internals.
+Connectors talk to a stable Membase Context API.
 
 ```text
 Client plugin or MCP config      ← per-client adapter (clients/*)
@@ -244,42 +228,35 @@ Membase Context API              ← stable public surface
 Private Membase memory engine    ← storage, graph, ranking (not in this repo)
 ```
 
-Dependencies point downward only. Client-specific behavior stays in
-`clients/*`; shared behavior lives in `packages/*`. A CI guard fails the build
-if any internal Membase term (storage schema, graph, embeddings, ranking) leaks
-into the public surface.
+Client-specific behavior stays in
+`clients/*`; shared behavior lives in `packages/*`.
+
+For the full design rationale, see [docs/architecture.md](docs/architecture.md)
+and the "where does X live" map in [MAP.md](MAP.md).
 
 > **Note:** This repository is the connector/integration layer only. The
 > Membase Context API, memory engine, and their supporting services are a
 > separate, private system and are not part of this repo.
 
-For the full design rationale, see [docs/architecture.md](docs/architecture.md)
-and the "where does X live" map in [MAP.md](MAP.md).
 
 ## Contributing
 
-Contributions are welcome! This is a [pnpm](https://pnpm.io) monorepo
-(**Node.js 20+**, **pnpm 11+**):
+Contributions are welcome — new connectors, bug fixes, docs, performance
+optimization. 
+This is a [pnpm](https://pnpm.io) monorepo (Node.js 20+, pnpm 11+):
 
 ```bash
 pnpm install
-pnpm check
+pnpm test    # runtime + contract suites
+pnpm check   # the same gate CI runs on your PR
 ```
 
-`pnpm check` is the full gate: it typechecks the workspace, verifies that
-committed manifests match adapter-generated output, runs the connector smoke
-tests, scans for accidentally committed secrets, and enforces the public
-surface boundary. Run it before opening a pull request.
-
-Adding a new MCP host is often just a descriptor — `defineMcpHostAgent()` in
-`packages/connector-sdk` — plus a regen, not a hand-written adapter. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the branch → `pnpm check` →
-PR flow, and how to add a connector, and please review our
+Details in [CONTRIBUTING.md](CONTRIBUTING.md); please also review our
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-Please do not open public issues for security problems. See
+For security issues, see
 [SECURITY.md](SECURITY.md) for how to report a vulnerability, and
 [docs/security.md](docs/security.md) for the connector secret-handling and
 redaction model.
