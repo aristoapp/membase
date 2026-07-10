@@ -52,6 +52,7 @@ test("C-HOOK-2 PostToolUse writes the tool observation to the per-session scratc
     input: codexPostToolUse,
     env: {
       MEMBASE_DATA_DIR: dir,
+      MEMBASE_CLIENT_SOURCE: "codex",
       CLAUDE_PLUGIN_OPTION_captureMode: "summary",
     },
   });
@@ -67,6 +68,42 @@ test("C-HOOK-2 PostToolUse writes the tool observation to the per-session scratc
     api.requests.length,
     0,
     `no network without credentials; saw ${JSON.stringify(api.requests.map((r) => r.url))}`,
+  );
+});
+
+test("C-HOOK-2a tool-capture events are client-owned: PostToolUse is a no-op for Claude, PostToolBatch for Codex", async (t) => {
+  // One shared hooks.json registers BOTH events for every host; the runtime
+  // must run only the one the detected client owns or Claude double-captures.
+  const dir = await makeDataDir(t);
+  const claudeRun = await runEntry(CLAUDE_HOOK, ["PostToolUse"], {
+    input: codexPostToolUse,
+    env: {
+      MEMBASE_DATA_DIR: dir,
+      CLAUDE_PLUGIN_OPTION_captureMode: "summary",
+    },
+  });
+  assert.equal(claudeRun.code, 0);
+  assert.ok(
+    !scratchExists(dir, "s-tool"),
+    "PostToolUse must not write scratch for Claude (it owns PostToolBatch)",
+  );
+  const codexBatch = await runEntry(CLAUDE_HOOK, ["PostToolBatch"], {
+    input: JSON.stringify({
+      session_id: "s-tool",
+      tool_calls: [
+        { tool_name: "apply_patch", tool_input: { command: "*** Update File: x.ts" } },
+      ],
+    }),
+    env: {
+      MEMBASE_DATA_DIR: dir,
+      MEMBASE_CLIENT_SOURCE: "codex",
+      CLAUDE_PLUGIN_OPTION_captureMode: "summary",
+    },
+  });
+  assert.equal(codexBatch.code, 0);
+  assert.ok(
+    !scratchExists(dir, "s-tool"),
+    "PostToolBatch must not write scratch for Codex (it owns PostToolUse)",
   );
 });
 
@@ -118,7 +155,11 @@ test("C-HOOK-2c SessionStart sweeps an idle prior-session scratch into a digest 
       tool_name: "apply_patch",
       tool_input: { command: "*** Update File: swept.ts" },
     }),
-    env: { MEMBASE_DATA_DIR: dir, CLAUDE_PLUGIN_OPTION_captureMode: "summary" },
+    env: {
+      MEMBASE_DATA_DIR: dir,
+      MEMBASE_CLIENT_SOURCE: "codex",
+      CLAUDE_PLUGIN_OPTION_captureMode: "summary",
+    },
   });
   assert.equal(tool.code, 0);
   // Age the scratch past the idle threshold so the next start sweeps it.

@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Root package.json is the single version source for every generated manifest.
+const ROOT_VERSION = JSON.parse(
+  await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
+).version;
 
 const adapterSpecs = [
   {
@@ -13,22 +17,17 @@ const adapterSpecs = [
     generateArtifacts: "generateClaudeArtifacts",
     targets: [
       {
-        path: "clients/claude/.claude-plugin/plugin.json",
+        path: ".claude-plugin/plugin.json",
         format: "json",
         pick: (artifacts) => artifacts.plugin
       },
       {
-        path: "manifests/claude/plugin.json",
+        path: ".claude-plugin/marketplace.json",
         format: "json",
-        pick: (artifacts) => artifacts.plugin
+        pick: (artifacts) => artifacts.marketplace
       },
       {
-        path: "clients/claude/.mcp.json",
-        format: "json",
-        pick: (artifacts) => artifacts.mcp
-      },
-      {
-        path: "manifests/claude/mcp.json",
+        path: ".mcp.json",
         format: "json",
         pick: (artifacts) => artifacts.mcp
       }
@@ -41,22 +40,12 @@ const adapterSpecs = [
     generateArtifacts: "generateCursorArtifacts",
     targets: [
       {
-        path: "clients/cursor/.cursor-plugin/plugin.json",
+        path: ".cursor-plugin/plugin.json",
         format: "json",
         pick: (artifacts) => artifacts.plugin
       },
       {
-        path: "clients/cursor/mcp.json",
-        format: "json",
-        pick: (artifacts) => artifacts.mcp
-      },
-      {
-        path: "manifests/cursor/plugin.json",
-        format: "json",
-        pick: (artifacts) => artifacts.plugin
-      },
-      {
-        path: "manifests/cursor/mcp.json",
+        path: "mcp.json",
         format: "json",
         pick: (artifacts) => artifacts.mcp
       }
@@ -69,24 +58,9 @@ const adapterSpecs = [
     generateArtifacts: "generateCodexArtifacts",
     targets: [
       {
-        path: "clients/codex/.codex-plugin/plugin.json",
+        path: ".plugin/plugin.json",
         format: "json",
         pick: (artifacts) => artifacts.plugin
-      },
-      {
-        path: "clients/codex/.mcp.json",
-        format: "json",
-        pick: (artifacts) => artifacts.mcp
-      },
-      {
-        path: "manifests/codex/plugin.json",
-        format: "json",
-        pick: (artifacts) => artifacts.plugin
-      },
-      {
-        path: "manifests/codex/mcp.json",
-        format: "json",
-        pick: (artifacts) => artifacts.mcp
       }
     ]
   },
@@ -164,7 +138,7 @@ for (const spec of adapterSpecs) {
     throw new TypeError(`${spec.modulePath} does not export ${spec.generateArtifacts}`);
   }
 
-  const artifacts = generateArtifacts(defineRuntimeConfig());
+  const artifacts = generateArtifacts(defineRuntimeConfig({ version: ROOT_VERSION }));
 
   for (const target of spec.targets) {
     checkedFiles += 1;

@@ -1,0 +1,21 @@
+{
+  "name": "membase",
+  "displayName": "Membase",
+  "description": "Connect Cursor to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
+  "version": "0.1.5",
+  "author": {
+    "name": "Membase",
+    "email": "support@aristo.so",
+    "url": "https://membase.so"
+  },
+  "homepage": "https://membase.so",
+  "repository": "https://github.com/aristoapp/membase-plugin-mcp",
+  "license": "MIT",
+  "keywords": [
+    "agent-memory",
+    "context",
+    "mcp",
+    "cursor",
+    "membase"
+  ]
+}

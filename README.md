@@ -34,7 +34,21 @@ With Membase, your agents share one persistent memory:
 
 ## Installation
 
-Every client connects to the same hosted MCP server:
+The quickest path installs the plugin into every detected client (Claude
+Code, Cursor, Codex) at once:
+
+```bash
+npx plugins add aristoapp/membase-plugin-mcp
+```
+
+Claude Code can also install it as a marketplace plugin directly:
+
+```bash
+claude plugin marketplace add aristoapp/membase-plugin-mcp
+claude plugin install membase@membase-plugins
+```
+
+Per-client manual setup below. Every client connects to the same hosted MCP server:
 `https://mcp.membase.so/mcp`. **No API key needed** — the first time your
 client calls Membase, it opens a Membase OAuth login in your browser. Approve
 it once and you're connected; no tokens are stored in any config file.
@@ -49,8 +63,8 @@ claude mcp add --transport http membase https://mcp.membase.so/mcp
 ```
 
 Want auto-capture and cross-session handoff too? Install the Membase
-**plugin** (a bundled MCP server plus hooks) instead — see
-[clients/claude](clients/claude).
+**plugin** (a bundled MCP server plus hooks) instead — the repo root is the
+plugin package; see the install commands above or [clients/claude](clients/claude).
 
 Full guide: [docs/install/claude.md](docs/install/claude.md)
 

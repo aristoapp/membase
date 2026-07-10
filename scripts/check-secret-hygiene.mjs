@@ -57,7 +57,7 @@ const secretPatterns = [
 // Redaction-feature test fixtures deliberately contain secret-shaped
 // key/value strings to prove the sanitizer redacts them; not secrets.
 const redactionFixtureFiles = new Set([
-  "clients/claude/runtime/tests/sanitize.test.ts",
+  "packages/stdio-runtime/tests/sanitize.test.ts",
   "clients/openclaw/runtime/src/utils.test.ts",
   "clients/openclaw/runtime/src/tools/secret-guard.test.ts",
   "packages/capture-core/spec/sanitize-vectors.json",

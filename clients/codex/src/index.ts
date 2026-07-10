@@ -17,10 +17,6 @@ export const CODEX_CLIENT_ID = "codex";
 export const CODEX_DISPLAY_NAME = "Codex CLI";
 export const CODEX_MCP_SERVER_NAME = MEMBASE_MCP_SERVER_NAME;
 export const CODEX_MCP_SERVER_URL = MEMBASE_MCP_SERVER_URL;
-// Codex reads a plugin's MCP servers from a bundled config file referenced by
-// the manifest's `mcpServers` field (OpenAI Codex `.codex-plugin` format).
-export const CODEX_MCP_CONFIG_FILE = ".mcp.json";
-
 export interface CodexPluginManifest {
   name: string;
   version: string;
@@ -34,8 +30,24 @@ export interface CodexPluginManifest {
   repository: string;
   license: string;
   keywords: string[];
-  // Path (relative to the plugin dir) to the bundled MCP server config.
-  mcpServers: string;
+  // Inline server config (not a file pointer): the root .mcp.json belongs to
+  // the Claude plugin (local stdio server), while Codex keeps the HTTP-first
+  // contract — inlining is the only way one shared payload carries both.
+  mcpServers: Record<string, { url: string; headers: Record<string, string> }>;
+  // Committed interface metadata. Its presence also stops installer-side
+  // enrichment (the plugins CLI synthesizes skills/mcpServers/interface into
+  // manifests that lack `interface`, which would re-point mcpServers at the
+  // Claude-owned .mcp.json).
+  interface: {
+    displayName: string;
+    shortDescription: string;
+    developerName: string;
+    websiteURL: string;
+    category: string;
+    capabilities: string[];
+    logo: string;
+    composerIcon: string;
+  };
 }
 
 export type CodexRuntimeConfigInput = McpHostAgentRuntimeConfigInput;
@@ -50,7 +62,7 @@ export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
   id: CODEX_CLIENT_ID,
   displayName: CODEX_DISPLAY_NAME,
   manifest: {
-    dir: ".codex-plugin",
+    dir: ".plugin",
     template: ({ version }) => ({
       // Codex requires a kebab-case plugin name.
       name: "membase",
@@ -62,7 +74,20 @@ export const codexAgent = defineMcpHostAgent<CodexPluginManifest>({
       repository: MEMBASE_REPOSITORY,
       license: "MIT",
       keywords: ["agent-memory", "context", "mcp", "codex", "membase"],
-      mcpServers: CODEX_MCP_CONFIG_FILE,
+      mcpServers: {
+        [CODEX_MCP_SERVER_NAME]: { url: CODEX_MCP_SERVER_URL, headers: {} },
+      },
+      interface: {
+        displayName: "Membase",
+        shortDescription:
+          "Persistent memory over MCP — memory search and store, wiki, and session handoffs.",
+        developerName: "Membase",
+        websiteURL: MEMBASE_HOMEPAGE,
+        category: "Coding",
+        capabilities: ["Interactive", "Write"],
+        logo: "./assets/logo.svg",
+        composerIcon: "./assets/logo.svg",
+      },
     }),
   },
 });

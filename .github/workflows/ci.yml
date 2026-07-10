@@ -36,13 +36,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # claude:bundle-provenance (inside pnpm check) rebuilds the plugin
+      # bundle-provenance (inside pnpm check) rebuilds the stdio-runtime
       # bundles with bun and diffs them against the committed files.
       - uses: oven-sh/setup-bun@v2
 
       - run: pnpm lint
 
       - run: pnpm check
+
+      # Installs the committed root payload into stubbed Claude/Cursor/Codex
+      # homes via the pinned vercel-labs plugins CLI — guards the install
+      # conventions (root manifests, hooks env-var rewrite, codex interface).
+      - run: pnpm smoke:install
 
       # Runtime unit tests. The parity
       # checks above are source-inspection only; these actually import and
@@ -54,7 +59,7 @@ jobs:
 
       - run: pnpm openclaw:runtime-test
 
-      - run: pnpm claude:runtime-test
+      - run: pnpm stdio-runtime:test
 
       - run: pnpm contract:test
 

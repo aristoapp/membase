@@ -42,10 +42,10 @@ test("C-HDF-1 the literal [HANDOFF] tag appears identically across all five clie
   // brackets, capitals, no space — must match everywhere, since recall
   // identifies a handoff "by that prefix alone".
   const surfaces = [
-    ["claude runtime", join(REPO_ROOT, "clients/claude/runtime")],
+    ["stdio runtime", join(REPO_ROOT, "packages/stdio-runtime/src")],
     ["openclaw runtime", join(REPO_ROOT, "clients/openclaw/runtime")],
     ["cursor skill", join(REPO_ROOT, "clients/cursor/skills/handoff")],
-    ["codex prompt", join(REPO_ROOT, "clients/codex/runtime/prompts")],
+    ["codex prompt", join(REPO_ROOT, "clients/codex/prompts")],
     ["hermes provider", join(REPO_ROOT, "clients/hermes/python/src/membase_hermes")],
   ];
   for (const [label, root] of surfaces) {

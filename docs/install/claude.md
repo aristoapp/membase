@@ -40,9 +40,10 @@ directly, Claude uses them for you:
 
 ## For contributors
 
-The plugin source lives under `clients/claude/runtime`; the committed
-`plugin/scripts/*.cjs` bundles are generated from it, and
-`pnpm claude:bundle-provenance` asserts they match a fresh build.
+The repo root is the plugin package (`.claude-plugin/`, `commands/`,
+`skills/`, `hooks/`); the committed `hooks/*.cjs` bundles are generated from
+the shared stdio runtime in `packages/stdio-runtime`, and
+`pnpm bundle-provenance` asserts they match a fresh build.
 
 ## Help
 
