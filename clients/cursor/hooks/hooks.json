@@ -1,0 +1,31 @@
+{
+  "$comment": "Cursor plugin hooks (default discovery path: hooks/hooks.json at the plugin root). Command paths are relative to this file per Cursor's hooks convention; cursor-hook.mjs translates Cursor payloads and delegates to the hook.cjs bundled next to it (the shared membase stdio runtime). LIVE VERIFICATION PENDING before announcing installs — plugin-hook command cwd behavior has known inconsistencies; verify against a real Cursor install. With a disk login (stdio bundle mode) it captures + flushes in real time; without one (HTTP mode) it still spools captures locally and announces the pending count at session start. State lives in ~/.membase/cursor by default; set MEMBASE_DATA_DIR to override.",
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node ../runtime/cursor-hook.mjs sessionStart"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node ../runtime/cursor-hook.mjs afterFileEdit"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "node ../runtime/cursor-hook.mjs afterShellExecution"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node ../runtime/cursor-hook.mjs stop"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node ../runtime/cursor-hook.mjs sessionEnd"
+      }
+    ]
+  }
+}

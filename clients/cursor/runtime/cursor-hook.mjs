@@ -2,23 +2,15 @@
 // Cursor hooks.json adapter for shared auto-capture. Cursor's hook events and
 // payload fields differ from the Claude/Codex shape, so this script only
 // TRANSLATES: map the Cursor payload to the shared runtime's input, then
-// pipe it into the bundled hook.cjs (which owns summarize/spool/flush).
+// pipe it into the hook.cjs bundled next to this file (which owns
+// summarize/spool/flush) — the plugin package is self-contained.
 // Dependency-free; auth-free unless a disk login exists (stdio bundle mode).
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import fs from "node:fs";
 
-const HOOK_BUNDLE = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "claude",
-  "runtime",
-  "plugin",
-  "scripts",
-  "hook.cjs",
-);
+const HOOK_BUNDLE = join(dirname(fileURLToPath(import.meta.url)), "hook.cjs");
 
 /** Cursor event name → shared-runtime event name. */
 // No beforeSubmitPrompt: Cursor has no context-injection output for it, so a
@@ -110,7 +102,7 @@ async function main() {
     // ambient env may override; MEMBASE_CLIENT_SOURCE AFTER the spread so the
     // adapter's identity always wins over ambient env.
     env: {
-      CLAUDE_PLUGIN_OPTION_captureMode: "summary",
+      MEMBASE_CAPTURE_MODE: "summary",
       ...process.env,
       MEMBASE_CLIENT_SOURCE: "cursor",
     },
