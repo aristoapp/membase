@@ -4,6 +4,19 @@
   "skills": [
     "skills"
   ],
+  "contracts": {
+    "tools": [
+      "membase_search",
+      "membase_store",
+      "membase_profile",
+      "membase_forget",
+      "membase_search_wiki",
+      "membase_add_wiki",
+      "membase_update_wiki",
+      "membase_delete_wiki",
+      "membase_handoff"
+    ]
+  },
   "uiHints": {
     "apiUrl": {
       "label": "Membase API URL",
