@@ -40,6 +40,11 @@
         "readOnlyHint": true,
         "openWorldHint": true,
         "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool only reads memories without modification",
+        "openWorldHint": "Tool accepts arbitrary search queries from users",
+        "destructiveHint": false
       }
     },
     "membase_store": {
@@ -50,6 +55,11 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool creates/updates memories, modifying user data",
+        "openWorldHint": "Tool accepts arbitrary memory content from users",
         "destructiveHint": false
       }
     },
@@ -62,6 +72,11 @@
         "readOnlyHint": false,
         "openWorldHint": false,
         "destructiveHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Tool deletes memories from storage",
+        "openWorldHint": "Tool requires specific memory ID (constrained input)",
+        "destructiveHint": "Tool permanently deletes user data"
       }
     },
     "membase_profile": {
@@ -72,6 +87,11 @@
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool only retrieves user profile data",
+        "openWorldHint": "Tool returns fixed profile structure (no custom input)",
         "destructiveHint": false
       }
     },
@@ -84,6 +104,11 @@
         "readOnlyHint": true,
         "openWorldHint": true,
         "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool only reads wiki documents without modification",
+        "openWorldHint": "Tool accepts arbitrary search queries",
+        "destructiveHint": false
       }
     },
     "membase_add_wiki": {
@@ -94,6 +119,11 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool creates new wiki documents",
+        "openWorldHint": "Tool accepts arbitrary document content",
         "destructiveHint": false
       }
     },
@@ -106,6 +136,11 @@
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Tool modifies wiki document content",
+        "openWorldHint": "Tool accepts arbitrary document updates",
+        "destructiveHint": false
       }
     },
     "membase_delete_wiki": {
@@ -117,6 +152,11 @@
         "readOnlyHint": false,
         "openWorldHint": false,
         "destructiveHint": true
+      },
+      "justifications": {
+        "readOnlyHint": "Tool deletes wiki documents from storage",
+        "openWorldHint": "Tool requires specific document ID (constrained input)",
+        "destructiveHint": "Tool permanently deletes wiki content"
       }
     }
   },
