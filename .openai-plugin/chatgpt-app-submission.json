@@ -35,49 +35,89 @@
       "description": "Search persistent memories by semantic similarity",
       "readOnlyHint": true,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      }
     },
     "membase_store": {
       "description": "Save important information to long-term memory",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      }
     },
     "membase_forget": {
       "description": "Delete a memory permanently",
       "readOnlyHint": false,
       "openWorldHint": false,
-      "destructiveHint": true
+      "destructiveHint": true,
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      }
     },
     "membase_profile": {
       "description": "Retrieve user profile and related memories",
       "readOnlyHint": true,
       "openWorldHint": false,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      }
     },
     "membase_search_wiki": {
       "description": "Search wiki documents for stable factual references",
       "readOnlyHint": true,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      }
     },
     "membase_add_wiki": {
       "description": "Create a wiki document from markdown content",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      }
     },
     "membase_update_wiki": {
       "description": "Update title, content, or collection of an existing wiki document",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": false,
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      }
     },
     "membase_delete_wiki": {
       "description": "Delete a wiki document permanently",
       "readOnlyHint": false,
       "openWorldHint": false,
-      "destructiveHint": true
+      "destructiveHint": true,
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      }
     }
   },
   "capabilities": [
