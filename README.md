@@ -24,14 +24,13 @@ With Membase, your agents share one persistent memory:
 
 ## Installation
 
-The quickest path installs the plugin into every detected client (Claude
-Code, Cursor, Codex) at once:
+One command, every detected client (Claude Code, Cursor, Codex):
 
 ```bash
 npx plugins add aristoapp/membase-plugin-mcp
 ```
 
-Claude Code can also install it as a marketplace plugin directly:
+Or Claude Code alone, via its plugin marketplace:
 
 ```bash
 claude plugin marketplace add aristoapp/membase-plugin-mcp
