@@ -42,7 +42,11 @@ export interface ClaudePluginManifest {
   skills: string;
   commands: string;
   agents: string[];
-  mcpServers: string;
+  // Inline (never a "./.mcp.json" file pointer): Claude Code also reads a
+  // repo-root .mcp.json as project-scope MCP config, so shipping one in the
+  // payload breaks for anyone opening this repo — CLAUDE_PLUGIN_ROOT is
+  // undefined outside the plugin context.
+  mcpServers: McpConfigDocument["mcpServers"];
   // No `hooks` field on purpose: Claude auto-discovers hooks/hooks.json, and
   // declaring it here too would load every hook twice.
   userConfig: Record<string, ClaudePluginUserConfigEntry>;
@@ -112,7 +116,7 @@ export function generateClaudePluginManifest(
     skills: "./skills/",
     commands: "./commands/",
     agents: ["./agents/membase-curator.md"],
-    mcpServers: "./.mcp.json",
+    mcpServers: generateClaudeMcpConfig(config).mcpServers,
     // Source of the CLAUDE_PLUGIN_OPTION_* env the stdio runtime reads;
     // defaults must match packages/stdio-runtime/src/config normalization.
     userConfig: {

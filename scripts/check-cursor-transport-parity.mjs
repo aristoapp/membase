@@ -9,7 +9,7 @@ const CURSOR_MCP_URL = "https://mcp.membase.so/mcp";
 const configPaths = ["mcp.json"];
 
 // Codex shares the HTTP-first contract, but its config is inlined in the
-// generic manifest (the root .mcp.json belongs to the Claude stdio server).
+// generic manifest (the Claude stdio config is inlined in .claude-plugin/).
 const codexManifestPath = ".plugin/plugin.json";
 
 const requiredDocMarkers = [
@@ -74,7 +74,7 @@ if (!codexServer || typeof codexServer !== "object") {
 }
 if (codexManifest && !codexManifest.interface) {
   failures.push(
-    `${codexManifestPath}: interface block is required — without it, installer-side enrichment re-points mcpServers at the Claude-owned .mcp.json`
+    `${codexManifestPath}: interface block is required — without it, installer-side enrichment re-points mcpServers at the Claude manifest's stdio config`
   );
 }
 

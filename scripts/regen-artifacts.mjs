@@ -18,8 +18,7 @@ const adapterSpecs = [
     generateArtifacts: "generateClaudeArtifacts",
     targets: [
       { path: ".claude-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: ".claude-plugin/marketplace.json", format: "json", pick: (a) => a.marketplace },
-      { path: ".mcp.json", format: "json", pick: (a) => a.mcp }
+      { path: ".claude-plugin/marketplace.json", format: "json", pick: (a) => a.marketplace }
     ]
   },
   {

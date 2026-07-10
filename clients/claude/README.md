@@ -50,6 +50,8 @@ pnpm claude:plugin-parity     # validates the plugin manifest with the Claude Co
 pnpm public-surface           # lints the public API surface
 ```
 
-Plugin metadata lives in `.claude-plugin/plugin.json`; the plugin-local MCP
-config lives in `.mcp.json`. Both are generated — edit the adapter in
-`src/index.ts` and run `pnpm generate` rather than hand-editing them.
+Plugin metadata — including the inline plugin-local MCP config — lives in the
+generated `.claude-plugin/plugin.json` (there is deliberately no root
+`.mcp.json`: Claude Code would also read that as project-scope MCP config for
+anyone opening this repo). Edit the adapter in `src/index.ts` and run
+`pnpm generate` rather than hand-editing it.
