@@ -31,132 +31,148 @@
     }
   },
   "tools": {
-    "membase_search": {
-      "description": "Search persistent memories by semantic similarity",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false,
+    "login": {
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Tool modifies local plugin credentials and configuration state during OAuth flow.",
+        "open_world_justification": "Tool initiates external OAuth authentication with membase.so, establishing connection to external API.",
+        "destructive_justification": "Tool is non-destructive; it stores credentials and settings without deleting existing data."
+      }
+    },
+    "logout": {
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Tool deletes local OAuth tokens and resets plugin configuration.",
+        "open_world_justification": "Tool only operates on local plugin state; no external world access.",
+        "destructive_justification": "Tool is non-destructive; it clears local credentials without affecting cloud data."
+      }
+    },
+    "get_status": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": false,
+        "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "Tool only reads memories without modification",
-        "openWorldHint": "Tool accepts arbitrary search queries from users",
-        "destructiveHint": false
+        "read_only_justification": "Tool retrieves current plugin state and configuration; no modifications.",
+        "open_world_justification": "Tool only queries local plugin state and optional profile from authenticated API.",
+        "destructive_justification": "Tool is read-only and non-destructive."
       }
     },
-    "membase_store": {
-      "description": "Save important information to long-term memory",
-      "readOnlyHint": false,
-      "openWorldHint": true,
-      "destructiveHint": false,
+    "set_project_config": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": false,
+        "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "Tool creates/updates memories, modifying user data",
-        "openWorldHint": "Tool accepts arbitrary memory content from users",
-        "destructiveHint": false
+        "read_only_justification": "Tool modifies local project scoping configuration (auto/manual/off mode).",
+        "open_world_justification": "Tool only operates on local plugin configuration; constrained to predefined config modes.",
+        "destructive_justification": "Tool is non-destructive; it updates settings without deleting data."
       }
     },
-    "membase_forget": {
-      "description": "Delete a memory permanently",
-      "readOnlyHint": false,
-      "openWorldHint": false,
-      "destructiveHint": true,
+    "add_memory": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": true
+        "destructiveHint": false,
+        "openWorldHint": true
       },
       "justifications": {
-        "readOnlyHint": "Tool deletes memories from storage",
-        "openWorldHint": "Tool requires specific memory ID (constrained input)",
-        "destructiveHint": "Tool permanently deletes user data"
+        "read_only_justification": "Tool creates and stores new long-term memories in Membase backend.",
+        "open_world_justification": "Tool accepts arbitrary user-provided memory content and metadata.",
+        "destructive_justification": "Tool is non-destructive; it appends new memories without modifying existing data."
       }
     },
-    "membase_profile": {
-      "description": "Retrieve user profile and related memories",
-      "readOnlyHint": true,
-      "openWorldHint": false,
-      "destructiveHint": false,
+    "store_handoff": {
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Tool creates or replaces the current handoff summary for a project.",
+        "open_world_justification": "Tool accepts arbitrary user-provided handoff content in any language.",
+        "destructive_justification": "Tool destructively replaces any older handoff for the same project (keeps exactly one per project)."
+      }
+    },
+    "search_memory": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
+        "destructiveHint": false,
+        "openWorldHint": true
       },
       "justifications": {
-        "readOnlyHint": "Tool only retrieves user profile data",
-        "openWorldHint": "Tool returns fixed profile structure (no custom input)",
-        "destructiveHint": false
+        "read_only_justification": "Tool searches and retrieves memories without modification.",
+        "open_world_justification": "Tool accepts open-ended semantic search queries, date ranges, source filters, and project scoping.",
+        "destructive_justification": "Tool is read-only and non-destructive."
       }
     },
-    "membase_search_wiki": {
-      "description": "Search wiki documents for stable factual references",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false,
+    "get_current_date": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": false,
+        "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "Tool only reads wiki documents without modification",
-        "openWorldHint": "Tool accepts arbitrary search queries",
-        "destructiveHint": false
+        "read_only_justification": "Tool returns current UTC timestamp; no state modification.",
+        "open_world_justification": "Tool only returns local system time; no external world dependency.",
+        "destructive_justification": "Tool is read-only and non-destructive."
       }
     },
-    "membase_add_wiki": {
-      "description": "Create a wiki document from markdown content",
-      "readOnlyHint": false,
-      "openWorldHint": true,
-      "destructiveHint": false,
+    "search_wiki": {
       "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
       },
       "justifications": {
-        "readOnlyHint": "Tool creates new wiki documents",
-        "openWorldHint": "Tool accepts arbitrary document content",
-        "destructiveHint": false
+        "read_only_justification": "Tool searches and retrieves wiki documents without modification.",
+        "open_world_justification": "Tool accepts open-ended semantic search queries and optional collection filters.",
+        "destructive_justification": "Tool is read-only and non-destructive."
       }
     },
-    "membase_update_wiki": {
-      "description": "Update title, content, or collection of an existing wiki document",
-      "readOnlyHint": false,
-      "openWorldHint": true,
-      "destructiveHint": false,
+    "add_wiki": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
+        "destructiveHint": false,
+        "openWorldHint": true
       },
       "justifications": {
-        "readOnlyHint": "Tool modifies wiki document content",
-        "openWorldHint": "Tool accepts arbitrary document updates",
-        "destructiveHint": false
+        "read_only_justification": "Tool creates new wiki documents with arbitrary title and content.",
+        "open_world_justification": "Tool accepts open-ended user-provided content for knowledge base storage.",
+        "destructive_justification": "Tool is non-destructive; it appends new documents without modifying existing wiki."
       }
     },
-    "membase_delete_wiki": {
-      "description": "Delete a wiki document permanently",
-      "readOnlyHint": false,
-      "openWorldHint": false,
-      "destructiveHint": true,
+    "update_wiki": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": true
+        "destructiveHint": false,
+        "openWorldHint": true
       },
       "justifications": {
-        "readOnlyHint": "Tool deletes wiki documents from storage",
-        "openWorldHint": "Tool requires specific document ID (constrained input)",
-        "destructiveHint": "Tool permanently deletes wiki content"
+        "read_only_justification": "Tool modifies existing wiki document title, content, or collection.",
+        "open_world_justification": "Tool accepts open-ended updates to document content.",
+        "destructive_justification": "Tool is non-destructive; updates maintain version history and are reversible."
+      }
+    },
+    "delete_wiki": {
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Tool deletes a wiki document by ID from permanent storage.",
+        "open_world_justification": "Tool requires specific wiki document UUID (constrained input); no open-world input acceptance.",
+        "destructive_justification": "Tool permanently and irreversibly deletes wiki documents; requires explicit user confirmation."
       }
     }
   },
@@ -164,51 +180,60 @@
     "memory-management",
     "knowledge-base",
     "context-persistence",
-    "cross-session-continuity"
+    "cross-session-continuity",
+    "session-handoff"
   ],
   "testCases": {
     "positive": [
       {
-        "name": "Search personal memories",
-        "description": "User recalls project preferences from previous sessions",
-        "expectedBehavior": "Returns top 3 relevant memories with dates and source tags"
+        "name": "Authenticate and login",
+        "description": "User initiates OAuth login to connect Membase account",
+        "tools_triggered": ["login"],
+        "expectedBehavior": "OAuth flow completes, credentials saved locally, user profile fetched and returned with logged_in=true"
       },
       {
-        "name": "Store new memory",
-        "description": "User saves a decision for future reference",
-        "expectedBehavior": "Memory stored with auto-tagging, confirmation includes memory ID"
+        "name": "Search personal memories by semantic query",
+        "description": "User searches for previous project decisions using natural language query",
+        "tools_triggered": ["search_memory"],
+        "expectedBehavior": "Returns up to 20 relevant memories with summary, source, timestamp; includes hasMore flag if results exceed limit"
       },
       {
-        "name": "Cross-session context recall",
-        "description": "User continues work from previous day with auto-recall",
-        "expectedBehavior": "Automatically injects top 3 relevant memories into context"
+        "name": "Store new long-term memory",
+        "description": "User saves architectural decision to persistent memory with optional project tag",
+        "tools_triggered": ["add_memory"],
+        "expectedBehavior": "Memory sanitized (no secrets detected), stored in backend, confirmation returned with timestamp and project scope"
       },
       {
-        "name": "Wiki document search",
-        "description": "User references documentation stored in wiki",
-        "expectedBehavior": "Returns full document content with formatting preserved and metadata accurate"
+        "name": "Create and update wiki document",
+        "description": "User adds factual documentation to wiki, then updates title and collection",
+        "tools_triggered": ["add_wiki", "update_wiki"],
+        "expectedBehavior": "Document created with unique ID, update modifies content while preserving version history, both operations confirm success"
       },
       {
-        "name": "Session handoff",
-        "description": "User saves ChatGPT session context for use in Cursor",
-        "expectedBehavior": "Creates handoff with unique token, Cursor can import and continue"
+        "name": "Store session handoff for cross-client continuation",
+        "description": "User saves ChatGPT session state (decisions, progress) as handoff for use in another IDE",
+        "tools_triggered": ["store_handoff"],
+        "expectedBehavior": "Handoff replaces any previous handoff for same project, status returned, replacement count shown if applicable"
       }
     ],
     "negative": [
       {
-        "name": "Search with no matches",
-        "description": "User searches for memories on unfamiliar topic",
-        "expectedBehavior": "Graceful empty result with clear message and no errors"
+        "name": "Attempt to add memory with secret content",
+        "description": "User tries to store API key or password-like content",
+        "tools_triggered": ["add_memory"],
+        "expectedBehavior": "Tool rejects content with 'Refusing to store content that looks like a secret' error; no partial storage occurs"
       },
       {
-        "name": "Permission denied",
-        "description": "User attempts wiki access without permissions",
-        "expectedBehavior": "Clear error message, no data corruption or permission granted"
+        "name": "Delete wiki document without confirmation",
+        "description": "User calls delete_wiki with confirm=false or omitted",
+        "tools_triggered": ["delete_wiki"],
+        "expectedBehavior": "Tool throws error 'delete_wiki requires confirm=true'; document not deleted; user must explicitly confirm"
       },
       {
-        "name": "Server timeout",
-        "description": "MCP server is temporarily unavailable",
-        "expectedBehavior": "Times out within 5 seconds, clear error message, no hanging requests"
+        "name": "Search memory when not logged in",
+        "description": "User calls search_memory without prior successful login",
+        "tools_triggered": ["search_memory"],
+        "expectedBehavior": "Tool throws 'Membase is not connected. Run /membase:login first.'; graceful error with no state corruption"
       }
     ]
   },
@@ -222,18 +247,20 @@
   "compliance": {
     "privacyPolicy": "https://membase.so/privacy",
     "termsOfService": "https://membase.so/terms",
-    "dataHandling": "OAuth-based authentication, no API keys stored in plugin, user data encrypted in transit",
+    "dataHandling": "OAuth-based authentication (no password storage), user data encrypted in transit via HTTPS, sensitive content redacted before persistence",
     "securityConsiderations": [
-      "HTTPS required",
-      "OAuth authentication (no password handling)",
-      "No sensitive data in tool responses",
-      "Destructive operations require explicit confirmation"
+      "HTTPS required for all API communication",
+      "OAuth 2.0 PKCE flow for authentication",
+      "No API keys stored locally in plaintext",
+      "Secrets detection filters content before storage",
+      "Destructive operations (delete_wiki, store_handoff) require explicit user confirmation",
+      "All tools perform input sanitization and validate content length (50KB for memories, 100KB for wiki)"
     ]
   },
   "metadata": {
     "submissionDate": "2026-07-10",
     "version": "0.1.6",
     "status": "ready_for_review",
-    "reviewNotes": "All OpenAI official requirements met. Documentation complete. MCP server tested and responding. Domain verification setup provided. 8 test cases documented (5 positive, 3 negative). Tool metadata fully configured."
+    "reviewNotes": "All 12 MCP tools properly annotated with readOnlyHint, openWorldHint, destructiveHint. Justifications use required keys: read_only_justification, open_world_justification, destructive_justification. 5 positive + 3 negative test cases cover authentication, search, memory storage, wiki operations, handoff, and error scenarios. Tools match actual server.ts implementation. No tool exposes secrets or credentials in responses."
   }
 }
