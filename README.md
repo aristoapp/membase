@@ -229,9 +229,7 @@ Private Membase memory engine    ← storage, graph, ranking (not in this repo)
 ```
 
 Client-specific behavior stays in
-`clients/*`; shared behavior lives in `packages/*`. A CI guard fails the build
-if any internal Membase term (storage schema, graph, embeddings, ranking) leaks
-into the public surface.
+`clients/*`; shared behavior lives in `packages/*`.
 
 > **Note:** This repository is the connector/integration layer only. The
 > Membase Context API, memory engine, and their supporting services are a
