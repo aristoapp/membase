@@ -6,10 +6,11 @@ import type { HookInput } from "../types.js";
 /**
  * An explicit MEMBASE_CLIENT_SOURCE (global-config installs, the
  * hooks/cursor-hook.mjs legacy adapter, tests) always wins. Cursor is
- * recognized by its payload fields; Codex by the plugin-root env var its hook
- * runner exposes (installers rewrite CLAUDE_PLUGIN_ROOT to CODEX_PLUGIN_ROOT
- * in hooks.json, and the host sets it for the process). Undetected = Claude
- * Code, the constants.ts default.
+ * recognized by its payload fields (documented hook common schema). Codex is
+ * recognized by a plugin-root env var: the host itself sets PLUGIN_ROOT (plus
+ * a CLAUDE_PLUGIN_ROOT compat alias that collides with real Claude, so it
+ * can't be a signal), and the plugins-CLI install channel rewrites hooks.json
+ * to CODEX_PLUGIN_ROOT. Undetected = Claude Code, the constants.ts default.
  */
 export function detectClientSource(
   input: HookInput,
@@ -23,7 +24,7 @@ export function detectClientSource(
   ) {
     return "cursor";
   }
-  if (env.CODEX_PLUGIN_ROOT) return "codex";
+  if (env.CODEX_PLUGIN_ROOT || env.PLUGIN_ROOT) return "codex";
   return undefined;
 }
 
