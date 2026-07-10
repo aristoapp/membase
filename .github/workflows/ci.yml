@@ -44,6 +44,11 @@ jobs:
 
       - run: pnpm check
 
+      # Installs the committed root payload into stubbed Claude/Cursor/Codex
+      # homes via the pinned vercel-labs plugins CLI — guards the install
+      # conventions (root manifests, hooks env-var rewrite, codex interface).
+      - run: pnpm smoke:install
+
       # Runtime unit tests. The parity
       # checks above are source-inspection only; these actually import and
       # exercise the runtimes.
