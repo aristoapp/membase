@@ -23,9 +23,26 @@ export interface OpenClawPluginManifest {
   id: string;
   kind: typeof OPENCLAW_PLUGIN_KIND;
   skills: string[];
+  // Host tool allowlist: OpenClaw only exposes tools a manifest declares
+  // under contracts.tools. Must stay identical to the runtime manifest's
+  // list (clients/openclaw/runtime/openclaw.plugin.json) — the native-parity
+  // guard cross-checks the two.
+  contracts: { tools: string[] };
   uiHints: Record<string, OpenClawUiHint>;
   configSchema: OpenClawConfigSchema;
 }
+
+export const OPENCLAW_TOOL_CONTRACTS = [
+  "membase_search",
+  "membase_store",
+  "membase_profile",
+  "membase_forget",
+  "membase_search_wiki",
+  "membase_add_wiki",
+  "membase_update_wiki",
+  "membase_delete_wiki",
+  "membase_handoff"
+] as const;
 
 export interface OpenClawUiHint {
   label: string;
@@ -91,6 +108,7 @@ export function generateOpenClawPluginManifest(
     id: OPENCLAW_PLUGIN_ID,
     kind: OPENCLAW_PLUGIN_KIND,
     skills: [OPENCLAW_SKILLS_DIR],
+    contracts: { tools: [...OPENCLAW_TOOL_CONTRACTS] },
     uiHints: {
       apiUrl: {
         label: "Membase API URL",

@@ -79,7 +79,7 @@ Ground rules for every client:
 
 ## openclaw (OpenClaw gateway plugin)
 
-Requires openclaw >= 2026.6 (the plugin manifest declares `contracts.tools`).
+Requires openclaw >= 2026.1.0 (the runtime package's peerDep; the plugin manifest declares `contracts.tools`).
 
 1. In `~/.openclaw/openclaw.json` add (merge, don't replace):
    ```json

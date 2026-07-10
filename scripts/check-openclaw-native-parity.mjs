@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGE_PATH = "clients/openclaw/package.json";
 const MANIFEST_PATH = "clients/openclaw/openclaw.plugin.json";
+const RUNTIME_MANIFEST_PATH = "clients/openclaw/runtime/openclaw.plugin.json";
 
 const failures = [];
 
@@ -57,6 +58,20 @@ if (manifest) {
     `${MANIFEST_PATH}: must not declare apiKeyEnv (OAuth-based auth, no user API key)`
   );
   assertNoRawSecretDefaults(MANIFEST_PATH, manifest.configSchema?.properties ?? {});
+
+  // The host tool allowlist (contracts.tools) exists in TWO manifests for the
+  // same plugin: the generated one (this file) and the runtime package's
+  // committed one. A tool registered but missing from either list is
+  // silently unavailable in the host — the lists must be identical.
+  const runtimeManifest = readJson(RUNTIME_MANIFEST_PATH);
+  if (runtimeManifest) {
+    const generatedTools = JSON.stringify(manifest.contracts?.tools ?? null);
+    const runtimeTools = JSON.stringify(runtimeManifest.contracts?.tools ?? null);
+    assert(
+      generatedTools !== "null" && generatedTools === runtimeTools,
+      `${MANIFEST_PATH}: contracts.tools must exist and match ${RUNTIME_MANIFEST_PATH}`
+    );
+  }
 }
 
 if (failures.length === 0) {
