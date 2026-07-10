@@ -213,9 +213,7 @@ Save this: the staging database resets every night at 02:00 UTC.
 
 ## How it works
 
-Connectors talk to a stable Membase Context API. Membase owns storage, ranking,
-freshness, provenance, and governance behind that API — this repo never exposes
-those internals.
+Connectors talk to a stable Membase Context API.
 
 ```text
 Client plugin or MCP config      ← per-client adapter (clients/*)
@@ -230,7 +228,7 @@ Membase Context API              ← stable public surface
 Private Membase memory engine    ← storage, graph, ranking (not in this repo)
 ```
 
-Dependencies point downward only. Client-specific behavior stays in
+Client-specific behavior stays in
 `clients/*`; shared behavior lives in `packages/*`. A CI guard fails the build
 if any internal Membase term (storage schema, graph, embeddings, ranking) leaks
 into the public surface.
