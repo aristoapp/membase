@@ -54,6 +54,38 @@ describe("stdio bundle client parameterization", () => {
     expect(bad.ua).toStartWith("membase-claude-code/");
   });
 
+  it("defaults the data dir per client descriptor when no env is set", () => {
+    const dataDirWithEnv = (env: Record<string, string | undefined>) => {
+      const childEnv: Record<string, string | undefined> = {
+        ...process.env,
+        MEMBASE_DATA_DIR: undefined,
+        CLAUDE_PLUGIN_DATA: undefined,
+        ...env,
+      };
+      for (const [key, value] of Object.entries(childEnv)) {
+        if (value === undefined) delete childEnv[key];
+      }
+      const result = spawnSync(
+        "bun",
+        [
+          "-e",
+          'const c = await import("./src/config/index.ts"); console.log(c.getDataDir());',
+        ],
+        { cwd: RUNTIME_DIR, env: childEnv, encoding: "utf-8" },
+      );
+      return result.stdout.trim();
+    };
+    // Claude keeps its pre-neutral-layout dir (installed-plugin contract).
+    expect(dataDirWithEnv({ MEMBASE_CLIENT_SOURCE: undefined })).toEndWith(
+      join(".claude", "plugins", "membase"),
+    );
+    // Every other client is per-source under ~/.membase without needing
+    // MEMBASE_DATA_DIR in its hook command.
+    expect(dataDirWithEnv({ MEMBASE_CLIENT_SOURCE: "cursor" })).toEndWith(
+      join(".membase", "cursor"),
+    );
+  });
+
   it("MEMBASE_DATA_DIR wins over the Claude-specific data dir env", () => {
     const prevNeutral = process.env.MEMBASE_DATA_DIR;
     const prevClaude = process.env.CLAUDE_PLUGIN_DATA;

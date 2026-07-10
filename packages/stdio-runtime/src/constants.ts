@@ -1,3 +1,5 @@
+import { clientDescriptor } from "./clients.js";
+
 export const PLUGIN_NAME = "claude-membase";
 export const PLUGIN_VERSION = "0.1.4";
 export const DEFAULT_API_URL = "https://api.membase.so";
@@ -21,20 +23,15 @@ export const INGEST_PLUGIN_LABEL =
   CLIENT_SOURCE === "claude-code"
     ? PLUGIN_NAME
     : `membase-bundle-${CLIENT_SOURCE}`;
-const CLIENT_LABELS: Record<string, string> = {
-  "claude-code": "Claude Code",
-  codex: "Codex",
-  cursor: "Cursor",
-};
 // Display label for an arbitrary client source — used to attribute a SWEPT
 // session digest to the client that did the work (persisted in scratch), not
 // the process that happens to run the sweep. Falls back to CLIENT_LABEL (this
 // process) when the session recorded no source.
 export function clientLabelFor(source?: string): string {
   if (!source) return CLIENT_LABEL;
-  return CLIENT_LABELS[source] ?? source;
+  return clientDescriptor(source).label ?? source;
 }
-export const CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
+export const CLIENT_LABEL = clientDescriptor(CLIENT_SOURCE).label ?? CLIENT_SOURCE;
 export const DEFAULT_RECALL_TIMEOUT_MS = 3_000;
 export const DEFAULT_MAX_RECALL_CHARS = 4_000;
 export const MAX_RECALL_CHARS = 16_000;

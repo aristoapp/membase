@@ -2,10 +2,12 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createTokenStore, writeJsonAtomic } from "@membase/capture-core";
+import { homeDataDirSegments } from "../clients.js";
 import {
   DEFAULT_API_URL,
   DEFAULT_MAX_RECALL_CHARS,
   MAX_RECALL_CHARS,
+  MEMORY_SOURCE,
   MIN_RECALL_CHARS,
 } from "../constants.js";
 import type {
@@ -18,12 +20,12 @@ import type {
 
 export function getDataDir(): string {
   const dir =
-    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
-    // point this at their own state dir — or a shared one for a single
-    // machine-wide login — without Claude-specific env names.
+    // Client-neutral override first: any client can point this at a custom
+    // state dir — or a shared one for a single machine-wide login. Without
+    // it, each client's descriptor default keeps state per client.
     process.env.MEMBASE_DATA_DIR ||
     process.env.CLAUDE_PLUGIN_DATA ||
-    join(homedir(), ".claude", "plugins", "membase");
+    join(homedir(), ...homeDataDirSegments(MEMORY_SOURCE));
   // MCP-client env entries are not shell-expanded, so `~/...` arrives literal.
   return dir.startsWith("~/") ? join(homedir(), dir.slice(2)) : dir;
 }
@@ -73,6 +75,11 @@ function boolFromOption(name: string, fallback: boolean): boolean {
 
 function strFromOption(name: string): string | undefined {
   const value = pluginOption(name);
+  return value?.trim() ? value.trim() : undefined;
+}
+
+function strFromEnv(name: string): string | undefined {
+  const value = process.env[name];
   return value?.trim() ? value.trim() : undefined;
 }
 
@@ -126,8 +133,13 @@ export function loadConfig(): PluginConfig {
     ),
     // Disk wins: hooks pass a captureMode option on every run, so env can
     // only be the default — otherwise it would override an explicit opt-out.
+    // MEMBASE_CAPTURE_MODE is the client-neutral env; CLAUDE_PLUGIN_OPTION_
+    // captureMode is the Claude plugin's native option channel and the legacy
+    // name for already-installed non-Claude hook configs.
     captureMode: normalizeCaptureMode(
-      disk.captureMode ?? strFromOption("captureMode"),
+      disk.captureMode ??
+        strFromEnv("MEMBASE_CAPTURE_MODE") ??
+        strFromOption("captureMode"),
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(

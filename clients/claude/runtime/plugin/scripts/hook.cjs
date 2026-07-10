@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 "use strict";
 
-// ../../../packages/capture-core/src/spool.ts
+// ../capture-core/src/spool.ts
 var import_node_crypto = require("node:crypto");
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = require("node:path");
 
-// ../../../packages/capture-core/src/token-store.ts
+// ../capture-core/src/token-store.ts
 var import_node_fs = require("node:fs");
 var import_node_path = require("node:path");
 function writeTextAtomic(path, text, mode = 384) {
@@ -70,7 +70,7 @@ function createTokenStore(options) {
   return { path, read, write, clear };
 }
 
-// ../../../packages/capture-core/src/spool.ts
+// ../capture-core/src/spool.ts
 var LOCK_STALE_MS = 3e4;
 var LOCK_WAIT_MS = 2e3;
 var INFLIGHT_STALE_MS = 6e4;
@@ -334,7 +334,7 @@ function createCaptureSpool(options) {
   return { captureId, enqueueCapture: enqueueCapture2, flushSpool: flushSpool2, pendingSpoolCount: pendingSpoolCount2 };
 }
 
-// ../../../packages/capture-core/src/handoff.ts
+// ../capture-core/src/handoff.ts
 var HANDOFF_TAG = "[HANDOFF]";
 var HANDOFF_RECALL_LIMIT = 20;
 function handoffRecallQuery() {
@@ -388,7 +388,7 @@ function buildStaleHandoffNotice(args) {
   return `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]", or read the local handoff file).`;
 }
 
-// ../../../packages/capture-core/src/index.ts
+// ../capture-core/src/index.ts
 var CASUAL_PATTERNS = [
   /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
   /^(good\s*(morning|afternoon|evening|night))\b/,
@@ -554,6 +554,33 @@ var MembaseTransport = class {
   }
 };
 
+// src/clients.ts
+var GENERIC_LOGIN_HINT = "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.";
+var CLIENT_DESCRIPTORS = {
+  "claude-code": {
+    label: "Claude Code",
+    fileFirstHandoff: true,
+    loginHint: "Membase is installed but not connected. Run /membase:login to enable memory.",
+    // Part of the installed Claude plugin's on-disk contract since before the
+    // client-neutral layout — do not migrate it to ~/.membase/claude-code.
+    homeDataDir: [".claude", "plugins", "membase"]
+  },
+  codex: {
+    label: "Codex",
+    handoffDotDir: ".codex"
+  },
+  cursor: {
+    label: "Cursor",
+    hostInjectsHandoff: true
+  }
+};
+function clientDescriptor(source) {
+  return CLIENT_DESCRIPTORS[source] ?? {};
+}
+function homeDataDirSegments(source) {
+  return clientDescriptor(source).homeDataDir ?? [".membase", source];
+}
+
 // src/constants.ts
 var PLUGIN_NAME = "claude-membase";
 var PLUGIN_VERSION = "0.1.4";
@@ -563,16 +590,11 @@ var CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOU
 var MEMORY_SOURCE = CLIENT_SOURCE;
 var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
 var INGEST_PLUGIN_LABEL = CLIENT_SOURCE === "claude-code" ? PLUGIN_NAME : `membase-bundle-${CLIENT_SOURCE}`;
-var CLIENT_LABELS = {
-  "claude-code": "Claude Code",
-  codex: "Codex",
-  cursor: "Cursor"
-};
 function clientLabelFor(source) {
   if (!source) return CLIENT_LABEL;
-  return CLIENT_LABELS[source] ?? source;
+  return clientDescriptor(source).label ?? source;
 }
-var CLIENT_LABEL = CLIENT_LABELS[CLIENT_SOURCE] ?? CLIENT_SOURCE;
+var CLIENT_LABEL = clientDescriptor(CLIENT_SOURCE).label ?? CLIENT_SOURCE;
 var DEFAULT_RECALL_TIMEOUT_MS = 3e3;
 var DEFAULT_MAX_RECALL_CHARS = 4e3;
 var MAX_RECALL_CHARS = 16e3;
@@ -729,10 +751,10 @@ var import_node_os = require("node:os");
 var import_node_path3 = require("node:path");
 function getDataDir() {
   const dir = (
-    // Client-neutral override first: stdio-bundled clients (Cursor/Codex)
-    // point this at their own state dir — or a shared one for a single
-    // machine-wide login — without Claude-specific env names.
-    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ".claude", "plugins", "membase")
+    // Client-neutral override first: any client can point this at a custom
+    // state dir — or a shared one for a single machine-wide login. Without
+    // it, each client's descriptor default keeps state per client.
+    process.env.MEMBASE_DATA_DIR || process.env.CLAUDE_PLUGIN_DATA || (0, import_node_path3.join)((0, import_node_os.homedir)(), ...homeDataDirSegments(MEMORY_SOURCE))
   );
   return dir.startsWith("~/") ? (0, import_node_path3.join)((0, import_node_os.homedir)(), dir.slice(2)) : dir;
 }
@@ -766,6 +788,10 @@ function boolFromOption(name, fallback) {
 }
 function strFromOption(name) {
   const value = pluginOption(name);
+  return value?.trim() ? value.trim() : void 0;
+}
+function strFromEnv(name) {
+  const value = process.env[name];
   return value?.trim() ? value.trim() : void 0;
 }
 function numberFromOption(name) {
@@ -805,8 +831,11 @@ function loadConfig() {
     ),
     // Disk wins: hooks pass a captureMode option on every run, so env can
     // only be the default — otherwise it would override an explicit opt-out.
+    // MEMBASE_CAPTURE_MODE is the client-neutral env; CLAUDE_PLUGIN_OPTION_
+    // captureMode is the Claude plugin's native option channel and the legacy
+    // name for already-installed non-Claude hook configs.
     captureMode: normalizeCaptureMode(
-      disk.captureMode ?? strFromOption("captureMode")
+      disk.captureMode ?? strFromEnv("MEMBASE_CAPTURE_MODE") ?? strFromOption("captureMode")
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
@@ -1027,16 +1056,17 @@ function readAt(path) {
     return null;
   }
 }
-function codexCandidates(cwd) {
+function dotDirCandidates(dotDir, cwd) {
   if (process.env.MEMBASE_HANDOFF_FILE) return [process.env.MEMBASE_HANDOFF_FILE];
   const home = process.env.HOME || (0, import_node_os2.homedir)();
   return [
-    (0, import_node_path6.join)(cwd ?? process.cwd(), ".codex", "membase-handoff.md"),
-    (0, import_node_path6.join)(home, ".codex", "membase-handoff.md")
+    (0, import_node_path6.join)(cwd ?? process.cwd(), dotDir, "membase-handoff.md"),
+    (0, import_node_path6.join)(home, dotDir, "membase-handoff.md")
   ];
 }
 function readLocalHandoff(args) {
-  const candidates = args.clientSource === "codex" ? codexCandidates(args.cwd) : [handoffFilePath(args.projectSlug)];
+  const dotDir = clientDescriptor(args.clientSource).handoffDotDir;
+  const candidates = dotDir ? dotDirCandidates(dotDir, args.cwd) : [handoffFilePath(args.projectSlug)];
   let newestStale = null;
   for (const candidate of candidates) {
     const found = readAt(candidate);
@@ -1513,7 +1543,7 @@ async function handleSessionStart(input) {
     const lines = [];
     if (config.sessionStartContext !== "off") {
       lines.push(
-        MEMORY_SOURCE === "claude-code" ? "Membase is installed but not connected. Run /membase:login to enable memory." : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory."
+        clientDescriptor(MEMORY_SOURCE).loginHint ?? GENERIC_LOGIN_HINT
       );
       const pending = pendingSpoolCount();
       if (pending > 0) {
@@ -1576,7 +1606,7 @@ async function fetchCloudHandoff(client, projectSlug) {
   return { text, storedAtMs };
 }
 async function resolveHandoffInjection(input, projectSlug, client) {
-  if (MEMORY_SOURCE === "cursor") return "";
+  if (clientDescriptor(MEMORY_SOURCE).hostInjectsHandoff) return "";
   const local = readLocalHandoff({
     clientSource: MEMORY_SOURCE,
     cwd: input.cwd,

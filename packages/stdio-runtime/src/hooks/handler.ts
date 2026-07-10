@@ -1,5 +1,6 @@
 import { createClient } from "../api/client.js";
 import type { MembaseClient } from "../api/client.js";
+import { GENERIC_LOGIN_HINT, clientDescriptor } from "../clients.js";
 import { loadConfig, readTokens, writeTokens } from "../config/index.js";
 import {
   DEFAULT_RECALL_TIMEOUT_MS,
@@ -241,9 +242,7 @@ async function handleSessionStart(input: HookInput): Promise<void> {
     const lines: string[] = [];
     if (config.sessionStartContext !== "off") {
       lines.push(
-        MEMORY_SOURCE === "claude-code"
-          ? "Membase is installed but not connected. Run /membase:login to enable memory."
-          : "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.",
+        clientDescriptor(MEMORY_SOURCE).loginHint ?? GENERIC_LOGIN_HINT,
       );
       // HTTP-fallback mode: hooks collect without
       // tokens, so the authenticated in-app AI is the uploader — announce
@@ -342,9 +341,10 @@ async function fetchCloudHandoff(
 }
 
 /**
- * The single handoff-injection policy for every non-cursor client and both
- * sources. Cursor is excluded — its Rules auto-load already injects the
- * rolling .mdc file, and doubling it here would inject twice.
+ * The single handoff-injection policy for every client and both sources.
+ * Clients whose host already injects the handoff (descriptor
+ * hostInjectsHandoff — cursor's Rules auto-load injects the rolling .mdc
+ * file) are excluded, since doubling it here would inject twice.
  *
  * Order: a FRESH local file wins (same-client continuation is
  * local, no quota); otherwise the cloud is consulted (cross-client fallback),
@@ -357,7 +357,7 @@ async function resolveHandoffInjection(
   projectSlug?: string,
   client?: MembaseClient,
 ): Promise<string> {
-  if (MEMORY_SOURCE === "cursor") return "";
+  if (clientDescriptor(MEMORY_SOURCE).hostInjectsHandoff) return "";
   const local = readLocalHandoff({
     clientSource: MEMORY_SOURCE,
     cwd: input.cwd,

@@ -1,8 +1,8 @@
 {
-  "name": "@membase/claude-membase-runtime",
+  "name": "@membase/stdio-runtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Claude Code plugin runtime for Membase (stdio MCP server, hooks, commands, skills).",
+  "description": "Shared stdio runtime for Membase clients (hook handler + stdio MCP server); client identity comes from MEMBASE_CLIENT_SOURCE.",
   "type": "module",
   "engines": {
     "node": ">=18.17.0"
