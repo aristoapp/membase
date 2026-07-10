@@ -39,11 +39,7 @@ claude plugin install membase@membase-plugins
 ```
 
 Per-client manual setup below. Every client connects to the same hosted MCP server:
-`https://mcp.membase.so/mcp`. **No API key needed** — the first time your
-client calls Membase, it opens a Membase OAuth login in your browser. Approve
-it once and you're connected; no tokens are stored in any config file.
-Headless/CI environments use a `client_credentials` service token via
-environment variables instead.
+`https://mcp.membase.so/mcp`.
 
 <details>
 <summary><b>Claude Code</b></summary>
