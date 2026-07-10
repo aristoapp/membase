@@ -4,7 +4,9 @@ description: Summarize this session's state, show it to the user, store it in Me
 
 Write a concise handoff summary of this session: what was done, key decisions
 and why, current state, and what's next. Only durable state — no secrets, API
-keys, passwords, or raw source files.
+keys, passwords, or raw source files. When writing the summary, reference
+prior work by path or URL rather than embedding full context — this keeps the
+handoff maintainable as upstream docs and specs evolve.
 
 0. If `~/.membase/codex/spool/pending.jsonl` is non-empty, flush it per the
    `/dream` prompt's rename-first protocol before storing the handoff —

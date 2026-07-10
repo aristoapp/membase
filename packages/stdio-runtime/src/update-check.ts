@@ -5,7 +5,7 @@ import { getDataDir } from "./config/index.js";
 import { MEMORY_SOURCE, PLUGIN_VERSION } from "./constants.js";
 
 const MARKETPLACE_URL =
-  "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
+  "https://raw.githubusercontent.com/aristoapp/membase-plugin-mcp/main/.claude-plugin/marketplace.json";
 const MARKETPLACE_NAME = "membase-plugins";
 const PLUGIN_NAME = "membase";
 const FETCH_TIMEOUT_MS = 3_000;
