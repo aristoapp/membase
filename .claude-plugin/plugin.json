@@ -21,7 +21,17 @@
   "agents": [
     "./agents/membase-curator.md"
   ],
-  "mcpServers": "./.mcp.json",
+  "mcpServers": {
+    "membase": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs"
+      ],
+      "env": {
+        "MEMBASE_CLAUDE_PLUGIN": "1"
+      }
+    }
+  },
   "userConfig": {
     "apiUrl": {
       "type": "string",

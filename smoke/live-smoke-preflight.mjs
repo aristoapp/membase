@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const mcpConfigSpecs = [
-  { path: ".mcp.json", mode: "claude-plugin-local" },
+  { path: ".claude-plugin/plugin.json", mode: "claude-plugin-local" },
   { path: "mcp.json", mode: "remote-http" },
   { path: "manifests/hermes/mcp.json", mode: "remote-http" },
   { path: "manifests/openclaw/mcp.json", mode: "remote-http" }

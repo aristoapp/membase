@@ -32,8 +32,9 @@ await Promise.all([
 
 // Committed, byte-identical copies in the root payload.
 // check-bundle-provenance rebuilds and diffs them.
-// mcp-server.cjs is wired only into Claude's .mcp.json — codex/cursor use the
-// remote HTTP MCP — but ships in the same hooks/ dir for every install.
+// mcp-server.cjs is wired only into the Claude manifest's inline mcpServers —
+// codex/cursor use the remote HTTP MCP — but ships in the same hooks/ dir for
+// every install.
 const copies: Array<[from: string, to: string]> = [
   ["dist/hook.cjs", "../../hooks/hook.cjs"],
   ["dist/mcp-server.cjs", "../../hooks/mcp-server.cjs"],

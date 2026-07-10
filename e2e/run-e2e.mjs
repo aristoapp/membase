@@ -63,7 +63,8 @@ const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
 const REST_API_BASE = process.env.MEMBASE_API_BASE ?? AUTH_SERVER;
 
 const CLIENTS = [
-  { id: "claude", config: ".mcp.json" },
+  // Claude's stdio config is inlined in the plugin manifest (no root .mcp.json).
+  { id: "claude", config: ".claude-plugin/plugin.json" },
   { id: "cursor", config: "mcp.json" },
   { id: "codex", config: "mcp.json" },
   { id: "hermes", config: "clients/hermes/mcp.json" },

@@ -25,11 +25,6 @@ const adapterSpecs = [
         path: ".claude-plugin/marketplace.json",
         format: "json",
         pick: (artifacts) => artifacts.marketplace
-      },
-      {
-        path: ".mcp.json",
-        format: "json",
-        pick: (artifacts) => artifacts.mcp
       }
     ]
   },

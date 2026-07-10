@@ -3,7 +3,8 @@
 // payload into Claude Code, Cursor, and Codex. Guards the conventions the CLI
 // depends on — root marketplace/vendor manifests, hooks.json env-var
 // rewriting, and the committed Codex `interface` block that must keep the
-// installer from re-pointing mcpServers at the Claude-owned .mcp.json.
+// installer from re-pointing mcpServers at the Claude manifest's inline
+// stdio config.
 //
 // The CLI mutates the plugin dir in place (marketplace generation, env-var
 // translation), so it runs against a fresh `git clone` of the COMMITTED tree
@@ -72,10 +73,19 @@ try {
     failures.push(`claude: expected one cached install under ${claudeCache}`);
   } else {
     const installed = path.join(claudeCache, claudeVersions[0]);
-    for (const rel of ["hooks/hook.cjs", "hooks/hooks.json", "hooks/mcp-server.cjs", ".mcp.json", "commands", "skills"]) {
+    for (const rel of ["hooks/hook.cjs", "hooks/hooks.json", "hooks/mcp-server.cjs", "commands", "skills"]) {
       if (!existsSync(path.join(installed, rel))) {
         failures.push(`claude: installed copy is missing ${rel}`);
       }
+    }
+    // The stdio MCP config is inlined in the manifest (a root .mcp.json would
+    // double as project-scope config for developers opening the repo).
+    const installedManifest = readJson(path.join(installed, ".claude-plugin", "plugin.json"));
+    if (
+      installedManifest?.mcpServers?.membase?.args?.[0] !==
+      "${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs"
+    ) {
+      failures.push("claude: installed plugin.json must carry the inline stdio mcpServers");
     }
   }
   const settings = readJson(path.join(home, ".claude", "settings.json"));
@@ -119,8 +129,8 @@ try {
     const codexDir = path.join(home, codexEntry.source.path.replace(/^\.\//, ""));
     const codexManifest = readJson(path.join(codexDir, ".codex-plugin", "plugin.json"));
     // The committed interface block must have blocked installer enrichment:
-    // mcpServers stays the inline HTTP config, never a .mcp.json pointer
-    // (which would resolve to the Claude-owned stdio config).
+    // mcpServers stays the inline HTTP config, never the Claude manifest's
+    // inline stdio config.
     if (codexManifest?.mcpServers?.membase?.url !== "https://mcp.membase.so/mcp") {
       failures.push("codex: .codex-plugin/plugin.json must keep the inline HTTP mcpServers");
     }
