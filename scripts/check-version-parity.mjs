@@ -19,7 +19,8 @@ const npmPackagePaths = [
 const pluginJsonVersionPaths = [
   ".claude-plugin/plugin.json",
   ".cursor-plugin/plugin.json",
-  ".plugin/plugin.json"
+  ".plugin/plugin.json",
+  ".openai-plugin/plugin.json"
 ];
 
 const hermesYamlVersionPaths = [
