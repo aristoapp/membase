@@ -5,20 +5,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-// The repo root is the Claude plugin: root .claude-plugin/ + .mcp.json are
-// what `claude plugin marketplace add` and the plugins CLI install.
+// The repo root is the Claude plugin: root .claude-plugin/ (manifest with the
+// stdio MCP config inlined) is what `claude plugin marketplace add` and the
+// plugins CLI install.
 const CLIENT_PLUGIN_PATH = ".claude-plugin/plugin.json";
-const CLIENT_MCP_PATH = ".mcp.json";
 const CLIENT_PACKAGE_PATH = "clients/claude/package.json";
 
 const failures = [];
 
 const clientPlugin = readJson(CLIENT_PLUGIN_PATH);
-const mcpConfig = readJson(CLIENT_MCP_PATH);
 const clientPackage = readJson(CLIENT_PACKAGE_PATH);
 
 if (clientPlugin) {
   assertClaudePluginManifest(clientPlugin);
+  assertClaudeMcpConfig(clientPlugin);
 }
 
 if (clientPlugin && clientPackage && clientPlugin.version !== clientPackage.version) {
@@ -27,8 +27,13 @@ if (clientPlugin && clientPackage && clientPlugin.version !== clientPackage.vers
   );
 }
 
-if (mcpConfig) {
-  assertClaudeMcpConfig(mcpConfig);
+// Claude Code reads a repo-root .mcp.json as project-scope MCP config too, so
+// a payload copy at that name breaks (undefined CLAUDE_PLUGIN_ROOT) for anyone
+// opening this repo. The stdio config must stay inlined in the manifest.
+if (fs.existsSync(path.join(ROOT_DIR, ".mcp.json"))) {
+  failures.push(
+    ".mcp.json: must not exist at the repo root — inline the stdio config in .claude-plugin/plugin.json instead"
+  );
 }
 
 runClaudePluginValidation();
@@ -82,50 +87,50 @@ function assertClaudePluginManifest(manifest) {
 function assertClaudeMcpConfig(config) {
   const server = config?.mcpServers?.membase;
   if (!server || typeof server !== "object") {
-    failures.push(`${CLIENT_MCP_PATH}: missing mcpServers.membase`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: missing mcpServers.membase`);
     return;
   }
 
   if (!isNonEmptyString(server.command)) {
-    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.command must be a non-empty string`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: mcpServers.membase.command must be a non-empty string`);
   }
 
   if (server.command !== "node") {
-    failures.push(`${CLIENT_MCP_PATH}: command must preserve Claude plugin-local node runtime`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: command must preserve Claude plugin-local node runtime`);
   }
 
   if (!Array.isArray(server.args) || server.args.length === 0) {
-    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.args must be a non-empty array`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: mcpServers.membase.args must be a non-empty array`);
   }
 
   if (server.args?.[0] !== "${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs") {
-    failures.push(`${CLIENT_MCP_PATH}: args must point at the plugin-local MCP server`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: args must point at the plugin-local MCP server`);
   }
 
   const env = server.env;
   if (!env || typeof env !== "object") {
-    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.env is required`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: mcpServers.membase.env is required`);
     return;
   }
 
   if (env.MEMBASE_CLAUDE_PLUGIN !== "1") {
-    failures.push(`${CLIENT_MCP_PATH}: MEMBASE_CLAUDE_PLUGIN marker must stay enabled`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: MEMBASE_CLAUDE_PLUGIN marker must stay enabled`);
   }
 
   // The bundled plugin manages login; the config must carry no user-supplied
   // API key, host, or client metadata env — only the plugin flag.
   if ("MEMBASE_API_KEY" in env) {
-    failures.push(`${CLIENT_MCP_PATH}: must not carry MEMBASE_API_KEY (Claude plugin login is used)`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: must not carry MEMBASE_API_KEY (Claude plugin login is used)`);
   }
 
   for (const field of ["MEMBASE_API_BASE_URL", "MEMBASE_CLIENT_ID", "MEMBASE_CLIENT_NAME", "MEMBASE_CLIENT_VERSION"]) {
     if (field in env) {
-      failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.env.${field} must not be set (bundled server handles it)`);
+      failures.push(`${CLIENT_PLUGIN_PATH}: mcpServers.membase.env.${field} must not be set (bundled server handles it)`);
     }
   }
 
   if (Object.keys(env).length !== 1) {
-    failures.push(`${CLIENT_MCP_PATH}: env must contain only MEMBASE_CLAUDE_PLUGIN`);
+    failures.push(`${CLIENT_PLUGIN_PATH}: env must contain only MEMBASE_CLAUDE_PLUGIN`);
   }
 }
 

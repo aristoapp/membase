@@ -48,6 +48,6 @@ pnpm public-surface        # lints the public API surface
 
 Plugin metadata lives in the generated root `.plugin/plugin.json`, which
 carries the MCP config INLINE (installers translate it to `.codex-plugin/`;
-the root `.mcp.json` belongs to the Claude stdio server). Edit the adapter in
-`src/index.ts` and run `pnpm generate` (a root script) rather than
+the Claude stdio config is inlined in `.claude-plugin/plugin.json`). Edit the
+adapter in `src/index.ts` and run `pnpm generate` (a root script) rather than
 hand-editing it.

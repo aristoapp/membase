@@ -30,14 +30,14 @@ export interface CodexPluginManifest {
   repository: string;
   license: string;
   keywords: string[];
-  // Inline server config (not a file pointer): the root .mcp.json belongs to
-  // the Claude plugin (local stdio server), while Codex keeps the HTTP-first
-  // contract — inlining is the only way one shared payload carries both.
+  // Inline server config (not a file pointer): the Claude manifest inlines a
+  // local stdio server, while Codex keeps the HTTP-first contract — every
+  // manifest inlines its own config so one shared payload carries both.
   mcpServers: Record<string, { url: string; headers: Record<string, string> }>;
   // Committed interface metadata. Its presence also stops installer-side
   // enrichment (the plugins CLI synthesizes skills/mcpServers/interface into
   // manifests that lack `interface`, which would re-point mcpServers at the
-  // Claude-owned .mcp.json).
+  // Claude manifest's stdio config).
   interface: {
     displayName: string;
     shortDescription: string;
