@@ -36,6 +36,7 @@
     "smoke:dry-run": "pnpm typecheck && node smoke/client-smoke.mjs",
     "smoke:execute": "pnpm typecheck && node smoke/client-smoke.mjs --execute",
     "smoke:live:preflight": "node smoke/live-smoke-preflight.mjs",
+    "smoke:install": "node smoke/plugins-cli-install.mjs",
     "typecheck": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw --pretty false",
     "version-parity": "node scripts/check-version-parity.mjs",
     "capture-core:typecheck": "pnpm --filter @membase/capture-core typecheck",
