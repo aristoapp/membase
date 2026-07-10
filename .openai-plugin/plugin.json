@@ -35,7 +35,7 @@
     "displayName": "Membase",
     "shortDescription": "Persistent memory across sessions — search, store, wiki, and handoffs.",
     "longDescription": "Membase provides persistent long-term memory for ChatGPT using hybrid vector search and knowledge graphs. Share context across sessions, remember your preferences and past decisions, and maintain project continuity without re-explaining everything.",
-    "logo": "./logo.svg",
+    "logo": "./Membase-white.png",
     "category": "Productivity",
     "instructions": "Sign up at app.membase.so to get started. Connect your ChatGPT account via OAuth in under a minute.",
     "externalURL": "https://app.membase.so"
