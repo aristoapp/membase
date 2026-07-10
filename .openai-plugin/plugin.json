@@ -1,0 +1,43 @@
+{
+  "name": "membase",
+  "displayName": "Membase",
+  "description": "Connect ChatGPT to Membase persistent memory over MCP — memory search and store, wiki, and cross-session handoffs.",
+  "version": "0.1.6",
+  "author": {
+    "name": "Membase",
+    "email": "support@aristo.so",
+    "url": "https://membase.so"
+  },
+  "homepage": "https://membase.so",
+  "repository": "https://github.com/aristoapp/membase-plugin-mcp",
+  "license": "MIT",
+  "keywords": [
+    "agent-memory",
+    "context",
+    "mcp",
+    "chatgpt",
+    "membase",
+    "persistent-memory"
+  ],
+  "category": "Productivity",
+  "capabilities": [
+    "memory-management",
+    "knowledge-base",
+    "context-persistence"
+  ],
+  "mcpServers": {
+    "membase": {
+      "url": "https://mcp.membase.so/mcp",
+      "headers": {}
+    }
+  },
+  "interface": {
+    "displayName": "Membase",
+    "shortDescription": "Persistent memory across sessions — search, store, wiki, and handoffs.",
+    "longDescription": "Membase provides persistent long-term memory for ChatGPT using hybrid vector search and knowledge graphs. Share context across sessions, remember your preferences and past decisions, and maintain project continuity without re-explaining everything.",
+    "logo": "./logo.svg",
+    "category": "Productivity",
+    "instructions": "Sign up at app.membase.so to get started. Connect your ChatGPT account via OAuth in under a minute.",
+    "externalURL": "https://app.membase.so"
+  }
+}
