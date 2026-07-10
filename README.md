@@ -240,23 +240,22 @@ and the "where does X live" map in [MAP.md](MAP.md).
 
 ## Contributing
 
-Contributions are welcome! This is a [pnpm](https://pnpm.io) monorepo
-(**Node.js 20+**, **pnpm 11+**):
+Contributions are welcome — new connectors, bug reports, install-guide and
+docs fixes. This is a [pnpm](https://pnpm.io) monorepo (**Node.js 20+**,
+**pnpm 11+**):
 
 ```bash
 pnpm install
-pnpm check
+pnpm test    # runtime + contract suites
+pnpm check   # the same gate CI runs on your PR
 ```
 
-`pnpm check` is the full gate: it typechecks the workspace, verifies that
-committed manifests match adapter-generated output, runs the connector smoke
-tests, scans for accidentally committed secrets, and enforces the public
-surface boundary. Run it before opening a pull request.
+Conventions, in short: [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat(cursor): …`); never hand-edit generated manifests — change the adapter
+or descriptor and run `pnpm generate`; a new config-only MCP host is a
+descriptor (`defineMcpHostAgent()`), not a hand-written adapter.
 
-Adding a new MCP host is often just a descriptor — `defineMcpHostAgent()` in
-`packages/connector-sdk` — plus a regen, not a hand-written adapter. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the branch → `pnpm check` →
-PR flow, and how to add a connector, and please review our
+Details in [CONTRIBUTING.md](CONTRIBUTING.md); please also review our
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
