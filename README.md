@@ -240,8 +240,8 @@ and the "where does X live" map in [MAP.md](MAP.md).
 
 ## Contributing
 
-Contributions are welcome — new connectors, bug reports, install-guide and
-docs fixes. This is a [pnpm](https://pnpm.io) monorepo (**Node.js 20+**,
+Contributions are welcome — new connectors, bug fixes, docs, performance
+optimization. This is a [pnpm](https://pnpm.io) monorepo (**Node.js 20+**,
 **pnpm 11+**):
 
 ```bash
@@ -249,11 +249,6 @@ pnpm install
 pnpm test    # runtime + contract suites
 pnpm check   # the same gate CI runs on your PR
 ```
-
-Conventions, in short: [Conventional Commits](https://www.conventionalcommits.org/)
-(`feat(cursor): …`); never hand-edit generated manifests — change the adapter
-or descriptor and run `pnpm generate`; a new config-only MCP host is a
-descriptor (`defineMcpHostAgent()`), not a hand-written adapter.
 
 Details in [CONTRIBUTING.md](CONTRIBUTING.md); please also review our
 [Code of Conduct](CODE_OF_CONDUCT.md).
