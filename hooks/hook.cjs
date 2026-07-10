@@ -1941,7 +1941,7 @@ function detectClientSource(input, env = process.env) {
   if ("conversation_id" in input || "workspace_roots" in input || "cursor_version" in input) {
     return "cursor";
   }
-  if (env.CODEX_PLUGIN_ROOT) return "codex";
+  if (env.CODEX_PLUGIN_ROOT || env.PLUGIN_ROOT) return "codex";
   return void 0;
 }
 function normalizeCursorInput(input) {
