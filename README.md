@@ -1,17 +1,13 @@
-# Membase Plugin/MCP
-
-**The official connector kit for plugging [Membase](https://membase.so) into your AI clients.**
+<p align="center">
+  <a href="https://membase.so">
+    <img src="docs/assets/banner.png" alt="Membase Plugin/MCP — the official connector kit for plugging Membase into your AI clients" width="100%">
+  </a>
+</p>
 
 [![CI](https://github.com/aristoapp/membase-plugin-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/aristoapp/membase-plugin-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?logo=opensourceinitiative&logoColor=white)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github&logoColor=white)](./CONTRIBUTING.md)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/vHgtDd6UTK)
-
-Membase is a persistent memory layer for AI agents — a shared store that
-survives across sessions, tools, and platforms so your agents remember what
-matters. This repository is the **integration surface**: it gives editors,
-CLIs, and MCP-capable agents a consistent, secure way to connect to Membase.
 
 [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=membase&config=eyJ1cmwiOiJodHRwczovL21jcC5tZW1iYXNlLnNvL21jcCJ9)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=membase&config=%7B%22type%22%3A%20%22http%22%2C%20%22url%22%3A%20%22https%3A%2F%2Fmcp.membase.so%2Fmcp%22%7D)
