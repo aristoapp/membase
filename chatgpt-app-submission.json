@@ -1,0 +1,173 @@
+{
+  "app": {
+    "name": "Membase",
+    "description": "Persistent memory for ChatGPT using MCP — search, store, wiki, and cross-session handoffs",
+    "logoUrl": "https://github.com/aristoapp/membase-plugin-mcp/raw/main/.openai-plugin/Membase-white.png",
+    "category": "Productivity",
+    "developer": {
+      "name": "Membase",
+      "email": "support@membase.so",
+      "website": "https://membase.so",
+      "privacyPolicyUrl": "https://membase.so/privacy",
+      "termsOfServiceUrl": "https://membase.so/terms"
+    },
+    "version": "0.1.6",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/aristoapp/membase-plugin-mcp"
+    }
+  },
+  "mcp": {
+    "type": "http",
+    "url": "https://mcp.membase.so/mcp",
+    "authentication": "oauth",
+    "authenticationDetails": {
+      "provider": "membase",
+      "flow": "PKCE",
+      "tokenEndpoint": "https://api.membase.so/oauth/token",
+      "authorizationEndpoint": "https://app.membase.so/oauth/authorize"
+    }
+  },
+  "tools": [
+    {
+      "name": "membase_search",
+      "description": "Search persistent memories by semantic similarity",
+      "category": "memory",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_store",
+      "description": "Save important information to long-term memory",
+      "category": "memory",
+      "readOnlyHint": false,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_forget",
+      "description": "Delete a memory permanently",
+      "category": "memory",
+      "readOnlyHint": false,
+      "openWorldHint": false,
+      "destructiveHint": true
+    },
+    {
+      "name": "membase_profile",
+      "description": "Retrieve user profile and related memories",
+      "category": "memory",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_search_wiki",
+      "description": "Search wiki documents for stable factual references",
+      "category": "wiki",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_add_wiki",
+      "description": "Create a wiki document from markdown content",
+      "category": "wiki",
+      "readOnlyHint": false,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_update_wiki",
+      "description": "Update title, content, or collection of an existing wiki document",
+      "category": "wiki",
+      "readOnlyHint": false,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    {
+      "name": "membase_delete_wiki",
+      "description": "Delete a wiki document permanently",
+      "category": "wiki",
+      "readOnlyHint": false,
+      "openWorldHint": false,
+      "destructiveHint": true
+    }
+  ],
+  "capabilities": [
+    "memory-management",
+    "knowledge-base",
+    "context-persistence",
+    "cross-session-continuity"
+  ],
+  "testCases": {
+    "positive": [
+      {
+        "name": "Search personal memories",
+        "description": "User recalls project preferences from previous sessions",
+        "expectedBehavior": "Returns top 3 relevant memories with dates and source tags"
+      },
+      {
+        "name": "Store new memory",
+        "description": "User saves a decision for future reference",
+        "expectedBehavior": "Memory stored with auto-tagging, confirmation includes memory ID"
+      },
+      {
+        "name": "Cross-session context recall",
+        "description": "User continues work from previous day with auto-recall",
+        "expectedBehavior": "Automatically injects top 3 relevant memories into context"
+      },
+      {
+        "name": "Wiki document search",
+        "description": "User references documentation stored in wiki",
+        "expectedBehavior": "Returns full document content with formatting preserved and metadata accurate"
+      },
+      {
+        "name": "Session handoff",
+        "description": "User saves ChatGPT session context for use in Cursor",
+        "expectedBehavior": "Creates handoff with unique token, Cursor can import and continue"
+      }
+    ],
+    "negative": [
+      {
+        "name": "Search with no matches",
+        "description": "User searches for memories on unfamiliar topic",
+        "expectedBehavior": "Graceful empty result with clear message and no errors"
+      },
+      {
+        "name": "Permission denied",
+        "description": "User attempts wiki access without permissions",
+        "expectedBehavior": "Clear error message, no data corruption or permission granted"
+      },
+      {
+        "name": "Server timeout",
+        "description": "MCP server is temporarily unavailable",
+        "expectedBehavior": "Times out within 5 seconds, clear error message, no hanging requests"
+      }
+    ]
+  },
+  "starterPrompts": [
+    "Save this architectural decision: We're using event-driven patterns for scalability",
+    "What do I remember about React development preferences?",
+    "I'm back on the microservice work. What was I doing?",
+    "Create a wiki page for our API design guidelines",
+    "Search for database design decisions I've made before"
+  ],
+  "compliance": {
+    "privacyPolicy": "https://membase.so/privacy",
+    "termsOfService": "https://membase.so/terms",
+    "dataHandling": "OAuth-based authentication, no API keys stored in plugin, user data encrypted in transit",
+    "securityConsiderations": [
+      "HTTPS required",
+      "OAuth authentication (no password handling)",
+      "No sensitive data in tool responses",
+      "Destructive operations require explicit confirmation"
+    ]
+  },
+  "metadata": {
+    "submissionDate": "2026-07-10",
+    "version": "0.1.6",
+    "status": "ready_for_review",
+    "reviewNotes": "All OpenAI official requirements met. Documentation complete. MCP server tested and responding. Domain verification setup provided. 8 test cases documented (5 positive, 3 negative). Tool metadata fully configured."
+  }
+}
