@@ -5,23 +5,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CLIENT_DIR = "clients/claude";
-const CLIENT_PLUGIN_PATH = `${CLIENT_DIR}/.claude-plugin/plugin.json`;
-const CLIENT_MCP_PATH = `${CLIENT_DIR}/.mcp.json`;
-const MANIFEST_PLUGIN_PATH = "manifests/claude/plugin.json";
-const MANIFEST_MCP_PATH = "manifests/claude/mcp.json";
-const CLIENT_PACKAGE_PATH = `${CLIENT_DIR}/package.json`;
+// The repo root is the Claude plugin: root .claude-plugin/ + .mcp.json are
+// what `claude plugin marketplace add` and the plugins CLI install.
+const CLIENT_PLUGIN_PATH = ".claude-plugin/plugin.json";
+const CLIENT_MCP_PATH = ".mcp.json";
+const CLIENT_PACKAGE_PATH = "clients/claude/package.json";
 
 const failures = [];
 
 const clientPlugin = readJson(CLIENT_PLUGIN_PATH);
-const clientMcpConfig = readJson(CLIENT_MCP_PATH);
-const manifestPlugin = readJson(MANIFEST_PLUGIN_PATH);
-const mcpConfig = readJson(MANIFEST_MCP_PATH);
+const mcpConfig = readJson(CLIENT_MCP_PATH);
 const clientPackage = readJson(CLIENT_PACKAGE_PATH);
 
-if (clientPlugin && manifestPlugin) {
-  assertJsonEqual(CLIENT_PLUGIN_PATH, clientPlugin, MANIFEST_PLUGIN_PATH, manifestPlugin);
+if (clientPlugin) {
   assertClaudePluginManifest(clientPlugin);
 }
 
@@ -33,10 +29,6 @@ if (clientPlugin && clientPackage && clientPlugin.version !== clientPackage.vers
 
 if (mcpConfig) {
   assertClaudeMcpConfig(mcpConfig);
-}
-
-if (clientMcpConfig && mcpConfig) {
-  assertJsonEqual(CLIENT_MCP_PATH, clientMcpConfig, MANIFEST_MCP_PATH, mcpConfig);
 }
 
 runClaudePluginValidation();
@@ -57,14 +49,6 @@ function readJson(relativePath) {
   } catch (error) {
     failures.push(`${relativePath}: unable to read valid JSON (${error.message})`);
     return undefined;
-  }
-}
-
-function assertJsonEqual(leftPath, left, rightPath, right) {
-  const leftText = JSON.stringify(left);
-  const rightText = JSON.stringify(right);
-  if (leftText !== rightText) {
-    failures.push(`${leftPath}: does not match ${rightPath}`);
   }
 }
 
@@ -98,50 +82,50 @@ function assertClaudePluginManifest(manifest) {
 function assertClaudeMcpConfig(config) {
   const server = config?.mcpServers?.membase;
   if (!server || typeof server !== "object") {
-    failures.push(`${MANIFEST_MCP_PATH}: missing mcpServers.membase`);
+    failures.push(`${CLIENT_MCP_PATH}: missing mcpServers.membase`);
     return;
   }
 
   if (!isNonEmptyString(server.command)) {
-    failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.command must be a non-empty string`);
+    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.command must be a non-empty string`);
   }
 
   if (server.command !== "node") {
-    failures.push(`${MANIFEST_MCP_PATH}: command must preserve Claude plugin-local node runtime`);
+    failures.push(`${CLIENT_MCP_PATH}: command must preserve Claude plugin-local node runtime`);
   }
 
   if (!Array.isArray(server.args) || server.args.length === 0) {
-    failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.args must be a non-empty array`);
+    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.args must be a non-empty array`);
   }
 
-  if (server.args?.[0] !== "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs") {
-    failures.push(`${MANIFEST_MCP_PATH}: args must point at the plugin-local MCP server`);
+  if (server.args?.[0] !== "${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs") {
+    failures.push(`${CLIENT_MCP_PATH}: args must point at the plugin-local MCP server`);
   }
 
   const env = server.env;
   if (!env || typeof env !== "object") {
-    failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.env is required`);
+    failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.env is required`);
     return;
   }
 
   if (env.MEMBASE_CLAUDE_PLUGIN !== "1") {
-    failures.push(`${MANIFEST_MCP_PATH}: MEMBASE_CLAUDE_PLUGIN marker must stay enabled`);
+    failures.push(`${CLIENT_MCP_PATH}: MEMBASE_CLAUDE_PLUGIN marker must stay enabled`);
   }
 
   // The bundled plugin manages login; the config must carry no user-supplied
   // API key, host, or client metadata env — only the plugin flag.
   if ("MEMBASE_API_KEY" in env) {
-    failures.push(`${MANIFEST_MCP_PATH}: must not carry MEMBASE_API_KEY (Claude plugin login is used)`);
+    failures.push(`${CLIENT_MCP_PATH}: must not carry MEMBASE_API_KEY (Claude plugin login is used)`);
   }
 
   for (const field of ["MEMBASE_API_BASE_URL", "MEMBASE_CLIENT_ID", "MEMBASE_CLIENT_NAME", "MEMBASE_CLIENT_VERSION"]) {
     if (field in env) {
-      failures.push(`${MANIFEST_MCP_PATH}: mcpServers.membase.env.${field} must not be set (bundled server handles it)`);
+      failures.push(`${CLIENT_MCP_PATH}: mcpServers.membase.env.${field} must not be set (bundled server handles it)`);
     }
   }
 
   if (Object.keys(env).length !== 1) {
-    failures.push(`${MANIFEST_MCP_PATH}: env must contain only MEMBASE_CLAUDE_PLUGIN`);
+    failures.push(`${CLIENT_MCP_PATH}: env must contain only MEMBASE_CLAUDE_PLUGIN`);
   }
 }
 
@@ -170,12 +154,12 @@ function runClaudePluginValidation() {
     return;
   }
 
-  const validation = spawnSync("claude", ["plugin", "validate", path.join(ROOT_DIR, CLIENT_DIR)], {
+  const validation = spawnSync("claude", ["plugin", "validate", ROOT_DIR], {
     encoding: "utf8"
   });
 
   if (validation.status !== 0) {
-    failures.push(`claude plugin validate ${CLIENT_DIR} failed: ${formatProcessOutput(validation)}`);
+    failures.push(`claude plugin validate <repo root> failed: ${formatProcessOutput(validation)}`);
   }
 }
 

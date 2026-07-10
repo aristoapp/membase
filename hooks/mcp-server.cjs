@@ -31489,15 +31489,20 @@ var CLIENT_DESCRIPTORS = {
     loginHint: "Membase is installed but not connected. Run /membase:login to enable memory.",
     // Part of the installed Claude plugin's on-disk contract since before the
     // client-neutral layout — do not migrate it to ~/.membase/claude-code.
-    homeDataDir: [".claude", "plugins", "membase"]
+    homeDataDir: [".claude", "plugins", "membase"],
+    usesToolBatch: true
+    // No defaultCaptureMode: Claude capture stays opt-in via /membase:login
+    // (disk config) or the plugin's captureMode option.
   },
   codex: {
     label: "Codex",
-    handoffDotDir: ".codex"
+    handoffDotDir: ".codex",
+    defaultCaptureMode: "summary"
   },
   cursor: {
     label: "Cursor",
-    hostInjectsHandoff: true
+    hostInjectsHandoff: true,
+    defaultCaptureMode: "summary"
   }
 };
 function clientDescriptor(source) {
@@ -31509,7 +31514,7 @@ function homeDataDirSegments(source) {
 
 // src/constants.ts
 var PLUGIN_NAME = "claude-membase";
-var PLUGIN_VERSION = "0.1.4";
+var PLUGIN_VERSION = "0.1.5";
 var DEFAULT_API_URL = "https://api.membase.so";
 var DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
 var RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
@@ -31792,7 +31797,9 @@ function loadConfig() {
     // captureMode is the Claude plugin's native option channel and the legacy
     // name for already-installed non-Claude hook configs.
     captureMode: normalizeCaptureMode(
-      disk.captureMode ?? strFromEnv("MEMBASE_CAPTURE_MODE") ?? strFromOption("captureMode")
+      disk.captureMode ?? strFromEnv("MEMBASE_CAPTURE_MODE") ?? strFromOption("captureMode") ?? // Descriptor default last: carries the summary-by-default contract
+      // codex/cursor hook configs used to express via command-line env.
+      clientDescriptor(MEMORY_SOURCE).defaultCaptureMode
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(

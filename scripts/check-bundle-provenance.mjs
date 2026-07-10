@@ -1,18 +1,13 @@
 #!/usr/bin/env node
-// Guard: every committed copy of the stdio-runtime bundles (the Claude
-// plugin's scripts/, codex's and cursor's plugin-internal hook.cjs) must be
-// exactly what `bun run build` in packages/stdio-runtime produces from src/.
-// Without this, a bundle-only edit (accidental or malicious) ships invisibly —
-// the bundles are what users actually execute. esbuild output is
+// Guard: the committed stdio-runtime bundles in the root hooks/ payload must
+// be exactly what `bun run build` in packages/stdio-runtime produces from
+// src/. Without this, a bundle-only edit (accidental or malicious) ships
+// invisibly — the bundles are what users actually execute. esbuild output is
 // deterministic, so a byte-level git diff is a reliable provenance check.
 import { execSync } from "node:child_process";
 
 const runtimeDir = "packages/stdio-runtime";
-const bundlePaths = [
-  "clients/claude/runtime/plugin/scripts",
-  "clients/codex/runtime/hook.cjs",
-  "clients/cursor/runtime/hook.cjs",
-];
+const bundlePaths = ["hooks/hook.cjs", "hooks/mcp-server.cjs"];
 
 try {
   execSync("bun run build", { cwd: runtimeDir, stdio: "inherit" });

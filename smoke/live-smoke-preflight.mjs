@@ -6,9 +6,8 @@ import { fileURLToPath } from "node:url";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const mcpConfigSpecs = [
-  { path: "clients/claude/.mcp.json", mode: "claude-plugin-local" },
-  { path: "manifests/claude/mcp.json", mode: "claude-plugin-local" },
-  { path: "manifests/cursor/mcp.json", mode: "remote-http" },
+  { path: ".mcp.json", mode: "claude-plugin-local" },
+  { path: "mcp.json", mode: "remote-http" },
   { path: "manifests/hermes/mcp.json", mode: "remote-http" },
   { path: "manifests/openclaw/mcp.json", mode: "remote-http" }
 ];
@@ -43,7 +42,7 @@ for (const spec of mcpConfigSpecs) {
   if (server.command !== "node") {
     failures.push(`${spec.path}: expected Claude plugin-local node command.`);
   }
-  if (!Array.isArray(server.args) || server.args[0] !== "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs") {
+  if (!Array.isArray(server.args) || server.args[0] !== "${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs") {
     failures.push(`${spec.path}: expected Claude plugin-local MCP server path.`);
   }
   if (server.env?.MEMBASE_CLAUDE_PLUGIN !== "1") {

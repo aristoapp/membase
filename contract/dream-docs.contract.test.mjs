@@ -9,10 +9,10 @@ import { join } from "node:path";
 import { REPO_ROOT } from "./helpers.mjs";
 
 const DREAM_DOCS = [
-  ["claude command", "clients/claude/runtime/plugin/commands/dream.md"],
-  ["claude skill", "clients/claude/runtime/plugin/skills/dream/SKILL.md"],
+  ["claude command", "commands/dream.md"],
+  ["claude skill", "skills/dream/SKILL.md"],
   ["cursor skill", "clients/cursor/skills/dream/SKILL.md"],
-  ["codex prompt", "clients/codex/runtime/prompts/dream.md"],
+  ["codex prompt", "clients/codex/prompts/dream.md"],
 ];
 
 // The four protocol clauses, as text-detectable requirements.

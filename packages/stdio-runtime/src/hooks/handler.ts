@@ -62,51 +62,17 @@ const ASYNC_FLUSH_TIMEOUT_MS = 4_000;
 const ASYNC_FLUSH_LIMIT = 3;
 
 
-// Hooks must never hang the host session: hosts are expected to close stdin
-// after one JSON payload, but if one doesn't (or the stream errors), resolve
-// with whatever arrived after a short deadline instead of waiting for EOF.
-const STDIN_IDLE_MS = 2_000;
-// 8MB ceiling — beyond it the payload is dropped rather than
-// summarized; raise or chunk if real hook payloads ever exceed this.
-const STDIN_MAX_BYTES = 8_388_608;
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        process.stdin.destroy();
-      } catch {}
-      resolve(data);
-    };
-    // Idle deadline, reset on every chunk: a slow-but-active stream is never
-    // cut, while an abandoned open pipe still resolves fail-open.
-    const arm = () => {
-      clearTimeout(timer);
-      timer = setTimeout(done, STDIN_IDLE_MS);
-      timer.unref?.();
-    };
-    arm();
-    process.stdin.setEncoding("utf-8");
-    process.stdin.on("data", (chunk) => {
-      arm();
-      if (data.length < STDIN_MAX_BYTES) data += chunk;
-    });
-    process.stdin.on("end", done);
-    process.stdin.on("error", done);
-  });
-}
-
 function outputAdditionalContext(
   text: string,
   event = "UserPromptSubmit",
 ): void {
   if (!text.trim()) return;
+  // Cursor consumes hook context in its own envelope; every other stdio host
+  // speaks the Claude hookSpecificOutput shape.
+  if (MEMORY_SOURCE === "cursor") {
+    process.stdout.write(JSON.stringify({ additional_context: text }));
+    return;
+  }
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -573,26 +539,17 @@ async function spoolSessionSummary(
   });
 }
 
-function parseHookInput(raw: string): HookInput {
-  if (!raw.trim()) return {};
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object") return parsed as HookInput;
-  } catch {
-    // Invalid/truncated stdin (e.g. a host that stalled mid-payload): fall
-    // back to an empty input so the event — driven by argv[2] — still runs
-    // (handoff injection, spool announcement) instead of aborting the hook.
-  }
-  return {};
-}
-
-async function main(): Promise<void> {
-  const explicitEvent = process.argv[2];
-  const raw = await readStdin();
-  const input = parseHookInput(raw);
-  input.hook_event_name =
-    explicitEvent || (input.hook_event_name as string | undefined);
+// Event dispatch for one already-parsed hook payload. The bundle entry
+// (main.ts) owns stdin/argv and host detection; tests and the entry both call
+// this. Exported as the module's single runtime surface.
+export async function runHookEvent(input: HookInput): Promise<void> {
   const event = input.hook_event_name;
+  // One shared hooks.json registers both tool-capture events; each host owns
+  // exactly one (Claude batches, Codex/Cursor fire per tool), so the other is
+  // skipped here instead of double-capturing.
+  const batchClient = clientDescriptor(MEMORY_SOURCE).usesToolBatch === true;
+  if (event === "PostToolUse" && batchClient) return;
+  if (event === "PostToolBatch" && !batchClient) return;
   if (event === "SessionStart") await handleSessionStart(input);
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
@@ -623,7 +580,3 @@ async function main(): Promise<void> {
     await spoolSessionSummary(input, "compact_summary");
   }
 }
-
-main().catch(() => {
-  process.exit(0);
-});

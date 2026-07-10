@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // One-shot regeneration of committed client/manifest artifacts from adapter output.
 // Mirrors the target list and formatting of scripts/check-generated-artifacts.mjs.
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Root package.json is the single version source for every generated manifest.
+const ROOT_VERSION = JSON.parse(
+  await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
+).version;
 
 const adapterSpecs = [
   {
@@ -13,10 +17,9 @@ const adapterSpecs = [
     defineRuntimeConfig: "defineClaudeRuntimeConfig",
     generateArtifacts: "generateClaudeArtifacts",
     targets: [
-      { path: "clients/claude/.claude-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "manifests/claude/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "clients/claude/.mcp.json", format: "json", pick: (a) => a.mcp },
-      { path: "manifests/claude/mcp.json", format: "json", pick: (a) => a.mcp }
+      { path: ".claude-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
+      { path: ".claude-plugin/marketplace.json", format: "json", pick: (a) => a.marketplace },
+      { path: ".mcp.json", format: "json", pick: (a) => a.mcp }
     ]
   },
   {
@@ -24,10 +27,8 @@ const adapterSpecs = [
     defineRuntimeConfig: "defineCursorRuntimeConfig",
     generateArtifacts: "generateCursorArtifacts",
     targets: [
-      { path: "clients/cursor/.cursor-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "clients/cursor/mcp.json", format: "json", pick: (a) => a.mcp },
-      { path: "manifests/cursor/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "manifests/cursor/mcp.json", format: "json", pick: (a) => a.mcp }
+      { path: ".cursor-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
+      { path: "mcp.json", format: "json", pick: (a) => a.mcp }
     ]
   },
   {
@@ -35,10 +36,7 @@ const adapterSpecs = [
     defineRuntimeConfig: "defineCodexRuntimeConfig",
     generateArtifacts: "generateCodexArtifacts",
     targets: [
-      { path: "clients/codex/.codex-plugin/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "clients/codex/.mcp.json", format: "json", pick: (a) => a.mcp },
-      { path: "manifests/codex/plugin.json", format: "json", pick: (a) => a.plugin },
-      { path: "manifests/codex/mcp.json", format: "json", pick: (a) => a.mcp }
+      { path: ".plugin/plugin.json", format: "json", pick: (a) => a.plugin }
     ]
   },
   {
@@ -68,7 +66,9 @@ const adapterSpecs = [
 let written = 0;
 for (const spec of adapterSpecs) {
   const mod = await import(pathToFileURL(path.join(ROOT_DIR, spec.modulePath)).href);
-  const artifacts = mod[spec.generateArtifacts](mod[spec.defineRuntimeConfig]());
+  const artifacts = mod[spec.generateArtifacts](
+    mod[spec.defineRuntimeConfig]({ version: ROOT_VERSION })
+  );
   for (const target of spec.targets) {
     await writeFile(path.join(ROOT_DIR, target.path), formatArtifact(target.pick(artifacts), target.format), "utf8");
     written += 1;

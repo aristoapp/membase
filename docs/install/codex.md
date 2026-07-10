@@ -57,9 +57,10 @@ see [clients/codex](../../clients/codex).
 
 ## For contributors
 
-`.codex-plugin/plugin.json` and `.mcp.json` are generated from
+The generic `.plugin/plugin.json` at the repo root (Codex installers
+translate it to `.codex-plugin/`) is generated from
 `clients/codex/src/index.ts` (`pnpm generate`), and `pnpm generated-artifacts`
-keeps them in sync. The bundled `runtime/hook.cjs` is a committed copy of the
-shared stdio runtime (`packages/stdio-runtime`, tested by
-`pnpm stdio-runtime:test`); `pnpm bundle-provenance` asserts it matches a
+keeps it in sync. The bundled `hooks/hook.cjs` at the repo root is a
+committed copy of the shared stdio runtime (`packages/stdio-runtime`, tested
+by `pnpm stdio-runtime:test`); `pnpm bundle-provenance` asserts it matches a
 fresh build.

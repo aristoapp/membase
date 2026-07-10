@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createTokenStore, writeJsonAtomic } from "@membase/capture-core";
-import { homeDataDirSegments } from "../clients.js";
+import { clientDescriptor, homeDataDirSegments } from "../clients.js";
 import {
   DEFAULT_API_URL,
   DEFAULT_MAX_RECALL_CHARS,
@@ -139,7 +139,10 @@ export function loadConfig(): PluginConfig {
     captureMode: normalizeCaptureMode(
       disk.captureMode ??
         strFromEnv("MEMBASE_CAPTURE_MODE") ??
-        strFromOption("captureMode"),
+        strFromOption("captureMode") ??
+        // Descriptor default last: carries the summary-by-default contract
+        // codex/cursor hook configs used to express via command-line env.
+        clientDescriptor(MEMORY_SOURCE).defaultCaptureMode,
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(

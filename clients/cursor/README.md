@@ -43,9 +43,10 @@ pnpm cursor:transport-parity   # ensures the HTTP MCP endpoint stays the primary
 pnpm public-surface            # lints the public API surface
 ```
 
-Plugin metadata lives in `.cursor-plugin/plugin.json` and the MCP config in
-`mcp.json`. Both are generated — edit the adapter in `src/index.ts` and run
-`pnpm generate` (a root script) rather than hand-editing them. Run the hook
-adapter tests with `node --test clients/cursor/runtime/` (the tests stub the
-hook bundle; the committed `runtime/hook.cjs` itself is rebuilt via
+Plugin metadata lives in the root `.cursor-plugin/plugin.json` and the MCP
+config in the root `mcp.json`. Both are generated — edit the adapter in
+`src/index.ts` and run `pnpm generate` (a root script) rather than
+hand-editing them. Run the hook adapter tests with
+`node --test hooks/cursor-hook.test.mjs` (the tests stub the hook bundle; the
+committed `hooks/hook.cjs` itself is rebuilt via
 `cd packages/stdio-runtime && bun run build`).

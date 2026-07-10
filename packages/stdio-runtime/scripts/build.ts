@@ -12,15 +12,15 @@ const shared = {
   external: [],
 };
 
-// dist/ is a gitignored intermediate. Installable plugin packages must be
-// self-contained, so every client ships its own committed copy (below) —
-// nothing executes dist/ directly.
+// dist/ is a gitignored intermediate. The repo root is the single plugin
+// payload every install channel copies, so the committed bundles live in the
+// root hooks/ directory — nothing executes dist/ directly.
 mkdirSync("dist", { recursive: true });
 
 await Promise.all([
   build({
     ...shared,
-    entryPoints: ["src/hooks/handler.ts"],
+    entryPoints: ["src/hooks/main.ts"],
     outfile: "dist/hook.cjs",
   }),
   build({
@@ -30,17 +30,13 @@ await Promise.all([
   }),
 ]);
 
-// Committed, byte-identical copies per client plugin package.
-// check-bundle-provenance rebuilds and diffs all of them.
-// mcp-server.cjs ships only with Claude — codex/cursor use the remote HTTP MCP.
+// Committed, byte-identical copies in the root payload.
+// check-bundle-provenance rebuilds and diffs them.
+// mcp-server.cjs is wired only into Claude's .mcp.json — codex/cursor use the
+// remote HTTP MCP — but ships in the same hooks/ dir for every install.
 const copies: Array<[from: string, to: string]> = [
-  ["dist/hook.cjs", "../../clients/claude/runtime/plugin/scripts/hook.cjs"],
-  [
-    "dist/mcp-server.cjs",
-    "../../clients/claude/runtime/plugin/scripts/mcp-server.cjs",
-  ],
-  ["dist/hook.cjs", "../../clients/codex/runtime/hook.cjs"],
-  ["dist/hook.cjs", "../../clients/cursor/runtime/hook.cjs"],
+  ["dist/hook.cjs", "../../hooks/hook.cjs"],
+  ["dist/mcp-server.cjs", "../../hooks/mcp-server.cjs"],
 ];
 
 for (const [from, to] of copies) {

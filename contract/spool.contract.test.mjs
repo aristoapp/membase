@@ -46,6 +46,7 @@ test("C-SPOOL-1 pending.jsonl is JSON-Lines of SpoolRecord-shaped objects (sessi
     }),
     env: {
       MEMBASE_DATA_DIR: dir,
+      MEMBASE_CLIENT_SOURCE: "codex",
       CLAUDE_PLUGIN_OPTION_captureMode: "summary",
     },
   });
@@ -87,6 +88,7 @@ test("C-SPOOL-2 secret value never reaches disk (hook entry point → scratch)",
     }),
     env: {
       MEMBASE_DATA_DIR: dir,
+      MEMBASE_CLIENT_SOURCE: "codex",
       CLAUDE_PLUGIN_OPTION_captureMode: "summary",
     },
   });

@@ -1,0 +1,26 @@
+{
+  "name": "membase-plugins",
+  "owner": {
+    "name": "Membase"
+  },
+  "plugins": [
+    {
+      "name": "membase",
+      "source": "./",
+      "description": "Connect Claude Code to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
+      "version": "0.1.5",
+      "author": {
+        "name": "Membase",
+        "url": "https://membase.so"
+      },
+      "license": "MIT",
+      "keywords": [
+        "agent-memory",
+        "context",
+        "mcp",
+        "claude-code",
+        "membase"
+      ]
+    }
+  ]
+}
