@@ -83,11 +83,11 @@
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false
       },
       "justifications": {
         "read_only_justification": "Tool creates and stores new long-term memories in Membase backend.",
-        "open_world_justification": "Tool accepts arbitrary user-provided memory content and metadata.",
+        "open_world_justification": "Tool only operates on user's private Membase memory; no public internet state change.",
         "destructive_justification": "Tool is non-destructive; it appends new memories without modifying existing data."
       }
     },
@@ -107,11 +107,11 @@
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
-        "openWorldHint": true
+        "openWorldHint": false
       },
       "justifications": {
         "read_only_justification": "Tool searches and retrieves memories without modification.",
-        "open_world_justification": "Tool accepts open-ended semantic search queries, date ranges, source filters, and project scoping.",
+        "open_world_justification": "Tool only queries user's private Membase memory; no public internet state change.",
         "destructive_justification": "Tool is read-only and non-destructive."
       }
     },
