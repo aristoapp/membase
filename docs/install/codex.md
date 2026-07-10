@@ -57,7 +57,10 @@ see [clients/codex](../../clients/codex).
 
 ## For contributors
 
-Codex is a descriptor-only client: `.codex-plugin/plugin.json` and `.mcp.json`
-are generated from `clients/codex/src/index.ts` (`pnpm generate`), and
-`pnpm generated-artifacts` keeps them in sync. There is no per-client runtime
-to test beyond the shared stdio bundle covered by the Claude runtime suite.
+The generic `.plugin/plugin.json` at the repo root (Codex installers
+translate it to `.codex-plugin/`) is generated from
+`clients/codex/src/index.ts` (`pnpm generate`), and `pnpm generated-artifacts`
+keeps it in sync. The bundled `hooks/hook.cjs` at the repo root is a
+committed copy of the shared stdio runtime (`packages/stdio-runtime`, tested
+by `pnpm stdio-runtime:test`); `pnpm bundle-provenance` asserts it matches a
+fresh build.

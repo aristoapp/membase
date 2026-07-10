@@ -30,10 +30,10 @@ Cursor reaches the hosted Membase MCP tools:
 `update_wiki` · `delete_wiki` · `get_current_date`
 
 `skills/` adds guided flows (memory search/save, wiki, dream, handoff),
-`rules/membase.mdc` keeps memory use proactive, and `runtime/` ships an
-optional hooks adapter (`cursor-hook.mjs` + `hooks.json` template) that wires
-auto-capture and recall through the shared stdio runtime bundled with the
-Claude client. No Membase server internals are exposed.
+`rules/membase.mdc` keeps memory use proactive, and `hooks/hooks.json` +
+`runtime/` ship an optional, self-contained hooks adapter (`cursor-hook.mjs`
+delegating to the bundled `hook.cjs`, a committed copy of the shared stdio
+runtime in `packages/stdio-runtime`). No Membase server internals are exposed.
 
 ## For contributors
 
@@ -43,8 +43,10 @@ pnpm cursor:transport-parity   # ensures the HTTP MCP endpoint stays the primary
 pnpm public-surface            # lints the public API surface
 ```
 
-Plugin metadata lives in `.cursor-plugin/plugin.json` and the MCP config in
-`mcp.json`. Both are generated — edit the adapter in `src/index.ts` and run
-`pnpm generate` (a root script) rather than hand-editing them. Run the hook
-adapter tests with `node --test clients/cursor/runtime/` (requires the Claude
-runtime bundle, built via `cd clients/claude/runtime && bun run build`).
+Plugin metadata lives in the root `.cursor-plugin/plugin.json` and the MCP
+config in the root `mcp.json`. Both are generated — edit the adapter in
+`src/index.ts` and run `pnpm generate` (a root script) rather than
+hand-editing them. Run the hook adapter tests with
+`node --test hooks/cursor-hook.test.mjs` (the tests stub the hook bundle; the
+committed `hooks/hook.cjs` itself is rebuilt via
+`cd packages/stdio-runtime && bun run build`).

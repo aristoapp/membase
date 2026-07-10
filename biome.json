@@ -6,7 +6,7 @@
 			"**",
 			"!**/dist",
 			"!**/*.cjs",
-			"!clients/claude/runtime/plugin",
+			"!hooks/hook.cjs", "!hooks/mcp-server.cjs",
 			"!pnpm-lock.yaml",
 			"!**/*.svg"
 		]

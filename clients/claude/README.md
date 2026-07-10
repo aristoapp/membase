@@ -18,7 +18,7 @@ The plugin-local MCP config looks like this:
   "mcpServers": {
     "membase": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server.cjs"],
+      "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/mcp-server.cjs"],
       "env": { "MEMBASE_CLAUDE_PLUGIN": "1" }
     }
   }

@@ -63,9 +63,9 @@ const MCP_URL_OVERRIDE = process.env.MEMBASE_MCP_URL;
 const REST_API_BASE = process.env.MEMBASE_API_BASE ?? AUTH_SERVER;
 
 const CLIENTS = [
-  { id: "claude", config: "clients/claude/.mcp.json" },
-  { id: "cursor", config: "clients/cursor/mcp.json" },
-  { id: "codex", config: "clients/codex/.mcp.json" },
+  { id: "claude", config: ".mcp.json" },
+  { id: "cursor", config: "mcp.json" },
+  { id: "codex", config: "mcp.json" },
   { id: "hermes", config: "clients/hermes/mcp.json" },
   { id: "openclaw", config: "clients/openclaw/mcp.json" }
 ];
