@@ -37,7 +37,8 @@ claude plugin marketplace add aristoapp/membase-plugin-mcp
 claude plugin install membase@membase-plugins
 ```
 
-Per-client manual setup below. Every client connects to the same hosted MCP server:
+Per-client manual setup below. 
+Every client connects to the same hosted MCP server:
 `https://mcp.membase.so/mcp`.
 
 <details>
@@ -186,14 +187,13 @@ OAuth prompt on first use:
 
 ## Tools
 
-Every connector reaches the same hosted MCP tool set — nothing about
-Membase's internal memory engine leaks through:
+Every connector reaches the same hosted MCP tool set:
 
 `add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` · `delete_wiki` · `get_current_date`
 
-Clients with native runtimes (Claude Code, OpenClaw, Hermes) add session
-handoff, profile, and login/status tools on top, plus the auto-capture and
-recall hooks described in each client's install guide.
+Clients with a native runtime (Claude Code, OpenClaw, Hermes) make memory
+automatic: just work, and your sessions are captured, recalled, and handed
+off for you. Details in each client's install guide.
 
 You won't call these directly — memory works through natural language, and the
 agent calls the tools for you:
