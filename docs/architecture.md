@@ -51,8 +51,8 @@ Each client adapter defines:
 
 ## Repo Boundary
 
-Shared behavior belongs in `packages/core`, `packages/connector-sdk`, and
-`packages/capture-core`.
+Shared behavior belongs in `packages/core`, `packages/connector-sdk`,
+`packages/capture-core`, and `packages/stdio-runtime`.
 Client-specific behavior belongs in `clients/{claude,cursor,codex,hermes,openclaw}`.
 Generated or canonical examples belong in `manifests/`.
 
@@ -75,6 +75,16 @@ transport (see [Design decisions](#shared-capture-core-per-host-adapters)).
 Recall-context assembly (grouping, budgets, headers) is per-client today; the
 neutralization primitive it must call lives in the core.
 
+`packages/stdio-runtime` owns the shared hook handler and stdio MCP server for
+hook-driven hosts (Claude Code, Codex, Cursor). One esbuild build produces
+`hook.cjs`/`mcp-server.cjs`, and each client plugin package commits its own
+copy so it installs self-contained; `pnpm bundle-provenance` asserts every
+copy matches a fresh build. Client identity comes from `MEMBASE_CLIENT_SOURCE`
+at runtime, and everything that legitimately differs per client (labels,
+handoff file conventions, default data dir, injection exclusions) lives in one
+descriptor table (`src/clients.ts`) — supporting another stdio host is one
+entry there plus a hooks config.
+
 ## Client Adapters
 
 - **Claude Code** (`clients/claude`) — implements the SDK `ClientAdapter`,
@@ -82,7 +92,8 @@ neutralization primitive it must call lives in the core.
   MCP config.
 - **Cursor** (`clients/cursor`) — a `defineMcpHostAgent()` descriptor over the
   hosted HTTP MCP endpoint at `https://mcp.membase.so/mcp`, plus optional
-  local capture hooks that reuse the Claude runtime bundle.
+  local capture hooks running the package's own committed copy of the shared
+  stdio runtime.
 - **Codex CLI** (`clients/codex`) — points Codex directly at the streamable-HTTP
   MCP endpoint; auth via Codex-managed OAuth.
 - **Hermes Agent** (`clients/hermes`) — ships a native Python provider and
@@ -132,8 +143,8 @@ behavior and keep per-client runtimes. Config-only MCP hosts (Cursor, Codex)
 differ only in packaging data — config file path and format, install command —
 so each is a `defineMcpHostAgent()` descriptor rendered by one shared
 implementation, not a hand-written adapter. Their optional capture hooks
-(`runtime/hooks.json` templates) reuse the Claude runtime's stdio bundle
-rather than shipping a third runtime.
+(`hooks/hooks.json`) run a committed copy of `packages/stdio-runtime`'s bundle
+rather than shipping a third runtime implementation.
 
 ### Failure-path spool and dreaming
 

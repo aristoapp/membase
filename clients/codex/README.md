@@ -5,9 +5,9 @@ Connect [Membase](https://membase.so) persistent memory to the
 
 Codex supports remote streamable-HTTP MCP servers, so this connector points
 Codex directly at the hosted Membase MCP endpoint. Auth is handled by
-Codex-managed OAuth (`codex mcp login membase`). An optional local hooks
-runtime (`runtime/hooks.json`) adds auto-capture, recall, and handoff
-injection on top.
+Codex-managed OAuth (`codex mcp login membase`). Optional plugin hooks
+(`hooks/hooks.json` running the bundled `runtime/hook.cjs`) add auto-capture,
+recall, and handoff injection on top.
 
 ## Install
 
@@ -31,10 +31,10 @@ Codex reaches the hosted Membase MCP tools:
 `update_wiki` · `delete_wiki` · `get_current_date`
 
 `runtime/prompts/` adds `/dream` (flush the local capture spool) and
-`/handoff` (store/pick up a session-state summary); `runtime/hooks.json` is a
-template that wires optional auto-capture and recall through the shared stdio
-runtime bundled with the Claude client. Nothing about Membase's internal
-memory engine is exposed.
+`/handoff` (store/pick up a session-state summary); `hooks/hooks.json` wires
+optional auto-capture and recall through `runtime/hook.cjs`, a committed copy
+of the shared stdio runtime (`packages/stdio-runtime`), so the package is
+self-contained. No Membase server internals are exposed.
 
 ## For contributors
 
