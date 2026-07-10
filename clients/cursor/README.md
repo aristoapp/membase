@@ -30,8 +30,8 @@ Cursor reaches the hosted Membase MCP tools:
 `update_wiki` · `delete_wiki` · `get_current_date`
 
 `skills/` adds guided flows (memory search/save, wiki, dream, handoff),
-`rules/membase.mdc` keeps memory use proactive, and `hooks/hooks.json` +
-`runtime/` ship an optional, self-contained hooks adapter (`cursor-hook.mjs`
+`rules/membase.mdc` keeps memory use proactive, and the root `hooks/`
+payload ships an optional, self-contained hooks adapter (`cursor-hook.mjs`
 delegating to the bundled `hook.cjs`, a committed copy of the shared stdio
 runtime in `packages/stdio-runtime`). No Membase server internals are exposed.
 

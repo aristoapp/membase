@@ -93,8 +93,8 @@ table (`src/clients.ts`) — supporting another stdio host is one entry there.
   MCP config.
 - **Cursor** (`clients/cursor`) — a `defineMcpHostAgent()` descriptor over the
   hosted HTTP MCP endpoint at `https://mcp.membase.so/mcp`, plus optional
-  local capture hooks running the package's own committed copy of the shared
-  stdio runtime.
+  local capture hooks running the root payload's committed `hooks/hook.cjs`
+  (the shared stdio runtime bundle).
 - **Codex CLI** (`clients/codex`) — points Codex directly at the streamable-HTTP
   MCP endpoint; auth via Codex-managed OAuth.
 - **Hermes Agent** (`clients/hermes`) — ships a native Python provider and

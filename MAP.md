@@ -12,7 +12,7 @@ this shape.
 | `packages/connector-sdk` | adapter-facing extension surface + `defineMcpHostAgent()` | descriptor mechanism for config-only agents |
 | `packages/capture-core` | sanitize, spool/buffer, capture kinds, `MembaseTransport` (OAuth) | shared "what" logic; golden vectors in `spec/*.json` bind TS+Python |
 | repo root (`hooks/` `commands/` `skills/` `agents/` + `.claude-plugin/` `.cursor-plugin/` `.plugin/`) | the single installable plugin payload | committed stdio-runtime bundles + generated vendor manifests; `npx plugins add aristoapp/membase-plugin-mcp` installs it into Claude Code/Cursor/Codex |
-| `clients/claude` | Claude Code adapter (descriptor) | generates the root Claude manifests; runtime behavior lives in `packages/stdio-runtime` |
+| `clients/claude` | Claude Code adapter (hand-written `defineAdapter`) | generates the root Claude manifests; runtime behavior lives in `packages/stdio-runtime` |
 | `clients/cursor` | Cursor MCP host adapter | descriptor-only (`defineMcpHostAgent`) |
 | `clients/codex` | Codex CLI MCP host adapter | descriptor-only (`defineMcpHostAgent`) |
 | `clients/hermes` | Hermes provider runtime (Python, `membase_hermes`) | host-native Python APIs; kept to a minimal shim (two-language policy) |
