@@ -192,11 +192,12 @@ Every connector reaches the same hosted MCP tool set:
 `add_memory` · `search_memory` · `add_wiki` · `search_wiki` · `update_wiki` · `delete_wiki` · `get_current_date`
 
 Clients with a native runtime (Claude Code, OpenClaw, Hermes) make memory
-automatic: just work, and your sessions are captured, recalled, and handed
-off for you. Details in each client's install guide.
+automatic: 
+just work, and your sessions are captured, recalled, and handed off for you. 
+Details in each client's install guide.
 
-You won't call these directly — memory works through natural language, and the
-agent calls the tools for you:
+Anything important, save it yourself and pull it back later — plain language
+is enough, the agent calls the tools for you:
 
 ```txt
 Remember that we deploy from the release branch, never from main.
