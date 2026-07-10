@@ -1,6 +1,6 @@
 {
   "name": "membase-plugin-mcp",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "license": "MIT",
   "private": true,
   "description": "Integrated Membase Plugin/MCP connector repo.",
@@ -16,7 +16,7 @@
     "bundle-provenance": "node scripts/check-bundle-provenance.mjs",
     "stdio-runtime:typecheck": "pnpm --filter @membase/stdio-runtime typecheck",
     "stdio-runtime:test": "cd packages/stdio-runtime && bun test",
-    "cursor:runtime-test": "node --test clients/cursor/runtime/cursor-hook.test.mjs",
+    "cursor:runtime-test": "node --test hooks/cursor-hook.test.mjs",
     "clean": "tsc -b packages/core packages/connector-sdk clients/claude clients/cursor clients/codex clients/hermes clients/openclaw --clean",
     "e2e": "node e2e/run-e2e.mjs",
     "e2e:live": "node e2e/run-e2e.mjs --live",

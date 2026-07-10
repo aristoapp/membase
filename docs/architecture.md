@@ -77,13 +77,14 @@ neutralization primitive it must call lives in the core.
 
 `packages/stdio-runtime` owns the shared hook handler and stdio MCP server for
 hook-driven hosts (Claude Code, Codex, Cursor). One esbuild build produces
-`hook.cjs`/`mcp-server.cjs`, and each client plugin package commits its own
-copy so it installs self-contained; `pnpm bundle-provenance` asserts every
-copy matches a fresh build. Client identity comes from `MEMBASE_CLIENT_SOURCE`
-at runtime, and everything that legitimately differs per client (labels,
-handoff file conventions, default data dir, injection exclusions) lives in one
-descriptor table (`src/clients.ts`) — supporting another stdio host is one
-entry there plus a hooks config.
+`hook.cjs`/`mcp-server.cjs`, committed once in the root `hooks/` payload that
+every install channel copies; `pnpm bundle-provenance` asserts they match a
+fresh build. The bundle detects its host at startup (explicit
+`MEMBASE_CLIENT_SOURCE`, then Cursor payload fields, then
+`CODEX_PLUGIN_ROOT`), and everything that legitimately differs per client
+(labels, handoff file conventions, default data dir, injection exclusions,
+tool-capture event ownership, capture-mode default) lives in one descriptor
+table (`src/clients.ts`) — supporting another stdio host is one entry there.
 
 ## Client Adapters
 
@@ -142,9 +143,10 @@ data*. Runtime clients (Claude Code, OpenClaw, Hermes) have real client-side
 behavior and keep per-client runtimes. Config-only MCP hosts (Cursor, Codex)
 differ only in packaging data — config file path and format, install command —
 so each is a `defineMcpHostAgent()` descriptor rendered by one shared
-implementation, not a hand-written adapter. Their optional capture hooks
-(`hooks/hooks.json`) run a committed copy of `packages/stdio-runtime`'s bundle
-rather than shipping a third runtime implementation.
+implementation, not a hand-written adapter. Their optional capture hooks run
+the root payload's `hooks/hook.cjs` (the shared stdio-runtime bundle) declared
+in the single root `hooks/hooks.json`, rather than shipping a third runtime
+implementation.
 
 ### Failure-path spool and dreaming
 

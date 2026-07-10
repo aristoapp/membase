@@ -1,18 +1,26 @@
 {
   "name": "membase",
-  "version": "0.1.4",
-  "description": "Persistent memory and wiki workflows for Claude Code.",
+  "description": "Connect Claude Code to Membase persistent memory over MCP — memory search and store, wiki, and session handoffs.",
+  "version": "0.1.5",
   "author": {
-    "name": "Aristo Technologies",
-    "email": "support@membase.so"
+    "name": "Membase",
+    "url": "https://membase.so"
   },
   "homepage": "https://membase.so",
   "repository": "https://github.com/aristoapp/membase-plugin-mcp",
   "license": "MIT",
-  "keywords": ["membase", "memory", "mcp", "claude-code"],
+  "keywords": [
+    "agent-memory",
+    "context",
+    "mcp",
+    "claude-code",
+    "membase"
+  ],
   "skills": "./skills/",
   "commands": "./commands/",
-  "agents": ["./agents/membase-curator.md"],
+  "agents": [
+    "./agents/membase-curator.md"
+  ],
   "mcpServers": "./.mcp.json",
   "userConfig": {
     "apiUrl": {

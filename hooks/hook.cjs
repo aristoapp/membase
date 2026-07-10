@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 "use strict";
-
-// ../capture-core/src/spool.ts
-var import_node_crypto = require("node:crypto");
-var import_node_fs2 = require("node:fs");
-var import_node_path2 = require("node:path");
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 
 // ../capture-core/src/token-store.ts
-var import_node_fs = require("node:fs");
-var import_node_path = require("node:path");
 function writeTextAtomic(path, text, mode = 384) {
   (0, import_node_fs.mkdirSync)((0, import_node_path.dirname)(path), { recursive: true, mode: 448 });
   const tmp = `${path}.tmp.${process.pid}`;
@@ -69,13 +71,16 @@ function createTokenStore(options) {
   }
   return { path, read, write, clear };
 }
+var import_node_fs, import_node_path;
+var init_token_store = __esm({
+  "../capture-core/src/token-store.ts"() {
+    "use strict";
+    import_node_fs = require("node:fs");
+    import_node_path = require("node:path");
+  }
+});
 
 // ../capture-core/src/spool.ts
-var LOCK_STALE_MS = 3e4;
-var LOCK_WAIT_MS = 2e3;
-var INFLIGHT_STALE_MS = 6e4;
-var SLEEP_BUFFER = new SharedArrayBuffer(4);
-var SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
 function sleepSync(ms) {
   Atomics.wait(SLEEP_VIEW, 0, 0, ms);
 }
@@ -333,10 +338,24 @@ function createCaptureSpool(options) {
   }
   return { captureId, enqueueCapture: enqueueCapture2, flushSpool: flushSpool2, pendingSpoolCount: pendingSpoolCount2 };
 }
+var import_node_crypto, import_node_fs2, import_node_path2, LOCK_STALE_MS, LOCK_WAIT_MS, INFLIGHT_STALE_MS, SLEEP_BUFFER, SLEEP_VIEW;
+var init_spool = __esm({
+  "../capture-core/src/spool.ts"() {
+    "use strict";
+    import_node_crypto = require("node:crypto");
+    import_node_fs2 = require("node:fs");
+    import_node_path2 = require("node:path");
+    init_src();
+    init_token_store();
+    LOCK_STALE_MS = 3e4;
+    LOCK_WAIT_MS = 2e3;
+    INFLIGHT_STALE_MS = 6e4;
+    SLEEP_BUFFER = new SharedArrayBuffer(4);
+    SLEEP_VIEW = new Int32Array(SLEEP_BUFFER);
+  }
+});
 
 // ../capture-core/src/handoff.ts
-var HANDOFF_TAG = "[HANDOFF]";
-var HANDOFF_RECALL_LIMIT = 20;
 function handoffRecallQuery() {
   return `${HANDOFF_TAG} session handoff summary`;
 }
@@ -362,7 +381,6 @@ function pickLatestHandoff(bundles) {
     return bTime > latestTime ? b : latest;
   });
 }
-var HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
 function isHandoffFresh(storedAtMs, nowMs) {
   const now = nowMs ?? Date.now();
   return Math.max(0, now - storedAtMs) <= HANDOFF_STALE_MS;
@@ -387,18 +405,17 @@ function buildStaleHandoffNotice(args) {
   const ageDays = Math.floor(Math.max(0, now - args.storedAtMs) / 864e5);
   return `A Membase handoff from ${ageDays} day(s) ago exists for this project but was not injected (stale). If the user wants to continue that work, recall it (search_memory for "[HANDOFF]", or read the local handoff file).`;
 }
+var HANDOFF_TAG, HANDOFF_RECALL_LIMIT, HANDOFF_STALE_MS;
+var init_handoff = __esm({
+  "../capture-core/src/handoff.ts"() {
+    "use strict";
+    HANDOFF_TAG = "[HANDOFF]";
+    HANDOFF_RECALL_LIMIT = 20;
+    HANDOFF_STALE_MS = 7 * 24 * 60 * 60 * 1e3;
+  }
+});
 
 // ../capture-core/src/index.ts
-var CASUAL_PATTERNS = [
-  /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
-  /^(good\s*(morning|afternoon|evening|night))\b/,
-  /^(thanks|thank you|thx|ty)\b/,
-  /^(ok|okay|sure|got it|sounds good|cool|nice|great|awesome|perfect)\b/,
-  /^(bye|goodbye|see you|later|gn|ttyl)\b/,
-  /^(yes|no|yep|nope|yeah|nah)\b/,
-  /^(lol|lmao|haha|heh)\b/,
-  /^(how are you|what's up|whats up|wassup)\b/
-];
 function isCasualChat(text, keywords, emptyIsCasual = false) {
   const lower = text.toLowerCase().trim();
   if (!lower) return emptyIsCasual;
@@ -407,35 +424,18 @@ function isCasualChat(text, keywords, emptyIsCasual = false) {
   }
   return CASUAL_PATTERNS.some((pattern) => pattern.test(lower));
 }
-var MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
-var MEMBASE_HANDOFF_BLOCK_RE = /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
-var METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
-var SIMPLE_TAG_RE = /<\/?final>/gi;
-var CODE_BLOCK_RE = /```[\s\S]*?```/g;
 function stripContextBlocks(text) {
   return text.replace(MEMBASE_CONTEXT_BLOCK_RE, " ").replace(MEMBASE_HANDOFF_BLOCK_RE, " ").replace(METADATA_BLOCK_RE, " ").replace(SIMPLE_TAG_RE, " ");
 }
 function normalizeLines(text, dropLine) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).filter((line) => !(dropLine?.(line) ?? false)).join("\n").trim();
 }
-var SECRET_ASSIGNMENT_KEYWORDS_FULL = [
-  "API_KEY",
-  "TOKEN",
-  "SECRET",
-  "PASSWORD",
-  "PRIVATE_KEY"
-];
 function buildSecretAssignmentRe(keywords = SECRET_ASSIGNMENT_KEYWORDS_FULL) {
   return new RegExp(
     `\\b([A-Z0-9_]*(?:${keywords.join("|")})[A-Z0-9_]*)\\s*=\\s*[^\\s\`]+`,
     "gi"
   );
 }
-var SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
-var BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
-var CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
-var COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
-var PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
 function redactSecrets(text) {
   return text.replace(PRIVATE_KEY_RE, "[REDACTED_PRIVATE_KEY]").replace(SECRET_ASSIGNMENT_FULL_RE, "$1=[REDACTED]").replace(BEARER_TOKEN_RE, "$1[REDACTED]").replace(CLI_SECRET_FLAG_RE, "$1[REDACTED]").replace(COMMON_TOKEN_RE, "[REDACTED_TOKEN]");
 }
@@ -454,288 +454,227 @@ function truncateText(value, max = 500) {
   const compact = value.replace(/\s+/g, " ").trim();
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
-var MembaseTransport = class {
-  constructor(opts) {
-    this.opts = opts;
-    this.apiUrl = opts.apiUrl.replace(/\/$/, "");
-    this.tokens = opts.tokens;
-    this.timeoutMs = opts.timeoutMs ?? 15e3;
-  }
-  tokens;
-  refreshPromise = null;
-  apiUrl;
-  timeoutMs;
-  get currentTokens() {
-    return this.tokens;
-  }
-  isAuthenticated() {
-    return Boolean(this.tokens.accessToken && this.tokens.clientId);
-  }
-  rawFetch(path, options = {}) {
-    return fetch(`${this.apiUrl}${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.tokens.accessToken}`,
-        "User-Agent": this.opts.userAgent,
-        ...options.headers ?? {}
+var CASUAL_PATTERNS, MEMBASE_CONTEXT_BLOCK_RE, MEMBASE_HANDOFF_BLOCK_RE, METADATA_BLOCK_RE, SIMPLE_TAG_RE, CODE_BLOCK_RE, SECRET_ASSIGNMENT_KEYWORDS_FULL, SECRET_ASSIGNMENT_FULL_RE, BEARER_TOKEN_RE, CLI_SECRET_FLAG_RE, COMMON_TOKEN_RE, PRIVATE_KEY_RE, MembaseTransport;
+var init_src = __esm({
+  "../capture-core/src/index.ts"() {
+    "use strict";
+    init_spool();
+    init_token_store();
+    init_handoff();
+    CASUAL_PATTERNS = [
+      /^(hi|hey|hello|yo|sup|hola|howdy|hiya|heya)\b/,
+      /^(good\s*(morning|afternoon|evening|night))\b/,
+      /^(thanks|thank you|thx|ty)\b/,
+      /^(ok|okay|sure|got it|sounds good|cool|nice|great|awesome|perfect)\b/,
+      /^(bye|goodbye|see you|later|gn|ttyl)\b/,
+      /^(yes|no|yep|nope|yeah|nah)\b/,
+      /^(lol|lmao|haha|heh)\b/,
+      /^(how are you|what's up|whats up|wassup)\b/
+    ];
+    MEMBASE_CONTEXT_BLOCK_RE = /<membase-context>[\s\S]*?<\/membase-context>\s*/gi;
+    MEMBASE_HANDOFF_BLOCK_RE = /<membase-handoff\b[^>]*>[\s\S]*?<\/membase-handoff>\s*/gi;
+    METADATA_BLOCK_RE = /(sender|conversation info)\s*\(untrusted metadata\):\s*(?:```json[\s\S]*?```|json\s*\{[\s\S]*?\})/gi;
+    SIMPLE_TAG_RE = /<\/?final>/gi;
+    CODE_BLOCK_RE = /```[\s\S]*?```/g;
+    SECRET_ASSIGNMENT_KEYWORDS_FULL = [
+      "API_KEY",
+      "TOKEN",
+      "SECRET",
+      "PASSWORD",
+      "PRIVATE_KEY"
+    ];
+    SECRET_ASSIGNMENT_FULL_RE = buildSecretAssignmentRe();
+    BEARER_TOKEN_RE = /\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
+    CLI_SECRET_FLAG_RE = /((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+/gi;
+    COMMON_TOKEN_RE = /\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
+    PRIVATE_KEY_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+    MembaseTransport = class {
+      constructor(opts) {
+        this.opts = opts;
+        this.apiUrl = opts.apiUrl.replace(/\/$/, "");
+        this.tokens = opts.tokens;
+        this.timeoutMs = opts.timeoutMs ?? 15e3;
       }
-    });
-  }
-  async doRefresh() {
-    if (!this.tokens.refreshToken || !this.tokens.clientId) {
-      throw this.opts.createError(
-        this.opts.notAuthenticatedMessage ?? "Not authenticated",
-        401,
-        ""
-      );
-    }
-    this.opts.log?.("refreshing access token");
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: this.tokens.refreshToken,
-      client_id: this.tokens.clientId
-    });
-    const response = await fetch(`${this.apiUrl}/oauth/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": this.opts.userAgent
-      },
-      body,
-      signal: AbortSignal.timeout(this.timeoutMs)
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw this.opts.createError(
-        this.opts.refreshFailedMessage?.(response.status) ?? "Token refresh failed",
-        response.status,
-        text
-      );
-    }
-    const data = await response.json();
-    this.tokens = {
-      ...this.tokens,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token ?? this.tokens.refreshToken,
-      expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
-      scope: data.scope ?? this.tokens.scope
+      tokens;
+      refreshPromise = null;
+      apiUrl;
+      timeoutMs;
+      get currentTokens() {
+        return this.tokens;
+      }
+      isAuthenticated() {
+        return Boolean(this.tokens.accessToken && this.tokens.clientId);
+      }
+      rawFetch(path, options = {}) {
+        return fetch(`${this.apiUrl}${path}`, {
+          ...options,
+          signal: options.signal ?? AbortSignal.timeout(this.timeoutMs),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.tokens.accessToken}`,
+            "User-Agent": this.opts.userAgent,
+            ...options.headers ?? {}
+          }
+        });
+      }
+      async doRefresh() {
+        if (!this.tokens.refreshToken || !this.tokens.clientId) {
+          throw this.opts.createError(
+            this.opts.notAuthenticatedMessage ?? "Not authenticated",
+            401,
+            ""
+          );
+        }
+        this.opts.log?.("refreshing access token");
+        const body = new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: this.tokens.refreshToken,
+          client_id: this.tokens.clientId
+        });
+        const response = await fetch(`${this.apiUrl}/oauth/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": this.opts.userAgent
+          },
+          body,
+          signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw this.opts.createError(
+            this.opts.refreshFailedMessage?.(response.status) ?? "Token refresh failed",
+            response.status,
+            text
+          );
+        }
+        const data = await response.json();
+        this.tokens = {
+          ...this.tokens,
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token ?? this.tokens.refreshToken,
+          expiresAt: data.expires_in ? Math.floor(Date.now() / 1e3) + data.expires_in : void 0,
+          scope: data.scope ?? this.tokens.scope
+        };
+        this.opts.log?.("token refreshed successfully");
+        this.opts.onTokenRefresh?.(this.tokens);
+      }
+      async refreshAccessToken() {
+        if (!this.refreshPromise) {
+          this.refreshPromise = this.doRefresh().finally(() => {
+            this.refreshPromise = null;
+          });
+        }
+        await this.refreshPromise;
+      }
+      /** Authenticated fetch with single-flight refresh and one retry on 401. */
+      async authorizedFetch(path, options = {}) {
+        this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
+        let response = await this.rawFetch(path, options);
+        if (response.status === 401 && this.tokens.refreshToken) {
+          await response.body?.cancel();
+          await this.refreshAccessToken();
+          response = await this.rawFetch(path, options);
+        }
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw this.opts.createError(
+            this.opts.apiErrorMessage?.(response.status, text) ?? `Membase API error ${response.status}`,
+            response.status,
+            text
+          );
+        }
+        return response;
+      }
     };
-    this.opts.log?.("token refreshed successfully");
-    this.opts.onTokenRefresh?.(this.tokens);
   }
-  async refreshAccessToken() {
-    if (!this.refreshPromise) {
-      this.refreshPromise = this.doRefresh().finally(() => {
-        this.refreshPromise = null;
-      });
-    }
-    await this.refreshPromise;
-  }
-  /** Authenticated fetch with single-flight refresh and one retry on 401. */
-  async authorizedFetch(path, options = {}) {
-    this.opts.log?.(`${options.method ?? "GET"} ${path.split("?")[0]}`);
-    let response = await this.rawFetch(path, options);
-    if (response.status === 401 && this.tokens.refreshToken) {
-      await response.body?.cancel();
-      await this.refreshAccessToken();
-      response = await this.rawFetch(path, options);
-    }
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw this.opts.createError(
-        this.opts.apiErrorMessage?.(response.status, text) ?? `Membase API error ${response.status}`,
-        response.status,
-        text
-      );
-    }
-    return response;
-  }
-};
+});
 
 // src/clients.ts
-var GENERIC_LOGIN_HINT = "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.";
-var CLIENT_DESCRIPTORS = {
-  "claude-code": {
-    label: "Claude Code",
-    fileFirstHandoff: true,
-    loginHint: "Membase is installed but not connected. Run /membase:login to enable memory.",
-    // Part of the installed Claude plugin's on-disk contract since before the
-    // client-neutral layout — do not migrate it to ~/.membase/claude-code.
-    homeDataDir: [".claude", "plugins", "membase"]
-  },
-  codex: {
-    label: "Codex",
-    handoffDotDir: ".codex"
-  },
-  cursor: {
-    label: "Cursor",
-    hostInjectsHandoff: true
-  }
-};
 function clientDescriptor(source) {
   return CLIENT_DESCRIPTORS[source] ?? {};
 }
 function homeDataDirSegments(source) {
   return clientDescriptor(source).homeDataDir ?? [".membase", source];
 }
+var GENERIC_LOGIN_HINT, CLIENT_DESCRIPTORS;
+var init_clients = __esm({
+  "src/clients.ts"() {
+    "use strict";
+    GENERIC_LOGIN_HINT = "Membase is not logged in on this machine. Call the membase `login` tool to enable memory.";
+    CLIENT_DESCRIPTORS = {
+      "claude-code": {
+        label: "Claude Code",
+        fileFirstHandoff: true,
+        loginHint: "Membase is installed but not connected. Run /membase:login to enable memory.",
+        // Part of the installed Claude plugin's on-disk contract since before the
+        // client-neutral layout — do not migrate it to ~/.membase/claude-code.
+        homeDataDir: [".claude", "plugins", "membase"],
+        usesToolBatch: true
+        // No defaultCaptureMode: Claude capture stays opt-in via /membase:login
+        // (disk config) or the plugin's captureMode option.
+      },
+      codex: {
+        label: "Codex",
+        handoffDotDir: ".codex",
+        defaultCaptureMode: "summary"
+      },
+      cursor: {
+        label: "Cursor",
+        hostInjectsHandoff: true,
+        defaultCaptureMode: "summary"
+      }
+    };
+  }
+});
 
 // src/constants.ts
-var PLUGIN_NAME = "claude-membase";
-var PLUGIN_VERSION = "0.1.4";
-var DEFAULT_API_URL = "https://api.membase.so";
-var RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
-var CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOURCE) ? RAW_CLIENT_SOURCE : "claude-code";
-var MEMORY_SOURCE = CLIENT_SOURCE;
-var USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
-var INGEST_PLUGIN_LABEL = CLIENT_SOURCE === "claude-code" ? PLUGIN_NAME : `membase-bundle-${CLIENT_SOURCE}`;
 function clientLabelFor(source) {
   if (!source) return CLIENT_LABEL;
   return clientDescriptor(source).label ?? source;
 }
-var CLIENT_LABEL = clientDescriptor(CLIENT_SOURCE).label ?? CLIENT_SOURCE;
-var DEFAULT_RECALL_TIMEOUT_MS = 3e3;
-var DEFAULT_MAX_RECALL_CHARS = 4e3;
-var MAX_RECALL_CHARS = 16e3;
-var MIN_RECALL_CHARS = 500;
-var PREFETCH_MEMORY_LIMIT = 10;
-var PREFETCH_PROJECT_MEMORY_LIMIT = 7;
-var PREFETCH_BROADER_MEMORY_LIMIT = 4;
-var PREFETCH_WIKI_LIMIT = 5;
+var PLUGIN_NAME, PLUGIN_VERSION, DEFAULT_API_URL, RAW_CLIENT_SOURCE, CLIENT_SOURCE, MEMORY_SOURCE, USER_AGENT, INGEST_PLUGIN_LABEL, CLIENT_LABEL, DEFAULT_RECALL_TIMEOUT_MS, DEFAULT_MAX_RECALL_CHARS, MAX_RECALL_CHARS, MIN_RECALL_CHARS, PREFETCH_MEMORY_LIMIT, PREFETCH_PROJECT_MEMORY_LIMIT, PREFETCH_BROADER_MEMORY_LIMIT, PREFETCH_WIKI_LIMIT;
+var init_constants = __esm({
+  "src/constants.ts"() {
+    "use strict";
+    init_clients();
+    PLUGIN_NAME = "claude-membase";
+    PLUGIN_VERSION = "0.1.5";
+    DEFAULT_API_URL = "https://api.membase.so";
+    RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
+    CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOURCE) ? RAW_CLIENT_SOURCE : "claude-code";
+    MEMORY_SOURCE = CLIENT_SOURCE;
+    USER_AGENT = `membase-${CLIENT_SOURCE}/${PLUGIN_VERSION}`;
+    INGEST_PLUGIN_LABEL = CLIENT_SOURCE === "claude-code" ? PLUGIN_NAME : `membase-bundle-${CLIENT_SOURCE}`;
+    CLIENT_LABEL = clientDescriptor(CLIENT_SOURCE).label ?? CLIENT_SOURCE;
+    DEFAULT_RECALL_TIMEOUT_MS = 3e3;
+    DEFAULT_MAX_RECALL_CHARS = 4e3;
+    MAX_RECALL_CHARS = 16e3;
+    MIN_RECALL_CHARS = 500;
+    PREFETCH_MEMORY_LIMIT = 10;
+    PREFETCH_PROJECT_MEMORY_LIMIT = 7;
+    PREFETCH_BROADER_MEMORY_LIMIT = 4;
+    PREFETCH_WIKI_LIMIT = 5;
+  }
+});
 
 // src/types.ts
-var MembaseApiError = class extends Error {
-  constructor(message, status, body) {
-    super(message);
-    this.status = status;
-    this.body = body;
-    this.name = "MembaseApiError";
+var MembaseApiError;
+var init_types = __esm({
+  "src/types.ts"() {
+    "use strict";
+    MembaseApiError = class extends Error {
+      constructor(message, status, body) {
+        super(message);
+        this.status = status;
+        this.body = body;
+        this.name = "MembaseApiError";
+      }
+    };
   }
-};
+});
 
 // src/api/client.ts
-var MembaseClient = class {
-  tokens;
-  transport;
-  constructor(options) {
-    this.tokens = options.tokens;
-    this.transport = new MembaseTransport({
-      apiUrl: options.apiUrl,
-      tokens: {
-        accessToken: options.tokens.accessToken,
-        refreshToken: options.tokens.refreshToken,
-        clientId: options.tokens.clientId,
-        expiresAt: options.tokens.expiresAt,
-        scope: options.tokens.scope
-      },
-      userAgent: USER_AGENT,
-      timeoutMs: options.timeoutMs,
-      createError: (message, status, body) => new MembaseApiError(message, status, body),
-      onTokenRefresh: (tokens) => {
-        this.tokens = {
-          ...this.tokens,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: tokens.expiresAt,
-          scope: tokens.scope
-        };
-        options.onTokenRefresh?.(this.tokens);
-      }
-    });
-  }
-  async request(path, options = {}) {
-    const response = await this.transport.authorizedFetch(path, options);
-    if (response.status === 204) return void 0;
-    return await response.json();
-  }
-  async searchMemory(args) {
-    const params = new URLSearchParams({
-      query: args.query,
-      limit: String(args.limit ?? 20),
-      format: "bundles"
-    });
-    if (args.offset !== void 0) params.set("offset", String(args.offset));
-    if (args.date_from) params.set("date_from", args.date_from);
-    if (args.date_to) params.set("date_to", args.date_to);
-    if (args.timezone) params.set("timezone", args.timezone);
-    if (args.project) params.set("project", args.project);
-    for (const source of args.sources ?? []) params.append("sources", source);
-    const data = await this.request(
-      `/memory/search?${params.toString()}`
-    );
-    return data.episodes ?? [];
-  }
-  async ingestMemory(args) {
-    return this.request("/memory/ingest", {
-      method: "POST",
-      body: JSON.stringify({
-        content: args.content,
-        display_summary: args.display_summary,
-        metadata: args.metadata,
-        project: args.project,
-        source: MEMORY_SOURCE,
-        channel: "mcp"
-      })
-    });
-  }
-  async getProfile() {
-    return this.request("/user/settings");
-  }
-  async searchWiki(args) {
-    const params = new URLSearchParams({
-      query: args.query,
-      limit: String(args.limit ?? 10)
-    });
-    if (args.collection) params.set("collection", args.collection);
-    const data = await this.request(
-      `/wiki/search?${params.toString()}`
-    );
-    return data.documents ?? [];
-  }
-  async addWiki(args) {
-    return this.request("/wiki/documents", {
-      method: "POST",
-      body: JSON.stringify({
-        title: args.title,
-        content: args.content,
-        collection: args.collection,
-        summarize: args.summarize ?? false,
-        source: MEMORY_SOURCE
-      })
-    });
-  }
-  async updateWiki(args) {
-    return this.request(`/wiki/documents/${args.doc_id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        title: args.title,
-        content: args.content,
-        collection: args.collection
-      })
-    });
-  }
-  async deleteEpisode(uuid) {
-    await this.request(`/memory/episodes/${encodeURIComponent(uuid)}`, {
-      method: "DELETE"
-    });
-  }
-  async deleteWiki(docId) {
-    await this.request(`/wiki/documents/${docId}`, { method: "DELETE" });
-  }
-  async registerConnection() {
-    await this.request("/agents/connect", {
-      method: "POST",
-      body: JSON.stringify({ source: MEMORY_SOURCE })
-    });
-  }
-  async recordUsage() {
-    await this.request("/agents/usage", {
-      method: "POST",
-      body: JSON.stringify({ source: MEMORY_SOURCE })
-    });
-  }
-};
 function createClient(apiUrl, tokens, onTokenRefresh, options) {
   return new MembaseClient({
     apiUrl,
@@ -744,11 +683,138 @@ function createClient(apiUrl, tokens, onTokenRefresh, options) {
     timeoutMs: options?.timeoutMs
   });
 }
+var MembaseClient;
+var init_client = __esm({
+  "src/api/client.ts"() {
+    "use strict";
+    init_src();
+    init_constants();
+    init_types();
+    MembaseClient = class {
+      tokens;
+      transport;
+      constructor(options) {
+        this.tokens = options.tokens;
+        this.transport = new MembaseTransport({
+          apiUrl: options.apiUrl,
+          tokens: {
+            accessToken: options.tokens.accessToken,
+            refreshToken: options.tokens.refreshToken,
+            clientId: options.tokens.clientId,
+            expiresAt: options.tokens.expiresAt,
+            scope: options.tokens.scope
+          },
+          userAgent: USER_AGENT,
+          timeoutMs: options.timeoutMs,
+          createError: (message, status, body) => new MembaseApiError(message, status, body),
+          onTokenRefresh: (tokens) => {
+            this.tokens = {
+              ...this.tokens,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              expiresAt: tokens.expiresAt,
+              scope: tokens.scope
+            };
+            options.onTokenRefresh?.(this.tokens);
+          }
+        });
+      }
+      async request(path, options = {}) {
+        const response = await this.transport.authorizedFetch(path, options);
+        if (response.status === 204) return void 0;
+        return await response.json();
+      }
+      async searchMemory(args) {
+        const params = new URLSearchParams({
+          query: args.query,
+          limit: String(args.limit ?? 20),
+          format: "bundles"
+        });
+        if (args.offset !== void 0) params.set("offset", String(args.offset));
+        if (args.date_from) params.set("date_from", args.date_from);
+        if (args.date_to) params.set("date_to", args.date_to);
+        if (args.timezone) params.set("timezone", args.timezone);
+        if (args.project) params.set("project", args.project);
+        for (const source of args.sources ?? []) params.append("sources", source);
+        const data = await this.request(
+          `/memory/search?${params.toString()}`
+        );
+        return data.episodes ?? [];
+      }
+      async ingestMemory(args) {
+        return this.request("/memory/ingest", {
+          method: "POST",
+          body: JSON.stringify({
+            content: args.content,
+            display_summary: args.display_summary,
+            metadata: args.metadata,
+            project: args.project,
+            source: MEMORY_SOURCE,
+            channel: "mcp"
+          })
+        });
+      }
+      async getProfile() {
+        return this.request("/user/settings");
+      }
+      async searchWiki(args) {
+        const params = new URLSearchParams({
+          query: args.query,
+          limit: String(args.limit ?? 10)
+        });
+        if (args.collection) params.set("collection", args.collection);
+        const data = await this.request(
+          `/wiki/search?${params.toString()}`
+        );
+        return data.documents ?? [];
+      }
+      async addWiki(args) {
+        return this.request("/wiki/documents", {
+          method: "POST",
+          body: JSON.stringify({
+            title: args.title,
+            content: args.content,
+            collection: args.collection,
+            summarize: args.summarize ?? false,
+            source: MEMORY_SOURCE
+          })
+        });
+      }
+      async updateWiki(args) {
+        return this.request(`/wiki/documents/${args.doc_id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            title: args.title,
+            content: args.content,
+            collection: args.collection
+          })
+        });
+      }
+      async deleteEpisode(uuid) {
+        await this.request(`/memory/episodes/${encodeURIComponent(uuid)}`, {
+          method: "DELETE"
+        });
+      }
+      async deleteWiki(docId) {
+        await this.request(`/wiki/documents/${docId}`, { method: "DELETE" });
+      }
+      async registerConnection() {
+        await this.request("/agents/connect", {
+          method: "POST",
+          body: JSON.stringify({ source: MEMORY_SOURCE })
+        });
+      }
+      async recordUsage() {
+        await this.request("/agents/usage", {
+          method: "POST",
+          body: JSON.stringify({ source: MEMORY_SOURCE })
+        });
+      }
+    };
+  }
+});
 
 // src/config/index.ts
-var import_node_fs3 = require("node:fs");
-var import_node_os = require("node:os");
-var import_node_path3 = require("node:path");
 function getDataDir() {
   const dir = (
     // Client-neutral override first: any client can point this at a custom
@@ -770,7 +836,6 @@ function ensureDataDir() {
 function configPath() {
   return (0, import_node_path3.join)(ensureDataDir(), "config.json");
 }
-var tokenStore = createTokenStore({ dir: ensureDataDir });
 function readJsonObject(path) {
   try {
     return JSON.parse((0, import_node_fs3.readFileSync)(path, "utf-8"));
@@ -835,7 +900,9 @@ function loadConfig() {
     // captureMode is the Claude plugin's native option channel and the legacy
     // name for already-installed non-Claude hook configs.
     captureMode: normalizeCaptureMode(
-      disk.captureMode ?? strFromEnv("MEMBASE_CAPTURE_MODE") ?? strFromOption("captureMode")
+      disk.captureMode ?? strFromEnv("MEMBASE_CAPTURE_MODE") ?? strFromOption("captureMode") ?? // Descriptor default last: carries the summary-by-default contract
+      // codex/cursor hook configs used to express via command-line env.
+      clientDescriptor(MEMORY_SOURCE).defaultCaptureMode
     ),
     maxRecallChars: clampRecallChars(maxRecallChars),
     sessionStartContext: normalizeSessionStartContext(
@@ -857,40 +924,21 @@ function readTokens() {
 function writeTokens(tokens) {
   tokenStore.write(tokens);
 }
+var import_node_fs3, import_node_os, import_node_path3, tokenStore;
+var init_config = __esm({
+  "src/config/index.ts"() {
+    "use strict";
+    import_node_fs3 = require("node:fs");
+    import_node_os = require("node:os");
+    import_node_path3 = require("node:path");
+    init_src();
+    init_clients();
+    init_constants();
+    tokenStore = createTokenStore({ dir: ensureDataDir });
+  }
+});
 
 // src/sanitize/index.ts
-var MEMORY_KEYWORDS = [
-  "remember",
-  "recall",
-  "forgot",
-  "forget",
-  "last time",
-  "previously",
-  "before",
-  "history",
-  "decision",
-  "preference",
-  "project",
-  "architecture",
-  "deploy",
-  "release",
-  "migration",
-  "refactor",
-  "deadline",
-  "bug",
-  "issue",
-  "error"
-];
-var PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
-var OPERATIONAL_PATTERNS = [
-  /^heartbeat$/i,
-  /^heartbeat_ok$/i,
-  /^heartbeat ok$/i,
-  /^heartbeat:\s*(ok|idle|noop)$/i,
-  /^heartbeat ping$/i,
-  /^heartbeat check$/i,
-  /\bcheck\s+heartbeat\.md\b/i
-];
 function sanitizeMembaseText(raw) {
   let stripped = raw;
   let previous;
@@ -912,8 +960,47 @@ function isOperationalMessage(text) {
   if (!trimmed) return true;
   return OPERATIONAL_PATTERNS.some((pattern) => pattern.test(trimmed));
 }
-var looksSensitive2 = looksSensitive;
-var truncateText2 = truncateText;
+var MEMORY_KEYWORDS, PRIVATE_BLOCK_RE, OPERATIONAL_PATTERNS, looksSensitive2, truncateText2;
+var init_sanitize = __esm({
+  "src/sanitize/index.ts"() {
+    "use strict";
+    init_src();
+    MEMORY_KEYWORDS = [
+      "remember",
+      "recall",
+      "forgot",
+      "forget",
+      "last time",
+      "previously",
+      "before",
+      "history",
+      "decision",
+      "preference",
+      "project",
+      "architecture",
+      "deploy",
+      "release",
+      "migration",
+      "refactor",
+      "deadline",
+      "bug",
+      "issue",
+      "error"
+    ];
+    PRIVATE_BLOCK_RE = /<(private|membase-private)>[\s\S]*?<\/\1>\s*/gi;
+    OPERATIONAL_PATTERNS = [
+      /^heartbeat$/i,
+      /^heartbeat_ok$/i,
+      /^heartbeat ok$/i,
+      /^heartbeat:\s*(ok|idle|noop)$/i,
+      /^heartbeat ping$/i,
+      /^heartbeat check$/i,
+      /\bcheck\s+heartbeat\.md\b/i
+    ];
+    looksSensitive2 = looksSensitive;
+    truncateText2 = truncateText;
+  }
+});
 
 // src/format/index.ts
 function formatBundle(bundle, index) {
@@ -971,10 +1058,15 @@ ${disclaimer}
   const suffix = "\n...</membase-context>";
   return full.length > maxChars ? `${full.slice(0, maxChars - suffix.length)}${suffix}` : full;
 }
+var init_format = __esm({
+  "src/format/index.ts"() {
+    "use strict";
+    init_src();
+    init_sanitize();
+  }
+});
 
 // src/project/index.ts
-var import_node_fs4 = require("node:fs");
-var import_node_path4 = require("node:path");
 function normalizeProjectSlug(raw) {
   return raw.trim().toLowerCase().replace(/[^\p{Letter}\p{Number}-]+/gu, "-").replace(/_{1,}/g, "-").replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 }
@@ -1007,13 +1099,16 @@ function resolveProjectSlug(cwd, config) {
     return remoteSlug(gitRoot) || normalizeProjectSlug((0, import_node_path4.basename)(gitRoot));
   return normalizeProjectSlug((0, import_node_path4.basename)(cwd));
 }
+var import_node_fs4, import_node_path4;
+var init_project = __esm({
+  "src/project/index.ts"() {
+    "use strict";
+    import_node_fs4 = require("node:fs");
+    import_node_path4 = require("node:path");
+  }
+});
 
 // src/spool/index.ts
-var import_node_path5 = require("node:path");
-var spool = createCaptureSpool({
-  stateDir: ensureDataDir,
-  sanitize: sanitizeMembaseText
-});
 function enqueueCapture(record) {
   return spool.enqueueCapture(record);
 }
@@ -1039,11 +1134,22 @@ function pendingSpoolCount() {
 function pendingSpoolPath() {
   return (0, import_node_path5.join)(ensureDataDir(), "spool", "pending.jsonl");
 }
+var import_node_path5, spool;
+var init_spool2 = __esm({
+  "src/spool/index.ts"() {
+    "use strict";
+    import_node_path5 = require("node:path");
+    init_src();
+    init_config();
+    init_sanitize();
+    spool = createCaptureSpool({
+      stateDir: ensureDataDir,
+      sanitize: sanitizeMembaseText
+    });
+  }
+});
 
 // src/handoff/file.ts
-var import_node_fs5 = require("node:fs");
-var import_node_os2 = require("node:os");
-var import_node_path6 = require("node:path");
 function handoffFilePath(projectSlug) {
   return (0, import_node_path6.join)(getDataDir(), "handoff", `${projectSlug || "unscoped"}.md`);
 }
@@ -1078,6 +1184,18 @@ function readLocalHandoff(args) {
   }
   return newestStale;
 }
+var import_node_fs5, import_node_os2, import_node_path6;
+var init_file = __esm({
+  "src/handoff/file.ts"() {
+    "use strict";
+    import_node_fs5 = require("node:fs");
+    import_node_os2 = require("node:os");
+    import_node_path6 = require("node:path");
+    init_src();
+    init_clients();
+    init_config();
+  }
+});
 
 // src/profile/index.ts
 function asProfileValue(value) {
@@ -1099,6 +1217,11 @@ function profileResourceFields(profile) {
     timezone: asProfileValue(profile.timezone)
   };
 }
+var init_profile = __esm({
+  "src/profile/index.ts"() {
+    "use strict";
+  }
+});
 
 // src/hooks/session-start.ts
 function sessionStartRoutingGuide() {
@@ -1127,10 +1250,17 @@ function buildSessionStartContext(args) {
   lines.push("</membase-session>");
   return lines.filter(Boolean).join("\n");
 }
+var init_session_start = __esm({
+  "src/hooks/session-start.ts"() {
+    "use strict";
+    init_src();
+    init_constants();
+    init_profile();
+    init_src();
+  }
+});
 
 // src/hooks/summary.ts
-var IMPORTANT_BASH_RE = /\b(bun|npm|pnpm|yarn|uv|pytest|cargo|go\s+test|make|docker|gcloud|vercel|wrangler|supabase|psql|prisma|drizzle|alembic|terraform|kubectl)\b|\bgit\s+(commit|merge|rebase|checkout|switch|push|pull|tag|reset|clean)\b|(?:^|\s)(rm|mv|cp|chmod|chown|mkdir|touch)\b/i;
-var PASSIVE_BASH_RE = /^(pwd|ls|rg|grep|find|sed|cat|nl|wc|head|tail|git\s+(status|diff|log|show|branch))\b/i;
 function objectValue(value) {
   return value && typeof value === "object" ? value : {};
 }
@@ -1172,10 +1302,17 @@ function extractToolObservation(tool) {
   if (!path || looksSensitive2(path)) return null;
   return { files: [path], commands: [], tasks: 0 };
 }
+var IMPORTANT_BASH_RE, PASSIVE_BASH_RE;
+var init_summary = __esm({
+  "src/hooks/summary.ts"() {
+    "use strict";
+    init_sanitize();
+    IMPORTANT_BASH_RE = /\b(bun|npm|pnpm|yarn|uv|pytest|cargo|go\s+test|make|docker|gcloud|vercel|wrangler|supabase|psql|prisma|drizzle|alembic|terraform|kubectl)\b|\bgit\s+(commit|merge|rebase|checkout|switch|push|pull|tag|reset|clean)\b|(?:^|\s)(rm|mv|cp|chmod|chown|mkdir|touch)\b/i;
+    PASSIVE_BASH_RE = /^(pwd|ls|rg|grep|find|sed|cat|nl|wc|head|tail|git\s+(status|diff|log|show|branch))\b/i;
+  }
+});
 
 // src/hooks/digest.ts
-var MAX_FILES = 20;
-var MAX_COMMANDS = 15;
 function uniq(values) {
   const seen = /* @__PURE__ */ new Set();
   const out = [];
@@ -1225,14 +1362,18 @@ function buildSessionDigest(args) {
     display_summary: truncateText2(summaryBody, 180)
   };
 }
+var MAX_FILES, MAX_COMMANDS;
+var init_digest = __esm({
+  "src/hooks/digest.ts"() {
+    "use strict";
+    init_constants();
+    init_sanitize();
+    MAX_FILES = 20;
+    MAX_COMMANDS = 15;
+  }
+});
 
 // src/scratch/index.ts
-var import_node_fs6 = require("node:fs");
-var import_node_path7 = require("node:path");
-var SCRATCH_IDLE_MS = 30 * 60 * 1e3;
-var SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
-var SCRATCH_MAX_OBSERVATIONS = 2e3;
-var ensuredScratchDir;
 function scratchDir() {
   const dir = (0, import_node_path7.join)(ensureDataDir(), "scratch");
   if (ensuredScratchDir === dir) return dir;
@@ -1290,7 +1431,6 @@ function appendObservation(args) {
   } catch {
   }
 }
-var SCRATCH_MAX_BYTES = SCRATCH_MAX_OBSERVATIONS * 512;
 function overCap(path) {
   try {
     return (0, import_node_fs6.statSync)(path).size >= SCRATCH_MAX_BYTES;
@@ -1416,45 +1556,32 @@ function sweepIdleSessions(args) {
   }
   return out;
 }
+var import_node_fs6, import_node_path7, SCRATCH_IDLE_MS, SCRATCH_MAX_AGE_MS, SCRATCH_MAX_OBSERVATIONS, ensuredScratchDir, SCRATCH_MAX_BYTES;
+var init_scratch = __esm({
+  "src/scratch/index.ts"() {
+    "use strict";
+    import_node_fs6 = require("node:fs");
+    import_node_path7 = require("node:path");
+    init_config();
+    init_sanitize();
+    SCRATCH_IDLE_MS = 30 * 60 * 1e3;
+    SCRATCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1e3;
+    SCRATCH_MAX_OBSERVATIONS = 2e3;
+    SCRATCH_MAX_BYTES = SCRATCH_MAX_OBSERVATIONS * 512;
+  }
+});
 
 // src/hooks/handler.ts
-var SESSION_FETCH_TIMEOUT_MS = 1800;
-var ASYNC_FLUSH_TIMEOUT_MS = 4e3;
-var ASYNC_FLUSH_LIMIT = 3;
-var STDIN_IDLE_MS = 2e3;
-var STDIN_MAX_BYTES = 8388608;
-function readStdin() {
-  return new Promise((resolve) => {
-    let data = "";
-    let settled = false;
-    let timer;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        process.stdin.destroy();
-      } catch {
-      }
-      resolve(data);
-    };
-    const arm = () => {
-      clearTimeout(timer);
-      timer = setTimeout(done, STDIN_IDLE_MS);
-      timer.unref?.();
-    };
-    arm();
-    process.stdin.setEncoding("utf-8");
-    process.stdin.on("data", (chunk) => {
-      arm();
-      if (data.length < STDIN_MAX_BYTES) data += chunk;
-    });
-    process.stdin.on("end", done);
-    process.stdin.on("error", done);
-  });
-}
+var handler_exports = {};
+__export(handler_exports, {
+  runHookEvent: () => runHookEvent
+});
 function outputAdditionalContext(text, event = "UserPromptSubmit") {
   if (!text.trim()) return;
+  if (MEMORY_SOURCE === "cursor") {
+    process.stdout.write(JSON.stringify({ additional_context: text }));
+    return;
+  }
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
@@ -1757,21 +1884,11 @@ async function spoolSessionSummary(input, captureKind) {
     metadata: captureMetadata(input, project)
   });
 }
-function parseHookInput(raw) {
-  if (!raw.trim()) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-  }
-  return {};
-}
-async function main() {
-  const explicitEvent = process.argv[2];
-  const raw = await readStdin();
-  const input = parseHookInput(raw);
-  input.hook_event_name = explicitEvent || input.hook_event_name;
+async function runHookEvent(input) {
   const event = input.hook_event_name;
+  const batchClient = clientDescriptor(MEMORY_SOURCE).usesToolBatch === true;
+  if (event === "PostToolUse" && batchClient) return;
+  if (event === "PostToolBatch" && !batchClient) return;
   if (event === "SessionStart") await handleSessionStart(input);
   if (event === "UserPromptSubmit") await handleUserPromptSubmit(input);
   if (event === "PostToolBatch") await scratchToolBatch(input);
@@ -1793,6 +1910,108 @@ async function main() {
   if (event === "PreCompact" || event === "PostCompact") {
     await spoolSessionSummary(input, "compact_summary");
   }
+}
+var SESSION_FETCH_TIMEOUT_MS, ASYNC_FLUSH_TIMEOUT_MS, ASYNC_FLUSH_LIMIT;
+var init_handler = __esm({
+  "src/hooks/handler.ts"() {
+    "use strict";
+    init_client();
+    init_clients();
+    init_config();
+    init_constants();
+    init_format();
+    init_project();
+    init_sanitize();
+    init_spool2();
+    init_src();
+    init_file();
+    init_session_start();
+    init_summary();
+    init_digest();
+    init_scratch();
+    SESSION_FETCH_TIMEOUT_MS = 1800;
+    ASYNC_FLUSH_TIMEOUT_MS = 4e3;
+    ASYNC_FLUSH_LIMIT = 3;
+  }
+});
+
+// src/hooks/detect.ts
+function detectClientSource(input, env = process.env) {
+  if (env.MEMBASE_CLIENT_SOURCE) return void 0;
+  if ("conversation_id" in input || "workspace_roots" in input || "cursor_version" in input) {
+    return "cursor";
+  }
+  if (env.CODEX_PLUGIN_ROOT) return "codex";
+  return void 0;
+}
+function normalizeCursorInput(input) {
+  if (typeof input.session_id !== "string") {
+    const conversationId = input.conversation_id;
+    if (typeof conversationId === "string") input.session_id = conversationId;
+  }
+  if (typeof input.cwd !== "string") {
+    const roots = input.workspace_roots;
+    if (Array.isArray(roots) && typeof roots[0] === "string") {
+      input.cwd = roots[0];
+    }
+  }
+  return input;
+}
+function parseHookInput(raw) {
+  if (!raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return {};
+}
+
+// src/hooks/main.ts
+var STDIN_IDLE_MS = 2e3;
+var STDIN_MAX_BYTES = 8388608;
+function readStdin() {
+  return new Promise((resolve) => {
+    let data = "";
+    let settled = false;
+    let timer;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        process.stdin.destroy();
+      } catch {
+      }
+      resolve(data);
+    };
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(done, STDIN_IDLE_MS);
+      timer.unref?.();
+    };
+    arm();
+    process.stdin.setEncoding("utf-8");
+    process.stdin.on("data", (chunk) => {
+      arm();
+      if (data.length < STDIN_MAX_BYTES) data += chunk;
+    });
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+  });
+}
+async function main() {
+  const explicitEvent = process.argv[2];
+  const raw = await readStdin();
+  const input = parseHookInput(raw);
+  input.hook_event_name = explicitEvent || input.hook_event_name;
+  const detected = detectClientSource(input);
+  if (detected) process.env.MEMBASE_CLIENT_SOURCE = detected;
+  if (process.env.MEMBASE_CLIENT_SOURCE === "cursor") {
+    normalizeCursorInput(input);
+  }
+  const { runHookEvent: runHookEvent2 } = await Promise.resolve().then(() => (init_handler(), handler_exports));
+  await runHookEvent2(input);
 }
 main().catch(() => {
   process.exit(0);

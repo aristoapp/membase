@@ -17,10 +17,9 @@ const npmPackagePaths = [
 ];
 
 const pluginJsonVersionPaths = [
-  "clients/claude/.claude-plugin/plugin.json",
-  "manifests/claude/plugin.json",
-  "clients/cursor/.cursor-plugin/plugin.json",
-  "manifests/cursor/plugin.json"
+  ".claude-plugin/plugin.json",
+  ".cursor-plugin/plugin.json",
+  ".plugin/plugin.json"
 ];
 
 const hermesYamlVersionPaths = [

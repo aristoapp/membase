@@ -92,7 +92,8 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   captures and instructions to store them via add_memory. Source:
   install docs "the session-start hook injects 'N pending captures — flush
   them'".
-- C-HOOK-2 — Session-digest capture: `hook.cjs PostToolUse` with a Codex-shaped payload
+- C-HOOK-2 — Session-digest capture: `hook.cjs PostToolUse` run as a per-tool
+  client (`MEMBASE_CLIENT_SOURCE=codex`) with a Codex-shaped payload
   (`{session_id, tool_name:"apply_patch", tool_input:{command:"*** Update
   File: x.ts"}}`) records the observation to the per-session SCRATCH
   (`<dataDir>/scratch/<session_id>.jsonl`) naming the touched file — and adds
@@ -101,8 +102,12 @@ promises in docs/install/{cursor,codex}.md Auto-Capture sections)
   exactly ONE `session_summary` record in the spool, attributed to the client
   source, then deletes the scratch. C-HOOK-2c: for a client with no end event
   (Codex) or a crash, the next `SessionStart` sweeps any scratch idle >30min
-  into a digest. Source: the session-digest capture design
-  decision.
+  into a digest. C-HOOK-2a: tool-capture events are client-owned —
+  the shared hooks.json registers both PostToolUse and PostToolBatch for
+  every host, so the runtime runs only the event the detected client owns
+  (Claude batches; Codex/Cursor fire per tool) and the other is a no-op.
+  Source: the session-digest capture design decision + the root-payload
+  single-hooks.json layout.
 - C-HOOK-3 — Attribution follows `MEMBASE_CLIENT_SOURCE`: with `codex`, the
   session digest's text/display identifies Codex, not Claude Code; with the
   env unset, upload requests identify claude-code. Source: PR #27

@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CURSOR_MCP_URL = "https://mcp.membase.so/mcp";
 
-const configPaths = [
-  "clients/cursor/mcp.json",
-  "manifests/cursor/mcp.json"
-];
+const configPaths = ["mcp.json"];
+
+// Codex shares the HTTP-first contract, but its config is inlined in the
+// generic manifest (the root .mcp.json belongs to the Claude stdio server).
+const codexManifestPath = ".plugin/plugin.json";
 
 const requiredDocMarkers = [
   {
@@ -55,6 +56,26 @@ for (const doc of requiredDocMarkers) {
       failures.push(`${doc.path}: missing marker ${JSON.stringify(marker)}`);
     }
   }
+}
+
+const codexManifest = readJson(codexManifestPath);
+const codexServer = codexManifest?.mcpServers?.membase;
+if (!codexServer || typeof codexServer !== "object") {
+  failures.push(`${codexManifestPath}: missing inline mcpServers.membase`);
+} else {
+  if (codexServer.url !== CURSOR_MCP_URL) {
+    failures.push(`${codexManifestPath}: expected ${CURSOR_MCP_URL}`);
+  }
+  for (const forbiddenKey of ["type", "command", "args", "env"]) {
+    if (Object.hasOwn(codexServer, forbiddenKey)) {
+      failures.push(`${codexManifestPath}: must not include ${forbiddenKey} for HTTP-first Codex MCP`);
+    }
+  }
+}
+if (codexManifest && !codexManifest.interface) {
+  failures.push(
+    `${codexManifestPath}: interface block is required — without it, installer-side enrichment re-points mcpServers at the Claude-owned .mcp.json`
+  );
 }
 
 assertPackageCheckComposition();

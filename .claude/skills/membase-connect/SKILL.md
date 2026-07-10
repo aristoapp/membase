@@ -20,13 +20,13 @@ Ground rules for every client:
 
 ## claude (Claude Code — plugin-local stdio server)
 
-1. Install from the in-repo runtime bundle:
+1. Install from the repo root (the plugin package):
    ```bash
-   claude plugin marketplace add $REPO/clients/claude/runtime
+   claude plugin marketplace add $REPO
    claude plugin install membase@membase-plugins
    ```
 2. Tell the user to run `/membase:login` inside Claude Code (browser OAuth).
-3. VERIFY: `claude plugin validate $REPO/clients/claude/runtime/plugin` passes,
+3. VERIFY: `claude plugin validate $REPO` passes,
    and after login `/membase:status` reports a connected account. Commands
    `/membase:remember`, `/membase:recall`, `/membase:wiki` should be listed.
 

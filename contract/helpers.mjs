@@ -13,11 +13,11 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Entry points listed in contract/spec.md ("the ONLY things tests may touch").
 export const CLAUDE_HOOK = join(
   REPO_ROOT,
-  "clients/claude/runtime/plugin/scripts/hook.cjs",
+  "hooks/hook.cjs",
 );
 export const CURSOR_HOOK = join(
   REPO_ROOT,
-  "clients/cursor/runtime/cursor-hook.mjs",
+  "hooks/cursor-hook.mjs",
 );
 const CAPTURE_CORE_DIST = join(
   REPO_ROOT,
