@@ -30,72 +30,56 @@
       "authorizationEndpoint": "https://app.membase.so/oauth/authorize"
     }
   },
-  "tools": [
-    {
-      "name": "membase_search",
+  "tools": {
+    "membase_search": {
       "description": "Search persistent memories by semantic similarity",
-      "category": "memory",
       "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    {
-      "name": "membase_store",
+    "membase_store": {
       "description": "Save important information to long-term memory",
-      "category": "memory",
       "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    {
-      "name": "membase_forget",
+    "membase_forget": {
       "description": "Delete a memory permanently",
-      "category": "memory",
       "readOnlyHint": false,
       "openWorldHint": false,
       "destructiveHint": true
     },
-    {
-      "name": "membase_profile",
+    "membase_profile": {
       "description": "Retrieve user profile and related memories",
-      "category": "memory",
       "readOnlyHint": true,
       "openWorldHint": false,
       "destructiveHint": false
     },
-    {
-      "name": "membase_search_wiki",
+    "membase_search_wiki": {
       "description": "Search wiki documents for stable factual references",
-      "category": "wiki",
       "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    {
-      "name": "membase_add_wiki",
+    "membase_add_wiki": {
       "description": "Create a wiki document from markdown content",
-      "category": "wiki",
       "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    {
-      "name": "membase_update_wiki",
+    "membase_update_wiki": {
       "description": "Update title, content, or collection of an existing wiki document",
-      "category": "wiki",
       "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    {
-      "name": "membase_delete_wiki",
+    "membase_delete_wiki": {
       "description": "Delete a wiki document permanently",
-      "category": "wiki",
       "readOnlyHint": false,
       "openWorldHint": false,
       "destructiveHint": true
     }
-  ],
+  },
   "capabilities": [
     "memory-management",
     "knowledge-base",
