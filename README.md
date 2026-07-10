@@ -231,18 +231,19 @@ Private Membase memory engine    ← storage, graph, ranking (not in this repo)
 Client-specific behavior stays in
 `clients/*`; shared behavior lives in `packages/*`.
 
+For the full design rationale, see [docs/architecture.md](docs/architecture.md)
+and the "where does X live" map in [MAP.md](MAP.md).
+
 > **Note:** This repository is the connector/integration layer only. The
 > Membase Context API, memory engine, and their supporting services are a
 > separate, private system and are not part of this repo.
 
-For the full design rationale, see [docs/architecture.md](docs/architecture.md)
-and the "where does X live" map in [MAP.md](MAP.md).
 
 ## Contributing
 
 Contributions are welcome — new connectors, bug fixes, docs, performance
-optimization. This is a [pnpm](https://pnpm.io) monorepo (**Node.js 20+**,
-**pnpm 11+**):
+optimization. 
+This is a [pnpm](https://pnpm.io) monorepo (Node.js 20+, pnpm 11+):
 
 ```bash
 pnpm install
@@ -255,7 +256,7 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md); please also review our
 
 ## Security
 
-Please do not open public issues for security problems. See
+For security issues, see
 [SECURITY.md](SECURITY.md) for how to report a vulnerability, and
 [docs/security.md](docs/security.md) for the connector secret-handling and
 redaction model.
