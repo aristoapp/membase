@@ -1,5 +1,6 @@
 {
   "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
   "app": {
     "name": "Membase",
     "description": "Persistent memory for ChatGPT using MCP — search, store, wiki, and cross-session handoffs",
