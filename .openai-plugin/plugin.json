@@ -38,6 +38,8 @@
     "logo": "./Membase-white.png",
     "category": "Productivity",
     "instructions": "Sign up at app.membase.so to get started. Connect your ChatGPT account via OAuth in under a minute.",
-    "externalURL": "https://app.membase.so"
+    "externalURL": "https://app.membase.so",
+    "privacyPolicyURL": "https://membase.so/privacy",
+    "termsOfServiceURL": "https://membase.so/terms"
   }
 }
