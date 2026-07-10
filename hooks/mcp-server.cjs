@@ -32135,7 +32135,7 @@ function profileResourceFields(profile) {
 var import_node_fs5 = require("node:fs");
 var import_promises = require("node:fs/promises");
 var import_node_path6 = require("node:path");
-var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/claude-membase/main/.claude-plugin/marketplace.json";
+var MARKETPLACE_URL = "https://raw.githubusercontent.com/aristoapp/membase-plugin-mcp/main/.claude-plugin/marketplace.json";
 var MARKETPLACE_NAME = "membase-plugins";
 var PLUGIN_NAME2 = "membase";
 var FETCH_TIMEOUT_MS = 3e3;
