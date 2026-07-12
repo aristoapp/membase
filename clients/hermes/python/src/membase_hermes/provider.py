@@ -22,7 +22,16 @@ from .config import (
     token_file_path_for_home,
     write_token_file,
 )
-from .format import format_bundle, format_bundles, format_profile, format_wiki_document, format_wiki_documents
+from .current_date import build_current_date_text
+from .format import (
+    format_bundle,
+    format_bundles,
+    format_profile,
+    format_wiki_create_result,
+    format_wiki_document,
+    format_wiki_documents,
+    format_wiki_update_result,
+)
 from .handoff import (
     HANDOFF_RECALL_LIMIT,
     build_handoff_display_summary,
@@ -35,10 +44,12 @@ from .mirror import MirrorAction, MirrorStore, MirrorWorker
 from .sanitize import (
     is_casual_chat,
     is_operational_message,
+    looks_sensitive,
     sanitize_capture_text,
     sanitize_membase_text,
     sanitize_recall_query,
 )
+from .wiki_project import known_projects_hint, resolve_wiki_project_input
 
 if TYPE_CHECKING:
 
@@ -55,6 +66,7 @@ else:
 
 
 TOOL_MEMBASE_SEARCH = "membase_search"
+TOOL_MEMBASE_CURRENT_DATE = "membase_get_current_date"
 TOOL_MEMBASE_STORE = "membase_store"
 TOOL_MEMBASE_PROFILE = "membase_profile"
 TOOL_MEMBASE_FORGET = "membase_forget"
@@ -72,19 +84,23 @@ WIKI_SEARCH_MAX_LIMIT = 20
 WIKI_DELETE_CANDIDATE_LIMIT = 5
 STORE_MAX_CONTENT_LENGTH = 50_000
 PROJECT_MAX_LENGTH = 60
+WIKI_PROJECT_MAX_LENGTH = 200
 MEMORY_SOURCES = [
     "cursor",
     "claude-desktop",
     "claude-code",
     "vscode",
     "chatgpt",
+    "codex",
     "gemini-cli",
     "opencode",
     "poke",
     "openclaw",
+    "hermes",
     "google-calendar",
     "gmail",
     "slack",
+    "notion",
     "chatgpt-import",
     "claude-import",
     "gemini-import",
@@ -174,6 +190,24 @@ def _tool_failure_prefix(tool_name: str) -> str:
     }.get(tool_name, "Tool call failed")
 
 
+def _wiki_project_args(
+    args: dict[str, Any], *, null_means_basic: bool = False
+) -> tuple[str | None, bool, str | None]:
+    """Resolved (project, is_null, error) for the wiki project/collection alias pair."""
+    project_value, project_is_null, error = resolve_wiki_project_input(
+        project=args.get("project"),
+        collection=args.get("collection"),
+        null_means_basic=null_means_basic,
+        project_provided="project" in args,
+        collection_provided="collection" in args,
+    )
+    if error:
+        return None, False, error
+    if project_value and len(project_value) > WIKI_PROJECT_MAX_LENGTH:
+        return None, False, f"project is too long (max {WIKI_PROJECT_MAX_LENGTH} chars)"
+    return project_value, project_is_null, None
+
+
 class MembaseMemoryProvider(HermesMemoryProvider):
     def __init__(self, config_path: Path | None = None) -> None:
         self._logger = logging.getLogger(__name__)
@@ -192,6 +226,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         self._prefetch_thread: threading.Thread | None = None
         self._prefetch_running = False
         self._prefetch_lock = threading.Lock()
+        self._known_wiki_projects: list[str] = []
 
     @property
     def name(self) -> str:
@@ -293,6 +328,21 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             name="membase-register-connection",
             daemon=True,
         ).start()
+        # Known wiki Projects feed the tool-schema hint; fetched in the
+        # background so a slow lookup never blocks initialization.
+        threading.Thread(
+            target=self._load_known_wiki_projects,
+            name="membase-known-wiki-projects",
+            daemon=True,
+        ).start()
+
+    def _load_known_wiki_projects(self) -> None:
+        if not self._client or not self._client.is_authenticated():
+            return
+        try:
+            self._known_wiki_projects = self._client.get_known_wiki_projects()
+        except Exception as error:
+            self._logger.debug("known wiki projects lookup failed: %s", error)
 
     def _on_token_refresh(self, access_token: str, refresh_token: str) -> None:
         if not self._config:
@@ -423,7 +473,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         if not force and len(self._capture_buffer) < MIN_MESSAGES_TO_FLUSH:
             return
         now = time.monotonic()
-        timed_out = (now - self._last_capture_ts) >= SILENCE_TIMEOUT_S
+        timed_out = self._last_capture_ts > 0 and (now - self._last_capture_ts) >= SILENCE_TIMEOUT_S
         if not force and not timed_out and len(self._capture_buffer) < MAX_BUFFER_SIZE:
             return
 
@@ -482,15 +532,19 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             return
         # Capture path: redact secrets before the text ever enters the upload
         # buffer, not only when it falls back to the disk spool.
-        safe_text = sanitize_capture_text(user_content or "")
-        if is_operational_message(safe_text):
+        safe_user_text = sanitize_capture_text(user_content or "")
+        safe_assistant_text = sanitize_capture_text(assistant_content or "")
+        captured_messages: list[str] = []
+        if safe_user_text and not is_operational_message(safe_user_text) and len(safe_user_text) >= 10:
+            captured_messages.append(f"### User\n{safe_user_text}")
+        if safe_assistant_text and not is_operational_message(safe_assistant_text) and len(safe_assistant_text) >= 10:
+            captured_messages.append(f"### Assistant\n{safe_assistant_text}")
+        if not captured_messages:
             return
-        if len(safe_text) < 10:
-            return
-        self._capture_buffer.append(safe_text)
+        self._capture_buffer.extend(captured_messages)
         self._flush_capture_if_needed(force=False)
         self._last_capture_ts = time.monotonic()
-        self.queue_prefetch(safe_text, session_id=session_id)
+        self.queue_prefetch(safe_user_text, session_id=session_id)
 
     def on_session_end(self, messages: list[dict[str, Any]]) -> None:
         self._flush_capture_if_needed(force=True)
@@ -529,6 +583,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             self._client = None
 
     def get_tool_schemas(self) -> list[dict[str, Any]]:
+        wiki_projects_hint = known_projects_hint(self._known_wiki_projects)
         return [
             {
                 "name": TOOL_MEMBASE_SEARCH,
@@ -573,7 +628,13 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                         "sources": {
                             "type": "array",
                             "items": {"type": "string", "enum": MEMORY_SOURCES},
-                            "description": "Optional memory source filter, e.g. ['slack', 'gmail'].",
+                            "description": (
+                                "Optional memory source filter. Integrations: 'slack', 'gmail', "
+                                "'google-calendar'. AI clients: 'cursor', 'claude-desktop', 'claude-code', "
+                                "'vscode', 'chatgpt', 'codex', 'gemini-cli', 'opencode', 'poke', "
+                                "'openclaw', 'hermes'. Imports: 'chatgpt-import', 'claude-import', "
+                                "'gemini-import'. Other: 'notion', 'web-dashboard', 'api-direct'."
+                            ),
                         },
                         "project": {
                             "type": "string",
@@ -585,6 +646,14 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                     },
                     "required": ["query"],
                 },
+            },
+            {
+                "name": TOOL_MEMBASE_CURRENT_DATE,
+                "description": (
+                    "Get the current runtime local time and UTC time. Use before converting relative dates like "
+                    "today, yesterday, or this week into membase_search date_from/date_to filters."
+                ),
+                "parameters": {"type": "object", "properties": {}},
             },
             {
                 "name": TOOL_MEMBASE_STORE,
@@ -659,7 +728,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 "description": (
                     "Search the user's knowledge wiki using hybrid semantic and keyword matching. Use for factual "
                     "knowledge, references, and stable documentation. For personal preferences, habits, or "
-                    "timeline recall, use membase_search."
+                    "timeline recall, use membase_search." + wiki_projects_hint
                 ),
                 "parameters": {
                     "type": "object",
@@ -674,7 +743,15 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                         },
                         "collection": {
                             "type": "string",
-                            "description": "Optional collection name to scope the search to a specific category.",
+                            "description": "Legacy alias for project. Prefer project for new requests."
+                            + wiki_projects_hint,
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": (
+                                "Optional Wiki filing location to scope the search. Separate from the document title."
+                            )
+                            + wiki_projects_hint,
                         },
                     },
                     "required": ["query"],
@@ -683,31 +760,43 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             {
                 "name": TOOL_MEMBASE_ADD_WIKI,
                 "description": (
-                    "Add a document to the user's wiki knowledge base. Use for factual documents and references, "
-                    "not personal context."
+                    "Add a complete document or knowledge artifact to the user's wiki knowledge base. Use for "
+                    "factual documents, references, reports, documentation, and stable knowledge, not personal "
+                    "context. Store the full artifact body unless the user explicitly asks to save a summary. "
+                    "If the artifact is too long, split it into sequential wiki documents instead of dropping "
+                    'content. After success, tell the user the returned destination such as "Saved to Project: X" '
+                    'or "Saved to Basic".' + wiki_projects_hint
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "title": {
                             "type": "string",
-                            "description": "Title of the wiki document.",
+                            "description": (
+                                "Title of the wiki document itself. The Project is a Wiki filing location, "
+                                "separate from the title."
+                            ),
                         },
                         "content": {
                             "type": "string",
-                            "description": "Markdown content for the wiki document. Use [[wikilinks]] when useful.",
+                            "description": (
+                                "Full document body to store in Wiki. Preserve sections, details, examples, "
+                                "tables, and decisions. Do not summarize, condense, or omit material unless the "
+                                "user explicitly asks to save a summary."
+                            ),
+                        },
+                        "project": {
+                            "type": "string",
+                            "description": (
+                                "Wiki filing location, separate from the title. New Projects are created on first use. "
+                                "Leave empty when the user does not specify a Project."
+                            )
+                            + wiki_projects_hint,
                         },
                         "collection": {
                             "type": "string",
-                            "description": (
-                                "Collection name to file the document under. Set ONLY when the user explicitly names "
-                                "a collection, tag, or category (e.g., 'save to Work wiki'). New collections are "
-                                "created on first use. Do not guess or invent a name."
-                            ),
-                        },
-                        "summarize": {
-                            "type": "boolean",
-                            "description": "If true, the backend will summarize content into structured markdown.",
+                            "description": "Legacy alias for project. Prefer project for new requests."
+                            + wiki_projects_hint,
                         },
                     },
                     "required": ["title", "content"],
@@ -715,7 +804,14 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             },
             {
                 "name": TOOL_MEMBASE_UPDATE_WIKI,
-                "description": "Update an existing wiki document. Use membase_search_wiki first to find the ID.",
+                "description": (
+                    "Update an existing wiki document. Use membase_search_wiki first to find the ID. The content "
+                    "field replaces the full document body, so preserve the complete updated artifact unless the "
+                    "user explicitly asks for a summary. A Project is the document's Wiki filing location, "
+                    'separate from the title. If the result includes a destination such as "Moved to Project: X", '
+                    '"Moved to Basic", or "Current destination: Basic", tell the user that destination.'
+                    + wiki_projects_hint
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -729,14 +825,26 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                         },
                         "content": {
                             "type": "string",
-                            "description": "New markdown content (optional).",
+                            "description": (
+                                "Complete replacement body for the wiki document. Do not summarize, condense, or "
+                                "omit material unless the user explicitly requested a summary."
+                            ),
+                        },
+                        "project": {
+                            "type": ["string", "null"],
+                            "description": (
+                                "Move the document to a different Wiki filing location by Project. New Projects "
+                                "are created on first use. Set null to move the document to Basic."
+                            )
+                            + wiki_projects_hint,
                         },
                         "collection": {
-                            "type": "string",
+                            "type": ["string", "null"],
                             "description": (
-                                "Move the document to a different collection by name. "
-                                "New collections are created on first use."
-                            ),
+                                "Legacy alias for project. Prefer project for new requests. Set null to move the "
+                                "document to Basic."
+                            )
+                            + wiki_projects_hint,
                         },
                     },
                     "required": ["doc_id"],
@@ -765,7 +873,10 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                         },
                         "collection_id": {
                             "type": "string",
-                            "description": "Optional collection filter used during search mode.",
+                            "description": (
+                                "Optional collection UUID filter used only during search mode "
+                                "to narrow delete candidates."
+                            ),
                         },
                     },
                 },
@@ -820,7 +931,13 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         return "Membase is disconnected. Run 'hermes membase login'."
 
     def _success_text(self, text: str) -> str:
-        """Single seam for decorating successful tool responses."""
+        """Single seam for decorating successful tool responses; also records
+        the ambient agents-usage signal (fire-and-forget)."""
+        try:
+            if self._client and self._client.is_authenticated():
+                self._client.record_agent_usage()
+        except Exception as error:
+            self._logger.debug("agent usage recording failed: %s", error)
         return text
 
     def _profile_text(self, client: MembaseClient) -> str:
@@ -950,6 +1067,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         return self._success_text(prefix + format_bundle(latest, 0, full=True))
 
     def handle_tool_call(self, tool_name: str, args: dict[str, Any], **kwargs: Any) -> str:
+        if tool_name == TOOL_MEMBASE_CURRENT_DATE:
+            return build_current_date_text()
+
         auth_error = self._auth_guard()
         if auth_error:
             return auth_error
@@ -1020,6 +1140,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 )
 
             if tool_name == TOOL_MEMBASE_SEARCH_WIKI:
+                project_value, _, project_error = _wiki_project_args(args)
+                if project_error:
+                    return project_error
                 result = client.search_wiki(
                     query=str(args.get("query", "")),
                     limit=_limit_arg(
@@ -1027,7 +1150,7 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                         default=WIKI_SEARCH_DEFAULT_LIMIT,
                         maximum=WIKI_SEARCH_MAX_LIMIT,
                     ),
-                    collection=args.get("collection"),
+                    project=project_value,
                 )
                 return self._success_text(format_wiki_documents(_documents_from_wiki_result(result)))
 
@@ -1036,15 +1159,20 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 content = str(args.get("content", ""))
                 if not title.strip() or not content.strip():
                     return "title and content are required"
+                if looks_sensitive(content):
+                    return (
+                        "Add wiki failed: content appears to contain secrets or private credentials. "
+                        "Redact it before saving."
+                    )
+                project_value, _, project_error = _wiki_project_args(args)
+                if project_error:
+                    return project_error
                 doc = client.create_wiki_document(
                     title=title,
                     content=content,
-                    collection=args.get("collection"),
-                    summarize=_bool_arg(args.get("summarize", False)),
+                    project=project_value,
                 )
-                doc_title = str(doc.get("title") or title)
-                doc_id = str(doc.get("id") or "")
-                return self._success_text(f'Wiki document created: "{doc_title}" (ID: {doc_id})')
+                return self._success_text(format_wiki_create_result(doc, project_value))
 
             if tool_name == TOOL_MEMBASE_UPDATE_WIKI:
                 doc_id = str(args.get("doc_id", "")).strip()
@@ -1054,15 +1182,34 @@ class MembaseMemoryProvider(HermesMemoryProvider):
                 if args.get("title") is not None:
                     updates["title"] = args.get("title")
                 if args.get("content") is not None:
+                    content = str(args.get("content", ""))
+                    if looks_sensitive(content):
+                        return (
+                            "Update wiki failed: content appears to contain secrets or private credentials. "
+                            "Redact it before saving."
+                        )
                     updates["content"] = args.get("content")
-                if args.get("collection") is not None:
-                    updates["collection"] = args.get("collection")
+                project_value, project_is_null, project_error = _wiki_project_args(
+                    args, null_means_basic=True
+                )
+                if project_error:
+                    return project_error
+                if project_is_null:
+                    updates["collection_id"] = None
+                elif project_value is not None:
+                    updates["project"] = project_value
                 if not updates:
-                    return "At least one update field is required (title/content/collection)."
+                    return "At least one update field is required (title/content/project/collection)."
                 doc = client.update_wiki_document(doc_id, updates)
-                doc_title = str(doc.get("title") or updates.get("title") or "(untitled)")
-                returned_id = str(doc.get("id") or doc_id)
-                return self._success_text(f'Wiki document updated: "{doc_title}" (ID: {returned_id})')
+                return self._success_text(
+                    format_wiki_update_result(
+                        doc,
+                        None if project_is_null else project_value,
+                        project_provided=project_is_null or project_value is not None,
+                        fallback_title=updates.get("title"),
+                        fallback_id=doc_id,
+                    )
+                )
 
             if tool_name == TOOL_MEMBASE_DELETE_WIKI:
                 confirm = _bool_arg(args.get("confirm", False))

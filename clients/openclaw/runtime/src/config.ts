@@ -7,35 +7,43 @@ import type { MembasePluginConfig, OpenClawPluginApi } from "./types";
 const DEFAULT_API_URL = "https://api.membase.so";
 export const REDACTED_TOKEN_SENTINEL = "__OPENCLAW_REDACTED__";
 
+export function resolveOpenClawStateDir(): string {
+  const configured = process.env.OPENCLAW_STATE_DIR?.trim();
+  return configured ? expandHomePath(configured) : join(homedir(), ".openclaw");
+}
+
+export function resolveOpenClawConfigPath(): string {
+  const configured = process.env.OPENCLAW_CONFIG_PATH?.trim();
+  return configured
+    ? expandHomePath(configured)
+    : join(resolveOpenClawStateDir(), "openclaw.json");
+}
+
 // Safe persistent location — outside extensions/ which is wiped on plugin update.
-export const DEFAULT_TOKEN_FILE_PATH = join(
-  homedir(),
-  ".openclaw",
-  "credentials",
-  "openclaw-membase.json",
-);
+export function resolveDefaultTokenFilePath(): string {
+  return join(
+    resolveOpenClawStateDir(),
+    "credentials",
+    "openclaw-membase.json",
+  );
+}
 
 // State dir for the failure-path capture spool. Sibling of the
-// token dir under ~/.openclaw so it survives plugin updates (not in
+// token dir under the OpenClaw state dir so it survives plugin updates (not in
 // extensions/). MEMBASE_DATA_DIR overrides it, matching the other clients.
 export function membaseStateDir(): string {
   const override = process.env.MEMBASE_DATA_DIR?.trim();
-  if (override) {
-    // Expand a leading ~/ so an override like `~/foo` doesn't create a literal
-    // `~` directory — matches the Claude client's config handling.
-    return override.startsWith("~/")
-      ? join(homedir(), override.slice(2))
-      : override;
-  }
-  return join(homedir(), ".openclaw", "membase");
+  // Expand a leading ~/ so an override like `~/foo` doesn't create a literal
+  // `~` directory — matches the Claude client's config handling.
+  if (override) return expandHomePath(override);
+  return join(resolveOpenClawStateDir(), "membase");
 }
 
 // Returns true if a path is inside extensions/ — that directory is fully replaced
 // whenever openclaw plugins update/reinstall, so token files stored there will be lost.
 export function isInsideExtensionsDir(tokenFile: string): boolean {
   const normalized = tokenFile.split("\\").join("/");
-  const extensionsMarker = "/.openclaw/extensions/";
-  return normalized.includes(extensionsMarker);
+  return normalized.includes("/extensions/");
 }
 
 const KNOWN_KEYS = new Set([
@@ -95,7 +103,7 @@ export function resolveTokenFilePath(
   pluginConfig: Record<string, unknown> = {},
 ): string {
   const configured = str(pluginConfig.tokenFile, "");
-  return expandHomePath(configured || DEFAULT_TOKEN_FILE_PATH);
+  return expandHomePath(configured || resolveDefaultTokenFilePath());
 }
 
 export function readTokenFile(

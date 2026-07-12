@@ -7,6 +7,7 @@
   "contracts": {
     "tools": [
       "membase_search",
+      "membase_get_current_date",
       "membase_store",
       "membase_profile",
       "membase_forget",
@@ -52,7 +53,7 @@
     },
     "autoCapture": {
       "label": "Auto-Capture",
-      "help": "Automatically store conversations to memory"
+      "help": "Automatically store user/assistant conversation transcripts to Wiki"
     },
     "maxRecallChars": {
       "label": "Max Recall Context Size",

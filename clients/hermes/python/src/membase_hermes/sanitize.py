@@ -58,8 +58,20 @@ OPENCLAW_TIMESTAMP_PREFIX_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*=\s*[^\s`]+",
+    r"\b([A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*[^\s`]+",
     re.IGNORECASE,
+)
+PRIVATE_BLOCK_RE = re.compile(r"<(private|membase-private)>[\s\S]*?</\1>\s*", re.IGNORECASE)
+BEARER_TOKEN_RE = re.compile(r"\b(authorization:\s*bearer\s+)[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
+CLI_SECRET_FLAG_RE = re.compile(
+    r"((?:^|\s)--(?:api-key|apikey|token|secret|password|pat|key)(?:=|\s+))[^\s`]+",
+    re.IGNORECASE,
+)
+COMMON_TOKEN_RE = re.compile(
+    r"\b(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b",
+)
+PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----",
 )
 CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")
 INJECTION_TAG_RE = re.compile(
@@ -103,9 +115,15 @@ def neutralize_injection(text: str) -> str:
 def sanitize_membase_text(raw: str) -> str:
     cleaned = raw
     cleaned = OPENCLAW_TIMESTAMP_PREFIX_RE.sub(" ", cleaned)
+    cleaned = PRIVATE_BLOCK_RE.sub(" ", cleaned)
     cleaned = MEMBASE_CONTEXT_BLOCK_RE.sub(" ", cleaned)
     cleaned = MEMBASE_HANDOFF_BLOCK_RE.sub(" ", cleaned)
     cleaned = METADATA_BLOCK_RE.sub(" ", cleaned)
+    cleaned = PRIVATE_KEY_RE.sub("[REDACTED_PRIVATE_KEY]", cleaned)
+    cleaned = SECRET_ASSIGNMENT_RE.sub(r"\1=[REDACTED]", cleaned)
+    cleaned = BEARER_TOKEN_RE.sub(r"\1[REDACTED]", cleaned)
+    cleaned = CLI_SECRET_FLAG_RE.sub(r"\1[REDACTED]", cleaned)
+    cleaned = COMMON_TOKEN_RE.sub("[REDACTED_TOKEN]", cleaned)
     cleaned = SIMPLE_TAG_RE.sub(" ", cleaned)
     # Pair-removal above misses standalone/unbalanced tags; neutralize the
     # leftovers so they cannot terminate the provider's context block.
@@ -134,6 +152,17 @@ def sanitize_recall_query(raw: str) -> str:
     cleaned = CODE_BLOCK_RE.sub(" ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned[:240]
+
+
+def looks_sensitive(text: str) -> bool:
+    return bool(
+        SECRET_ASSIGNMENT_RE.search(text)
+        or BEARER_TOKEN_RE.search(text)
+        or CLI_SECRET_FLAG_RE.search(text)
+        or COMMON_TOKEN_RE.search(text)
+        or PRIVATE_KEY_RE.search(text)
+        or re.search(r"\.env(\.|$|\s)", text, re.IGNORECASE)
+    )
 
 
 def is_operational_message(text: str) -> bool:

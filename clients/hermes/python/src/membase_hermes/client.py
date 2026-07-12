@@ -11,8 +11,11 @@ from typing import Any
 import httpx
 
 from . import __version__ as _HERMES_VERSION
+from .wiki_project import resolve_wiki_project_input
 
-DEFAULT_TIMEOUT_S = 15.0
+# Wiki-transcript capture uploads whole conversation chunks (up to ~95k chars)
+# through create_wiki_document; the old 15s budget aborted them on slow links.
+DEFAULT_TIMEOUT_S = 180.0
 USER_AGENT = f"membase-hermes/{_HERMES_VERSION}"
 TokenRefreshCallback = Callable[[str, str], None]
 
@@ -367,43 +370,77 @@ class MembaseClient:
             self._log("register_connection failed (ignored)")
             return
 
+    def record_agent_usage(self) -> None:
+        try:
+            self._request(
+                "POST",
+                "/agents/usage",
+                json_body={"source": self.source},
+            )
+        except Exception:
+            self._log("record_agent_usage failed (ignored)")
+            return
+
     def search_wiki(
         self,
         query: str,
         limit: int | None = None,
         collection_id: str | None = None,
+        project: str | None = None,
         collection: str | None = None,
     ) -> dict[str, Any]:
+        project_value, _, error = resolve_wiki_project_input(
+            project=project,
+            collection=collection,
+        )
+        if error:
+            raise MembaseApiError(error, 400)
         params: dict[str, Any] = {"query": query}
         if limit is not None:
             params["limit"] = str(limit)
         if collection_id:
             params["collection_id"] = collection_id
-        if collection:
-            params["collection"] = collection
+        if project_value:
+            params["project"] = project_value
         payload = self._request("GET", "/wiki/search", params=params)
         return payload if isinstance(payload, dict) else {"documents": []}
+
+    def get_known_wiki_projects(self) -> list[str]:
+        payload = self._request("GET", "/wiki/collections/known")
+        if not isinstance(payload, list):
+            return []
+        return [str(item).strip() for item in payload if str(item).strip()]
 
     def create_wiki_document(
         self,
         title: str,
         content: str,
         collection_id: str | None = None,
+        project: str | None = None,
         collection: str | None = None,
-        summarize: bool = False,
+        source_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        project_value, _, error = resolve_wiki_project_input(
+            project=project,
+            collection=collection,
+        )
+        if error:
+            raise MembaseApiError(error, 400)
         body: dict[str, Any] = {
             "title": title,
             "content": content,
             "source": self.source,
-            "summarize": summarize,
+            # Plugin identity keys are applied last so caller-supplied
+            # metadata cannot spoof them.
+            "source_metadata": {
+                **(source_metadata or {}),
+                "plugin_name": "hermes-membase",
+                "plugin_version": _HERMES_VERSION,
+                "host": "hermes",
+            },
         }
-        # Prefer the human-readable name when provided so the server
-        # performs lookup-or-create via the ``slug`` unique index.
-        if collection:
-            body["collection"] = collection
-        elif collection_id is not None:
-            body["collection_id"] = collection_id
+        if project_value:
+            body["project"] = project_value
         payload = self._request(
             "POST",
             "/wiki/documents",
@@ -416,10 +453,33 @@ class MembaseClient:
         doc_id: str,
         updates: dict[str, Any],
     ) -> dict[str, Any]:
+        project_value, project_is_null, error = resolve_wiki_project_input(
+            project=updates.get("project"),
+            collection=updates.get("collection"),
+            null_means_basic=True,
+            project_provided="project" in updates,
+            collection_provided="collection" in updates,
+        )
+        if error:
+            raise MembaseApiError(error, 400)
+        # Whitelist the update body: only title/content plus the resolved
+        # project routing may reach the API (`collection_id: null` moves the
+        # document to Basic).
+        body: dict[str, Any] = {}
+        if "title" in updates:
+            body["title"] = updates["title"]
+        if "content" in updates:
+            body["content"] = updates["content"]
+        if updates.get("collection_id") is None and "collection_id" in updates:
+            body["collection_id"] = None
+        elif project_is_null:
+            body["collection_id"] = None
+        elif project_value is not None:
+            body["project"] = project_value
         payload = self._request(
             "PUT",
             f"/wiki/documents/{quote(doc_id, safe='')}",
-            json_body=updates,
+            json_body=body,
         )
         return payload if isinstance(payload, dict) else {}
 

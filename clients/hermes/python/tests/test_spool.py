@@ -109,6 +109,83 @@ class SpoolBehaviorTest(unittest.TestCase):
         self.assertIsNone(again)
         self.assertEqual(self.spool.pending_count(), 0)
 
+    def test_dream_uploads_transcript_parts_and_legacy_records(self) -> None:
+        # Drive the real `hermes-membase dream` drain: wiki-transcript part
+        # records (spooled by capture.py) go through create_wiki_document with
+        # the resumed part title; legacy pre-wiki-capture records still go
+        # through ingest.
+        import membase_hermes.cli as cli
+        from membase_hermes.capture import CAPTURE_KIND_TRANSCRIPT
+
+        self.spool.enqueue_capture(
+            content="transcript part body worth resuming later",
+            capture_kind=CAPTURE_KIND_TRANSCRIPT,
+            project="Docs",
+            metadata={
+                "title": "Hermes conversation capture - t0",
+                "part_index": 2,
+                "part_total": 3,
+            },
+        )
+        self.spool.enqueue_capture(
+            content="legacy episode body from an old spool",
+            display_summary="legacy summary",
+        )
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.wiki_uploads: list[dict] = []
+                self.ingests: list[dict] = []
+
+            def is_authenticated(self) -> bool:
+                return True
+
+            def create_wiki_document(self, title, content, project=None, source_metadata=None):
+                self.wiki_uploads.append(
+                    {
+                        "title": title,
+                        "content": content,
+                        "project": project,
+                        "source_metadata": source_metadata,
+                    }
+                )
+                return {"id": "doc-1", "title": title}
+
+            def ingest(self, content, *, display_summary=None, project=None):
+                self.ingests.append(
+                    {"content": content, "display_summary": display_summary, "project": project}
+                )
+                return {"status": "stored"}
+
+            def close(self) -> None:
+                return None
+
+        client = FakeClient()
+        original_env = os.environ.get("HERMES_HOME")
+        original_builder = cli._build_client_from_config
+        os.environ["HERMES_HOME"] = str(self.root)
+        cli._build_client_from_config = lambda _config_path: client  # type: ignore[assignment]
+        try:
+            exit_code = cli._cmd_dream(self.root / "membase.json")
+        finally:
+            cli._build_client_from_config = original_builder  # type: ignore[assignment]
+            if original_env is None:
+                os.environ.pop("HERMES_HOME", None)
+            else:
+                os.environ["HERMES_HOME"] = original_env
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(client.wiki_uploads), 1)
+        upload = client.wiki_uploads[0]
+        self.assertEqual(upload["title"], "Hermes conversation capture - t0 part 2")
+        self.assertEqual(upload["project"], "Docs")
+        self.assertEqual(upload["source_metadata"]["capture_kind"], CAPTURE_KIND_TRANSCRIPT)
+        self.assertEqual(upload["source_metadata"]["part_index"], 2)
+        self.assertNotIn("title", upload["source_metadata"])
+        self.assertEqual(len(client.ingests), 1)
+        self.assertEqual(client.ingests[0]["display_summary"], "legacy summary")
+        self.assertEqual(self.spool.pending_count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

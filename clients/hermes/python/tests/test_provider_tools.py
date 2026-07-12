@@ -3,9 +3,14 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
+from membase_hermes import __version__
+from membase_hermes.client import AuthState, MembaseClient
 from membase_hermes.config import MembaseConfig
+from membase_hermes.format import format_wiki_document
 from membase_hermes.provider import (
+    MEMORY_SOURCES,
     TOOL_MEMBASE_ADD_WIKI,
+    TOOL_MEMBASE_CURRENT_DATE,
     TOOL_MEMBASE_DELETE_WIKI,
     TOOL_MEMBASE_FORGET,
     TOOL_MEMBASE_PROFILE,
@@ -27,11 +32,13 @@ class ToolClient:
                 "uuid": "episode-1",
                 "name": "Migration plan",
                 "summary": "Remember the migration plan.",
+                "source": "slack",
+                "attributes": {"project": "Hermes"},
                 "created_at": "2026-04-24T09:00:00Z",
                 "valid_at": "2026-04-24T09:00:00Z",
             },
             "nodes": [{"uuid": "fact-1", "name": "Raw node payload should not leak"}],
-            "edges": [{"fact": "The migration plan is staged."}],
+            "edges": [{"fact": "The migration plan is staged.", "valid_at": "2026-04-24T09:00:00Z"}],
             "relevance_score": 0.8,
         }
 
@@ -94,6 +101,7 @@ class WikiClient(ToolClient):
         query: str,
         limit: int = 10,
         collection_id: str | None = None,
+        project: str | None = None,
         collection: str | None = None,
     ) -> dict[str, Any]:
         self.wiki_search_calls.append(
@@ -102,6 +110,7 @@ class WikiClient(ToolClient):
                 limit,
                 {
                     "collection_id": collection_id,
+                    "project": project,
                     "collection": collection,
                 },
             ),
@@ -112,8 +121,29 @@ class WikiClient(ToolClient):
                     "id": "doc-1",
                     "title": "Migration Wiki",
                     "content": self.wiki_content,
-                    "collection_name": collection or collection_id,
+                    "collection_name": project or collection or collection_id,
                     "similarity": 0.91,
+                    "source": "notion",
+                    "source_status": "inaccessible",
+                    "source_warning": "Source page is no longer accessible.",
+                    "source_last_checked_at": "2026-05-18T00:00:00Z",
+                    "source_references": [
+                        {
+                            "source": "notion",
+                            "title": "Migration Wiki",
+                            "url": "https://notion.so/migration",
+                            "status": "active",
+                            "link_type": "primary",
+                        },
+                        {
+                            "source": "upload",
+                            "title": "Archive",
+                            "status": "active",
+                            "link_type": "supporting",
+                        },
+                    ],
+                    "created_at": "2026-05-01T00:00:00Z",
+                    "updated_at": "2026-05-02T00:00:00Z",
                 },
             ],
         }
@@ -122,22 +152,41 @@ class WikiClient(ToolClient):
         self,
         title: str,
         content: str,
+        project: str | None = None,
         collection: str | None = None,
-        summarize: bool = False,
     ) -> dict[str, Any]:
         doc = {
             "id": "doc-1",
             "title": title,
             "content": content,
+            "collection_id": "project-1" if project else None,
+            "project": project,
             "collection": collection,
-            "summarize": summarize,
+            "routing": {
+                "collection_id": "project-1",
+                "collection_name": project,
+                "routing_source": "explicit_project",
+                "fallback": False,
+            }
+            if project
+            else None,
         }
         self.created.append(doc)
         return doc
 
     def update_wiki_document(self, doc_id: str, updates: dict[str, Any]) -> dict[str, Any]:
         self.updated.append((doc_id, updates))
-        return {"id": doc_id, "title": updates.get("title", "Migration Wiki"), **updates}
+        collection_id = None
+        if updates.get("project"):
+            collection_id = "project-1"
+        if "collection_id" in updates:
+            collection_id = updates["collection_id"]
+        return {
+            "id": doc_id,
+            "title": updates.get("title", "Migration Wiki"),
+            "collection_id": collection_id,
+            **updates,
+        }
 
     def delete_wiki_document(self, doc_id: str) -> None:
         self.deleted_docs.append(doc_id)
@@ -167,10 +216,38 @@ class ProviderToolTests(unittest.TestCase):
         self.assertEqual(client.search_calls[0][1], 20)
         self.assertEqual(client.search_calls[1][1], 30)
         self.assertIn("Found 1 memory:", default_result)
-        self.assertIn("[relevance: 1.00]", default_result)
-        self.assertIn("Facts: The migration plan is staged.", default_result)
+        self.assertIn("[relevance: 0.8000]", default_result)
+        self.assertIn("[source: slack, project: Hermes]", default_result)
+        self.assertIn("Facts: The migration plan is staged. (valid_at=2026-04-24T09:00:00Z)", default_result)
         self.assertNotIn("Raw node payload should not leak", default_result)
         self.assertIn("Found 1 memory:", clamped_result)
+
+    def test_tool_schemas_include_current_sources_and_project_fields(self) -> None:
+        provider = MembaseMemoryProvider()
+        tools = {tool["name"]: tool for tool in provider.get_tool_schemas()}
+
+        self.assertIn("codex", MEMORY_SOURCES)
+        self.assertIn("hermes", MEMORY_SOURCES)
+        self.assertIn("notion", MEMORY_SOURCES)
+        source_enum = tools[TOOL_MEMBASE_SEARCH]["parameters"]["properties"]["sources"]["items"]["enum"]
+        self.assertIn("codex", source_enum)
+        self.assertIn("hermes", source_enum)
+        self.assertIn("notion", source_enum)
+        self.assertIn(TOOL_MEMBASE_CURRENT_DATE, tools)
+        self.assertIn("project", tools[TOOL_MEMBASE_SEARCH_WIKI]["parameters"]["properties"])
+        self.assertIn("project", tools[TOOL_MEMBASE_ADD_WIKI]["parameters"]["properties"])
+        self.assertIn("project", tools[TOOL_MEMBASE_UPDATE_WIKI]["parameters"]["properties"])
+        self.assertNotIn("metadata", tools[TOOL_MEMBASE_ADD_WIKI]["parameters"]["properties"])
+        self.assertNotIn("metadata_set", tools[TOOL_MEMBASE_UPDATE_WIKI]["parameters"]["properties"])
+        self.assertNotIn("metadata_unset", tools[TOOL_MEMBASE_UPDATE_WIKI]["parameters"]["properties"])
+
+    def test_current_date_helper_does_not_require_auth(self) -> None:
+        provider = MembaseMemoryProvider()
+
+        result = provider.handle_tool_call(TOOL_MEMBASE_CURRENT_DATE, {})
+
+        self.assertIn("local_time:", result)
+        self.assertIn("utc_time:", result)
 
     def test_search_tool_truncates_large_memory_previews(self) -> None:
         provider = MembaseMemoryProvider()
@@ -254,25 +331,201 @@ class ProviderToolTests(unittest.TestCase):
 
         search = provider.handle_tool_call(
             TOOL_MEMBASE_SEARCH_WIKI,
-            {"query": "migration", "limit": 999, "collection": "Docs"},
+            {"query": "migration", "limit": 999, "project": "Docs"},
         )
         created = provider.handle_tool_call(
             TOOL_MEMBASE_ADD_WIKI,
-            {"title": "Title", "content": "Body", "collection": "Docs"},
+            {
+                "title": "Title",
+                "content": "Body",
+                "project": "Docs",
+            },
         )
         updated = provider.handle_tool_call(
             TOOL_MEMBASE_UPDATE_WIKI,
-            {"doc_id": "doc-1", "content": "Updated"},
+            {
+                "doc_id": "doc-1",
+                "content": "Updated",
+                "project": "Docs",
+            },
         )
 
         self.assertEqual(client.wiki_search_calls[0][1], 20)
+        self.assertEqual(client.wiki_search_calls[0][2]["project"], "Docs")
         self.assertIn("Found 1 wiki document:", search)
-        self.assertIn("1. Migration Wiki [collection: Docs] [similarity: 0.910]", search)
+        self.assertIn("1. Migration Wiki [Project: Docs] [similarity: 0.910]", search)
         self.assertIn("ID: doc-1", search)
-        self.assertEqual(created, 'Wiki document created: "Title" (ID: doc-1)')
+        self.assertIn(
+            "Source: Notion - Migration Wiki (https://notion.so/migration); +1 additional reference",
+            search,
+        )
+        self.assertIn("source_status: inaccessible", search)
+        self.assertIn("source_warning: Source page is no longer accessible.", search)
+        self.assertIn("created: 2026-05-01", search)
+        self.assertIn("updated: 2026-05-02", search)
+        self.assertEqual(created, 'Wiki document created: "Title" (ID: doc-1). Saved to Project: Docs.')
         self.assertEqual(client.created[0]["title"], "Title")
-        self.assertEqual(updated, 'Wiki document updated: "Migration Wiki" (ID: doc-1)')
-        self.assertEqual(client.updated[0], ("doc-1", {"content": "Updated"}))
+        self.assertEqual(client.created[0]["project"], "Docs")
+        self.assertEqual(updated, 'Wiki document updated: "Migration Wiki" (ID: doc-1). Moved to Project: Docs.')
+        self.assertEqual(
+            client.updated[0],
+            (
+                "doc-1",
+                {
+                    "content": "Updated",
+                    "project": "Docs",
+                },
+            ),
+        )
+
+    def test_wiki_update_supports_project_removal(self) -> None:
+        provider = MembaseMemoryProvider()
+        client = WikiClient()
+        provider._client = client  # type: ignore[assignment]
+
+        result = provider.handle_tool_call(
+            TOOL_MEMBASE_UPDATE_WIKI,
+            {
+                "doc_id": "doc-1",
+                "project": None,
+            },
+        )
+
+        self.assertEqual(result, 'Wiki document updated: "Migration Wiki" (ID: doc-1). Moved to Basic.')
+        self.assertEqual(
+            client.updated[0],
+            ("doc-1", {"collection_id": None}),
+        )
+
+    def test_wiki_formatter_labels_basic_and_unknown_projects(self) -> None:
+        basic = format_wiki_document(
+            {
+                "id": "doc-basic",
+                "title": "Basic Note",
+                "content": "",
+                "collection_id": None,
+                "collection_name": None,
+            },
+            0,
+        )
+        unknown = format_wiki_document(
+            {
+                "id": "doc-unknown",
+                "title": "Unknown Project Note",
+                "content": "",
+                "collection_id": "project-2",
+                "collection_name": None,
+            },
+            1,
+        )
+
+        self.assertIn("1. Basic Note [Project: Basic]", basic)
+        self.assertIn("2. Unknown Project Note [Project: Unknown]", unknown)
+
+    def test_wiki_project_and_collection_conflict_is_rejected(self) -> None:
+        provider = MembaseMemoryProvider()
+        provider._client = WikiClient()  # type: ignore[assignment]
+
+        result = provider.handle_tool_call(
+            TOOL_MEMBASE_ADD_WIKI,
+            {"title": "Title", "content": "Body", "project": "Docs", "collection": "Other"},
+        )
+
+        self.assertIn("project and legacy collection must match", result)
+
+    def test_wiki_tools_reject_sensitive_content_before_client_calls(self) -> None:
+        provider = MembaseMemoryProvider()
+        client = WikiClient()
+        provider._client = client  # type: ignore[assignment]
+
+        created = provider.handle_tool_call(
+            TOOL_MEMBASE_ADD_WIKI,
+            {"title": "Secrets", "content": "API_KEY=redacted-placeholder"},
+        )
+        updated = provider.handle_tool_call(
+            TOOL_MEMBASE_UPDATE_WIKI,
+            {
+                "doc_id": "doc-1",
+                "content": "Authorization: Bearer redacted-placeholder",
+            },
+        )
+
+        self.assertIn("content appears to contain secrets or private credentials", created)
+        self.assertIn("content appears to contain secrets or private credentials", updated)
+        self.assertEqual(client.created, [])
+        self.assertEqual(client.updated, [])
+
+    def test_client_wiki_methods_send_project_payloads(self) -> None:
+        calls: list[dict[str, Any]] = []
+        client = MembaseClient(
+            "https://api.test",
+            AuthState(access_token="access", refresh_token="refresh", client_id="client"),
+        )
+
+        def fake_request(
+            method: str,
+            path: str,
+            *,
+            params: Any = None,
+            json_body: dict[str, Any] | None = None,
+            form_body: dict[str, Any] | None = None,
+            expect_json: bool = True,
+        ) -> dict[str, Any]:
+            calls.append(
+                {
+                    "method": method,
+                    "path": path,
+                    "params": params,
+                    "json_body": json_body,
+                    "form_body": form_body,
+                    "expect_json": expect_json,
+                },
+            )
+            return {"id": "doc-1", "title": "Title"}
+
+        client._request = fake_request  # type: ignore[method-assign]
+        try:
+            client.create_wiki_document(
+                "Title",
+                "Body",
+                project="Docs",
+                collection_id="legacy-collection-id",
+                source_metadata={
+                    "client_context": "unit-test",
+                    "plugin_name": "spoofed",
+                    "host": "spoofed",
+                },
+            )
+            client.update_wiki_document(
+                "doc-1",
+                {
+                    "project": None,
+                },
+            )
+        finally:
+            client.close()
+
+        self.assertEqual(
+            calls[0]["json_body"],
+            {
+                "title": "Title",
+                "content": "Body",
+                "source": "hermes",
+                "project": "Docs",
+                "source_metadata": {
+                    "plugin_name": "hermes-membase",
+                    "plugin_version": __version__,
+                    "host": "hermes",
+                    "client_context": "unit-test",
+                },
+            },
+        )
+        self.assertEqual(
+            calls[1]["json_body"],
+            {
+                "collection_id": None,
+            },
+        )
 
     def test_wiki_delete_uses_openclaw_confirm_flow(self) -> None:
         provider = MembaseMemoryProvider()
@@ -296,7 +549,7 @@ class ProviderToolTests(unittest.TestCase):
         self.assertEqual(deleted, "Wiki document deleted (ID: doc-1)")
         self.assertEqual(client.deleted_docs, ["doc-1"])
 
-    def test_wiki_search_returns_full_document_content(self) -> None:
+    def test_wiki_search_truncates_large_document_content(self) -> None:
         provider = MembaseMemoryProvider()
         client = WikiClient()
         client.wiki_content = "x" * 2_500
@@ -304,8 +557,8 @@ class ProviderToolTests(unittest.TestCase):
 
         result = provider.handle_tool_call(TOOL_MEMBASE_SEARCH_WIKI, {"query": "migration"})
 
-        self.assertIn("x" * 2_500, result)
-        self.assertNotIn("... [truncated]", result)
+        self.assertIn("... [truncated]", result)
+        self.assertLess(len(result), 1_500)
 
     def test_prefetch_respects_configured_recall_budget(self) -> None:
         provider = MembaseMemoryProvider()
