@@ -19,6 +19,7 @@
     "index.ts",
     "src",
     "!src/**/*.test.ts",
+    "dist",
     "openclaw.plugin.json",
     "README.md"
   ],
@@ -35,6 +36,8 @@
     ]
   },
   "scripts": {
+    "build": "bun build index.ts --outdir dist --target bun",
+    "prepack": "bun run build",
     "typecheck": "tsc -p tsconfig.json --pretty false"
   },
   "dependencies": {
