@@ -131,6 +131,21 @@ describe("extractToolObservation", () => {
       }),
     ).toBeNull();
   });
+
+  it("treats a plain exec command payload as one shell command (codex CLI shape)", () => {
+    expect(
+      extractToolObservation({
+        tool_name: "exec",
+        tool_input: { command: "pnpm --version" },
+      }),
+    ).toEqual({ files: [], commands: ["pnpm --version"], tasks: 0 });
+    expect(
+      extractToolObservation({
+        tool_name: "exec",
+        tool_input: { command: "ls -la" },
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("buildSessionDigest", () => {
