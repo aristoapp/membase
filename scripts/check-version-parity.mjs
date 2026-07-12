@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+// clients/openclaw/runtime and packages/capture-core are deliberately absent:
+// they follow their published npm lineages (@membase/openclaw-membase,
+// @membase/capture-core), not the monorepo version.
 const npmPackagePaths = [
   "package.json",
   "packages/core/package.json",
   "packages/connector-sdk/package.json",
+  "packages/stdio-runtime/package.json",
   "clients/claude/package.json",
   "clients/codex/package.json",
   "clients/cursor/package.json",
@@ -79,6 +83,18 @@ if (expectedVersion !== undefined) {
 
   assertNoUnexpectedVersionFields("clients/openclaw/openclaw.plugin.json");
   assertNoUnexpectedVersionFields("manifests/openclaw/plugin.json");
+
+  // The bundled stdio server reports this in serverInfo/source_metadata; it
+  // drifted to a stale value once (0.1.5 while the repo shipped 0.1.6).
+  const constantsText = readText("packages/stdio-runtime/src/constants.ts");
+  if (constantsText !== undefined) {
+    const match = constantsText.match(/^export const PLUGIN_VERSION = "([^"]+)";$/m);
+    assertVersion(
+      "packages/stdio-runtime/src/constants.ts (PLUGIN_VERSION)",
+      match?.[1],
+      expectedVersion
+    );
+  }
 }
 
 if (failures.length > 0) {
