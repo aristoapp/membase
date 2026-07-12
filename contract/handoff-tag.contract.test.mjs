@@ -59,11 +59,14 @@ test("C-HDF-1 the literal [HANDOFF] tag appears identically across all five clie
 test("C-HDF-2 SessionStart injects the LATEST [HANDOFF] bundle, not the most relevant", async (t) => {
   // Relevance-ranked response: OLD handoff first (top relevance), a
   // non-handoff distractor, then the NEWER handoff last. Latest-by-time
-  // must win, inside a single-JSON stdout (C-HOOK-7).
+  // must win, inside a single-JSON stdout (C-HOOK-7). Timestamps are
+  // relative to now: hardcoded dates age past HANDOFF_STALE_MS (7 days)
+  // and turn the test into a time bomb — that already happened once.
+  const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
   const bundles = [
-    { episode: { uuid: "u-old", name: "[HANDOFF] OLD-MARKER finished migration groundwork", summary: "[HANDOFF] OLD-MARKER", valid_at: "2026-07-01T00:00:00Z" } },
-    { episode: { uuid: "u-noise", name: "we decided to use postgres", summary: "ordinary memory", valid_at: "2026-07-06T00:00:00Z" } },
-    { episode: { uuid: "u-new", name: "[HANDOFF] NEW-MARKER started dashboard rewrite", summary: "[HANDOFF] NEW-MARKER", valid_at: "2026-07-05T00:00:00Z" } },
+    { episode: { uuid: "u-old", name: "[HANDOFF] OLD-MARKER finished migration groundwork", summary: "[HANDOFF] OLD-MARKER", valid_at: hoursAgo(72) } },
+    { episode: { uuid: "u-noise", name: "we decided to use postgres", summary: "ordinary memory", valid_at: hoursAgo(2) } },
+    { episode: { uuid: "u-new", name: "[HANDOFF] NEW-MARKER started dashboard rewrite", summary: "[HANDOFF] NEW-MARKER", valid_at: hoursAgo(24) } },
   ];
   const dir = await makeDataDir(t);
   const api = await startStubApi(t, { searchBody: { episodes: bundles } });
