@@ -639,7 +639,7 @@ var init_constants = __esm({
     "use strict";
     init_clients();
     PLUGIN_NAME = "claude-membase";
-    PLUGIN_VERSION = "0.1.5";
+    PLUGIN_VERSION = "0.3.0";
     DEFAULT_API_URL = "https://api.membase.so";
     RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
     CLIENT_SOURCE = RAW_CLIENT_SOURCE && /^[a-z0-9-]{1,32}$/.test(RAW_CLIENT_SOURCE) ? RAW_CLIENT_SOURCE : "claude-code";

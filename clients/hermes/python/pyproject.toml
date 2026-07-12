@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-membase"
-version = "0.1.6"
+version = "0.3.0"
 description = "Membase memory provider package for Hermes Agent"
 license = "MIT"
 readme = "README.md"

@@ -1,6 +1,6 @@
 {
   "name": "membase-plugin-mcp",
-  "version": "0.1.6",
+  "version": "0.3.0",
   "license": "MIT",
   "private": true,
   "description": "Integrated Membase Plugin/MCP connector repo.",
@@ -28,7 +28,7 @@
     "hermes:python-parity": "node scripts/check-hermes-python-parity.mjs",
     "hermes:test": "cd clients/hermes/python && PYTHONPATH=src python3 -m unittest discover -s tests",
     "openclaw:native-parity": "node scripts/check-openclaw-native-parity.mjs",
-    "openclaw:runtime-typecheck": "pnpm --filter @membase/openclaw-membase-runtime typecheck",
+    "openclaw:runtime-typecheck": "pnpm --filter @membase/openclaw-membase typecheck",
     "openclaw:runtime-test": "cd clients/openclaw/runtime && bun test",
     "public-surface": "scripts/check-public-surface.sh",
     "secret-hygiene": "node scripts/check-secret-hygiene.mjs",

@@ -31514,7 +31514,7 @@ function homeDataDirSegments(source) {
 
 // src/constants.ts
 var PLUGIN_NAME = "claude-membase";
-var PLUGIN_VERSION = "0.1.5";
+var PLUGIN_VERSION = "0.3.0";
 var DEFAULT_API_URL = "https://api.membase.so";
 var DEFAULT_MCP_URL = "https://mcp.membase.so/mcp";
 var RAW_CLIENT_SOURCE = process.env.MEMBASE_CLIENT_SOURCE;
