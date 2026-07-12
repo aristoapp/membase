@@ -37,7 +37,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "apply_patch|Bash|Task|Agent|Edit|Write",
+        "matcher": "apply_patch|Bash|Task|Agent|Edit|Write|exec",
         "hooks": [
           {
             "type": "command",
