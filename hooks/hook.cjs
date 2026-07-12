@@ -610,9 +610,12 @@ var init_clients = __esm({
         // Part of the installed Claude plugin's on-disk contract since before the
         // client-neutral layout — do not migrate it to ~/.membase/claude-code.
         homeDataDir: [".claude", "plugins", "membase"],
-        usesToolBatch: true
-        // No defaultCaptureMode: Claude capture stays opt-in via /membase:login
-        // (disk config) or the plugin's captureMode option.
+        usesToolBatch: true,
+        // Summary capture (tool-metadata digests only — never conversation text)
+        // is on by default, matching codex/cursor. /membase:login and the
+        // plugin's captureMode option remain the opt-out channels; off-by-default
+        // proved to mean off-forever in practice (2026-07-12 release drill).
+        defaultCaptureMode: "summary"
       },
       codex: {
         label: "Codex",

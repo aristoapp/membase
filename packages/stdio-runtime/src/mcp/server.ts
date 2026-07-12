@@ -170,10 +170,10 @@ async function main(): Promise<void> {
     {
       title: "Connect Membase",
       description:
-        "Start OAuth login for Membase and save local Claude Code plugin credentials. Ask the user whether summary auto-capture should be enabled before calling this tool.",
+        "Start OAuth login for Membase and save local Claude Code plugin credentials. Summary auto-capture (tool-metadata digests only, never conversation text) is on by default; mention that capture_mode=off disables it.",
       inputSchema: {
         capture_mode: CaptureModeSchema.describe(
-          "Use summary only after explicit user consent. Use off to disable automatic summary capture; explicit memory and wiki saves still work.",
+          "Defaults to summary (bounded tool-metadata digests; conversation text is never captured). Use off to disable automatic capture; explicit memory and wiki saves still work.",
         ),
       },
       annotations: {

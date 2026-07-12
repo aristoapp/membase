@@ -73,6 +73,14 @@ describe("captureMode plugin option", () => {
     }
   }
 
+  it("summary capture is the default with no config, env, or option", () => {
+    // The claude-code descriptor carries defaultCaptureMode: "summary"
+    // (2026-07-12 decision: off-by-default meant off-forever in practice).
+    withTempConfig(() => {
+      expect(loadConfig().captureMode).toBe("summary");
+    });
+  });
+
   it("CLAUDE_PLUGIN_OPTION_captureMode=summary enables capture without a config file", () => {
     withTempConfig(() => {
       withCaptureModeOption("summary", () => {
