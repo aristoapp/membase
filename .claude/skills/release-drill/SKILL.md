@@ -174,6 +174,18 @@ Evidence-based probes:
    jam). Prefer `OPENCLAW_STATE_DIR=$DRILL/openclaw-state` isolation, or
    `bun test dream.e2e` in the runtime for the hook→spool→dream chain
    against a fake gateway.
+7. **cursor**: hooks ARE implemented (same hook.cjs; cursor host detected by
+   payload fields; events sessionStart/afterFileEdit/afterShellExecution).
+   Headless coverage = the C-CUR-1..4 contract tests (part of `pnpm test`) —
+   cite them, don't re-derive. The only thing they can't prove is the live
+   IDE firing the hook: that check is manual — edit a file in Cursor, then
+   look for a fresh session file in the cursor data dir's `scratch/`.
+8. **hermes**: there are no hook files — recall/capture live INSIDE the
+   provider (`sync_turn` does dual-role wiki-transcript capture). Headless
+   coverage = `test_provider_capture.py`, the spool durability test, and the
+   `cli._cmd_dream` e2e in the hermes suite. Do not report hermes hooks as
+   "N/A": report the provider-capture tests as the evidence, and note that
+   live verification needs a running hermes-agent with login.
 
 ## Phase 5 — report and cleanup
 
