@@ -47,12 +47,16 @@ async function verify() {
 
   if (checks.warnings.length > 0) {
     console.log("\nWarnings:");
-    checks.warnings.forEach(w => console.log(`  ⚠️  ${w}`));
+    for (const w of checks.warnings) {
+      console.log(`  ⚠️  ${w}`);
+    }
   }
 
   if (checks.failed.length > 0) {
     console.log("\nFailed Checks:");
-    checks.failed.forEach(f => console.log(`  ❌ ${f}`));
+    for (const f of checks.failed) {
+      console.log(`  ❌ ${f}`);
+    }
     process.exit(1);
   }
 
@@ -153,7 +157,7 @@ function checkDocumentation() {
       } else {
         checks.failed.push(`${doc} is not a file`);
       }
-    } catch (error) {
+    } catch {
       checks.failed.push(`${doc} missing`);
     }
   }
