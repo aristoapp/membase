@@ -2,8 +2,11 @@
   "name": "@membase/capture-core",
   "version": "0.1.6",
   "license": "MIT",
-  "private": true,
   "type": "module",
+  "files": [
+    "src",
+    "!src/**/*.test.ts"
+  ],
   "description": "Shared client-side capture/recall primitives (sanitize, redaction, casual/noise filters) for the Membase connector runtimes.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
