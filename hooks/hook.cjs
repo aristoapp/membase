@@ -1273,10 +1273,35 @@ function extractToolObservation(tool) {
     "Bash",
     "Task",
     "Agent",
-    "apply_patch"
+    "apply_patch",
+    "exec"
   ];
   if (!allowed.includes(name)) return null;
   const input = objectValue(tool.tool_input ?? tool.input);
+  if (name === "exec") {
+    const rawInput = tool.tool_input ?? tool.input;
+    const source = typeof rawInput === "string" ? rawInput : [input.input, input.code, input.command].find(
+      (v) => typeof v === "string"
+    ) ?? "";
+    if (!source || looksSensitive2(source)) return null;
+    const commands = [];
+    for (const match of source.matchAll(/"cmd"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
+      let cmd;
+      try {
+        cmd = JSON.parse(match[1] ?? '""');
+      } catch {
+        continue;
+      }
+      const truncated = truncateText2(cmd, 160);
+      if (!truncated || looksSensitive2(truncated)) continue;
+      if (PASSIVE_BASH_RE.test(truncated) || !IMPORTANT_BASH_RE.test(truncated)) {
+        continue;
+      }
+      commands.push(truncated);
+    }
+    if (commands.length === 0) return null;
+    return { files: [], commands, tasks: 0 };
+  }
   if (name === "Task" || name === "Agent") {
     return { files: [], commands: [], tasks: 1 };
   }

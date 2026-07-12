@@ -88,6 +88,49 @@ describe("extractToolObservation", () => {
       extractToolObservation({ tool_name: "Read", tool_input: {} }),
     ).toBeNull();
   });
+
+  it("extracts embedded exec_command cmds from Codex Desktop exec source", () => {
+    const source = [
+      'const r = await tools.exec_command({"cmd":"pnpm run build","timeout":60});',
+      'const s = await tools.exec_command({"cmd":"rg --files -g \\"*.md\\""});',
+    ].join("\n");
+    const obs = extractToolObservation({
+      tool_name: "exec",
+      tool_input: { input: source },
+    });
+    // The important build command is kept; the passive rg scan is filtered.
+    expect(obs).toEqual({ files: [], commands: ["pnpm run build"], tasks: 0 });
+  });
+
+  it("accepts exec tool_input as a raw string and rejects sensitive sources", () => {
+    const obs = extractToolObservation({
+      tool_name: "exec",
+      tool_input: 'await tools.exec_command({"cmd":"git commit -m x"});',
+    });
+    expect(obs).toEqual({ files: [], commands: ["git commit -m x"], tasks: 0 });
+    expect(
+      extractToolObservation({
+        tool_name: "exec",
+        tool_input:
+          'await tools.exec_command({"cmd":"export OPENAI_API_KEY=dummy1234567890abc && pnpm build"});',
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null for exec with only passive commands or no cmds", () => {
+    expect(
+      extractToolObservation({
+        tool_name: "exec",
+        tool_input: { input: 'await tools.exec_command({"cmd":"ls -la"});' },
+      }),
+    ).toBeNull();
+    expect(
+      extractToolObservation({
+        tool_name: "exec",
+        tool_input: { input: "const x = 1 + 1;" },
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("buildSessionDigest", () => {

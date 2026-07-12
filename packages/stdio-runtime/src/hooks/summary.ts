@@ -36,9 +36,49 @@ export function extractToolObservation(
     "Task",
     "Agent",
     "apply_patch",
+    "exec",
   ];
   if (!allowed.includes(name)) return null;
   const input = objectValue(tool.tool_input ?? tool.input);
+
+  if (name === "exec") {
+    // Codex Desktop's node_repl tool: tool_input is JavaScript source with
+    // shell commands embedded as `tools.exec_command({"cmd": "..."})` calls
+    // (no Claude-style matcher alias, unlike the CLI's native "Bash"). The
+    // source itself is opaque code we cannot fully parse in a hook budget;
+    // JSON string literals ARE a regular grammar, so scanning for "cmd"
+    // string values and JSON.parse-ing each literal is exact per literal and
+    // best-effort per script. Extracted commands then flow through the same
+    // important/passive/secret filters as Bash.
+    const rawInput = tool.tool_input ?? tool.input;
+    const source =
+      typeof rawInput === "string"
+        ? rawInput
+        : [input.input, input.code, input.command].find(
+            (v): v is string => typeof v === "string",
+          ) ?? "";
+    if (!source || looksSensitive(source)) return null;
+    const commands: string[] = [];
+    for (const match of source.matchAll(/"cmd"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
+      let cmd: string;
+      try {
+        cmd = JSON.parse(match[1] ?? '""') as string;
+      } catch {
+        continue;
+      }
+      const truncated = truncateText(cmd, 160);
+      if (!truncated || looksSensitive(truncated)) continue;
+      if (
+        PASSIVE_BASH_RE.test(truncated) ||
+        !IMPORTANT_BASH_RE.test(truncated)
+      ) {
+        continue;
+      }
+      commands.push(truncated);
+    }
+    if (commands.length === 0) return null;
+    return { files: [], commands, tasks: 0 };
+  }
 
   if (name === "Task" || name === "Agent") {
     return { files: [], commands: [], tasks: 1 };
