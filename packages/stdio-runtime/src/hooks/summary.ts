@@ -42,13 +42,14 @@ export function extractToolObservation(
   const input = objectValue(tool.tool_input ?? tool.input);
 
   if (name === "exec") {
-    // Codex Desktop's node_repl tool: tool_input is JavaScript source with
-    // shell commands embedded as `tools.exec_command({"cmd": "..."})` calls
-    // (no Claude-style matcher alias, unlike the CLI's native "Bash"). The
-    // source itself is opaque code we cannot fully parse in a hook budget;
-    // JSON string literals ARE a regular grammar, so scanning for "cmd"
-    // string values and JSON.parse-ing each literal is exact per literal and
-    // best-effort per script. Extracted commands then flow through the same
+    // Two hosts share this tool name. Codex CLI's native shell surfaces as
+    // exec with a plain command payload; Codex Desktop routes shell work
+    // through the node_repl plugin, whose payload is JavaScript source with
+    // commands embedded as `tools.exec_command({"cmd": "..."})` calls. The
+    // JS source is opaque code we cannot fully parse in a hook budget; JSON
+    // string literals ARE a regular grammar, so scanning for "cmd" values
+    // and JSON.parse-ing each literal is exact per literal and best-effort
+    // per script. Every extracted command flows through the same
     // important/passive/secret filters as Bash.
     const rawInput = tool.tool_input ?? tool.input;
     const source =
@@ -58,15 +59,18 @@ export function extractToolObservation(
             (v): v is string => typeof v === "string",
           ) ?? "";
     if (!source || looksSensitive(source)) return null;
-    const commands: string[] = [];
+    const candidates: string[] = [];
     for (const match of source.matchAll(/"cmd"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
-      let cmd: string;
       try {
-        cmd = JSON.parse(match[1] ?? '""') as string;
-      } catch {
-        continue;
-      }
-      const truncated = truncateText(cmd, 160);
+        candidates.push(JSON.parse(match[1] ?? '""') as string);
+      } catch {}
+    }
+    // No embedded cmd literals → treat the whole payload as one plain shell
+    // command (the CLI shape).
+    if (candidates.length === 0) candidates.push(source);
+    const commands: string[] = [];
+    for (const candidate of candidates) {
+      const truncated = truncateText(candidate, 160);
       if (!truncated || looksSensitive(truncated)) continue;
       if (
         PASSIVE_BASH_RE.test(truncated) ||

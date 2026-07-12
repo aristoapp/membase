@@ -1284,15 +1284,17 @@ function extractToolObservation(tool) {
       (v) => typeof v === "string"
     ) ?? "";
     if (!source || looksSensitive2(source)) return null;
-    const commands = [];
+    const candidates = [];
     for (const match of source.matchAll(/"cmd"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
-      let cmd;
       try {
-        cmd = JSON.parse(match[1] ?? '""');
+        candidates.push(JSON.parse(match[1] ?? '""'));
       } catch {
-        continue;
       }
-      const truncated = truncateText2(cmd, 160);
+    }
+    if (candidates.length === 0) candidates.push(source);
+    const commands = [];
+    for (const candidate of candidates) {
+      const truncated = truncateText2(candidate, 160);
       if (!truncated || looksSensitive2(truncated)) continue;
       if (PASSIVE_BASH_RE.test(truncated) || !IMPORTANT_BASH_RE.test(truncated)) {
         continue;
