@@ -195,8 +195,8 @@
         "openWorldHint": false
       },
       "justifications": {
-        "read_only_justification": "Tool returns current UTC timestamp; no state modification.",
-        "open_world_justification": "Tool only returns local system time; no external world dependency.",
+        "read_only_justification": "Tool returns the current date/time in the user's Membase timezone and UTC; no state modification.",
+        "open_world_justification": "Tool computes the time server-side for the authenticated user; no external world interaction.",
         "destructive_justification": "Tool is read-only and non-destructive."
       },
       "outputSchema": {
@@ -260,13 +260,13 @@
     "update_wiki": {
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": false,
+        "destructiveHint": true,
         "openWorldHint": false
       },
       "justifications": {
         "read_only_justification": "Tool modifies existing wiki document title, content, or collection by ID.",
         "open_world_justification": "Tool requires specific document UUID; updates are constrained to user's wiki.",
-        "destructive_justification": "Tool is non-destructive; updates maintain version history and are reversible."
+        "destructive_justification": "Content updates replace the document body in place with no version history, so overwritten content is unrecoverable; flagged destructive accordingly."
       },
       "outputSchema": {
         "type": "object",
@@ -286,8 +286,8 @@
       },
       "justifications": {
         "read_only_justification": "Tool deletes a wiki document by ID from permanent storage.",
-        "open_world_justification": "Tool requires specific wiki document UUID (constrained input); no open-world input acceptance.",
-        "destructive_justification": "Tool permanently and irreversibly deletes wiki documents; requires explicit user confirmation."
+        "open_world_justification": "Tool operates only within the user's private Membase wiki; no external world interaction.",
+        "destructive_justification": "Tool permanently and irreversibly deletes wiki documents; flagged destructive so host clients can require user confirmation, and the tool description instructs the model to confirm with the user first."
       },
       "outputSchema": {
         "type": "object",
@@ -330,7 +330,7 @@
         "name": "Create and update wiki document",
         "description": "User adds factual documentation to wiki, then updates title and collection",
         "tools_triggered": ["add_wiki", "update_wiki"],
-        "expectedBehavior": "Document created with unique ID, update modifies content while preserving version history, both operations confirm success"
+        "expectedBehavior": "Document created with unique ID, update replaces the document content in place, both operations confirm success"
       },
       {
         "name": "Store session handoff for cross-client continuation",
@@ -347,10 +347,10 @@
         "expectedBehavior": "Tool rejects content with 'Refusing to store content that looks like a secret' error; no partial storage occurs"
       },
       {
-        "name": "Delete wiki document without confirmation",
-        "description": "User calls delete_wiki with confirm=false or omitted",
+        "name": "Delete wiki document with invalid ID",
+        "description": "User calls delete_wiki with a doc_id that does not exist or is not a valid UUID",
         "tools_triggered": ["delete_wiki"],
-        "expectedBehavior": "Tool throws error 'delete_wiki requires confirm=true'; document not deleted; user must explicitly confirm"
+        "expectedBehavior": "Tool returns an error and no document is deleted; the tool description instructs the model to confirm with the user before deleting"
       },
       {
         "name": "Search memory when not logged in",
@@ -374,7 +374,7 @@
       "OAuth 2.0 PKCE flow for authentication",
       "No API keys stored locally in plaintext",
       "Secrets detection filters content before storage",
-      "Destructive operations (delete_wiki, store_handoff) require explicit user confirmation",
+      "Destructive operations (delete_wiki, update_wiki, store_handoff) are flagged with destructiveHint=true so host clients can require user confirmation",
       "All tools perform input sanitization and validate content length (50KB for memories, 100KB for wiki)"
     ]
   },
