@@ -31490,9 +31490,12 @@ var CLIENT_DESCRIPTORS = {
     // Part of the installed Claude plugin's on-disk contract since before the
     // client-neutral layout — do not migrate it to ~/.membase/claude-code.
     homeDataDir: [".claude", "plugins", "membase"],
-    usesToolBatch: true
-    // No defaultCaptureMode: Claude capture stays opt-in via /membase:login
-    // (disk config) or the plugin's captureMode option.
+    usesToolBatch: true,
+    // Summary capture (tool-metadata digests only — never conversation text)
+    // is on by default, matching codex/cursor. /membase:login and the
+    // plugin's captureMode option remain the opt-out channels; off-by-default
+    // proved to mean off-forever in practice (2026-07-12 release drill).
+    defaultCaptureMode: "summary"
   },
   codex: {
     label: "Codex",
@@ -32405,10 +32408,10 @@ async function main() {
     "login",
     {
       title: "Connect Membase",
-      description: "Start OAuth login for Membase and save local Claude Code plugin credentials. Ask the user whether summary auto-capture should be enabled before calling this tool.",
+      description: "Start OAuth login for Membase and save local Claude Code plugin credentials. Summary auto-capture (tool-metadata digests only, never conversation text) is on by default; mention that capture_mode=off disables it.",
       inputSchema: {
         capture_mode: CaptureModeSchema.describe(
-          "Use summary only after explicit user consent. Use off to disable automatic summary capture; explicit memory and wiki saves still work."
+          "Defaults to summary (bounded tool-metadata digests; conversation text is never captured). Use off to disable automatic capture; explicit memory and wiki saves still work."
         )
       },
       annotations: {
