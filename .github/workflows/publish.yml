@@ -1,0 +1,108 @@
+name: Publish
+
+# Per-client release tags — versions follow each package's published lineage
+# (npm @membase/openclaw-membase, PyPI hermes-membase), not the monorepo
+# version. Claude/Codex/Cursor need no publish job: their channel is this
+# git repo itself (marketplace / plugins-cli git-direct).
+on:
+  push:
+    tags:
+      - "openclaw-v*"
+      - "hermes-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish-openclaw:
+    if: startsWith(github.ref_name, 'openclaw-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package version
+        working-directory: clients/openclaw/runtime
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#openclaw-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      # The runtime ships TS sources and depends on @membase/capture-core
+      # (workspace:* → exact version at pack time), so the dependency must
+      # exist on npm first. Idempotent: skipped when the version is already up.
+      - name: Publish @membase/capture-core dependency
+        working-directory: packages/capture-core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "@membase/capture-core@$V" version >/dev/null 2>&1; then
+            echo "@membase/capture-core@$V already on npm — skipping"
+          else
+            pnpm publish --access public --no-git-checks
+          fi
+
+      - name: Publish to npm
+        working-directory: clients/openclaw/runtime
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --access public --no-git-checks
+
+  publish-hermes:
+    if: startsWith(github.ref_name, 'hermes-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Verify tag matches package version
+        working-directory: clients/hermes/python
+        run: |
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG_VERSION="${GITHUB_REF_NAME#hermes-v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Build package
+        working-directory: clients/hermes/python
+        run: python -m build
+
+      - name: Publish to PyPI
+        working-directory: clients/hermes/python
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "${PYPI_API_TOKEN}" ]; then
+            echo "PYPI_API_TOKEN is not set." >&2
+            exit 1
+          fi
+          # --skip-existing keeps tag re-pushes / retries idempotent, matching
+          # the npm job's npm-view guard.
+          twine upload --skip-existing -u __token__ -p "${PYPI_API_TOKEN}" dist/*

@@ -1,13 +1,30 @@
 {
-  "name": "@membase/openclaw-membase-runtime",
-  "version": "0.1.0",
+  "name": "@membase/openclaw-membase",
+  "version": "0.6.0",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "description": "OpenClaw plugin runtime for Membase (tools, hooks, commands).",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aristoapp/membase-plugin-mcp",
+    "directory": "clients/openclaw/runtime"
+  },
+  "keywords": [
+    "openclaw",
+    "membase",
+    "agent-memory",
+    "mcp"
+  ],
+  "files": [
+    "index.ts",
+    "src",
+    "!src/**/*.test.ts",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "main": "./index.ts",
   "peerDependencies": {
-    "openclaw": ">=2026.1.0"
+    "openclaw": ">=2026.6.10"
   },
   "devDependencies": {
     "@types/bun": "^1.2.14"
