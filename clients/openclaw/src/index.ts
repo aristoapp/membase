@@ -34,6 +34,7 @@ export interface OpenClawPluginManifest {
 
 export const OPENCLAW_TOOL_CONTRACTS = [
   "membase_search",
+  "membase_get_current_date",
   "membase_store",
   "membase_profile",
   "membase_forget",
@@ -144,7 +145,7 @@ export function generateOpenClawPluginManifest(
       },
       autoCapture: {
         label: "Auto-Capture",
-        help: "Automatically store conversations to memory"
+        help: "Automatically store user/assistant conversation transcripts to Wiki"
       },
       maxRecallChars: {
         label: "Max Recall Context Size",

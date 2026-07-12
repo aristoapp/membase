@@ -13,18 +13,19 @@ import {
 } from "./spool";
 
 // Failure-path spool end-to-end. spool.test.ts covers the spool primitives
-// with a stub ingest; this drives the FULL client-side chain as shipped:
-// an `agent_end` hook event → a flush that fails against a down gateway →
-// disk spool → the real `membase dream` CLI action → a real HTTP upload once
-// the gateway recovers. The one seam a network-only e2e (e2e/run-e2e.mjs)
-// explicitly cannot cross — firing the hook and dream in-process — is exactly
-// what this covers, against a fake gateway over the real MembaseClient.
+// with a stub client; this drives the FULL client-side chain as shipped:
+// an `agent_end` hook event → a wiki-transcript flush that fails against a
+// down gateway → disk spool → the real `membase dream` CLI action → a real
+// HTTP re-creation of the document once the gateway recovers. The one seam a
+// network-only e2e (e2e/run-e2e.mjs) explicitly cannot cross — firing the hook
+// and dream in-process — is exactly what this covers, against a fake gateway
+// over the real MembaseClient.
 
 let dataDir: string;
 let prevEnv: string | undefined;
 let server: Server;
 let apiUrl = "";
-let ingestBodies: string[] = [];
+let wikiBodies: string[] = [];
 let gatewayDown = true;
 
 function startGateway(): Promise<void> {
@@ -32,16 +33,29 @@ function startGateway(): Promise<void> {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
-      if (req.url?.includes("/memory/ingest")) {
+      if (req.url?.includes("/wiki/documents")) {
         if (gatewayDown) {
           res.statusCode = 503;
           res.end("gateway down");
           return;
         }
-        ingestBodies.push(body);
+        wikiBodies.push(body);
         res.statusCode = 200;
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ status: "ok", id: `mem_${ingestBodies.length}` }));
+        res.end(
+          JSON.stringify({
+            id: `doc_${wikiBodies.length}`,
+            user_id: "u1",
+            collection_id: null,
+            title: "capture",
+            content: "",
+            metadata: {},
+            status: "active",
+            source: "openclaw",
+            created_at: "2026-07-12T00:00:00Z",
+            updated_at: "2026-07-12T00:00:00Z",
+          }),
+        );
         return;
       }
       res.statusCode = 200;
@@ -64,7 +78,7 @@ beforeEach(async () => {
   dataDir = mkdtempSync(join(tmpdir(), "oc-dream-e2e-"));
   prevEnv = process.env.MEMBASE_DATA_DIR;
   process.env.MEMBASE_DATA_DIR = dataDir;
-  ingestBodies = [];
+  wikiBodies = [];
   gatewayDown = true;
   resetCaptureSpoolForTest();
   await startGateway();
@@ -129,22 +143,21 @@ function makeProgram() {
   return { program: { command: (n: string) => cmd(n) }, actions };
 }
 
-// getLastTurn() slices from the LAST user message, so each agent_end yields at
-// most one buffered user message. Fire twice to clear MIN_MESSAGES_TO_FLUSH (2).
-async function captureTwoTurns(
+// One agent_end event carries the whole last turn (user + assistant), which
+// already clears MIN_MESSAGES_TO_FLUSH (2).
+async function captureTurn(
   handlers: Record<string, (e: Record<string, unknown>) => Promise<void> | void>,
-  text: string,
+  userText: string,
+  assistantText: string,
 ): Promise<void> {
-  for (let i = 0; i < 2; i++) {
-    await handlers.agent_end({
-      success: true,
-      sessionKey: "e2e-channel",
-      messages: [
-        { role: "assistant", content: "prior" },
-        { role: "user", content: text },
-      ],
-    });
-  }
+  await handlers.agent_end({
+    success: true,
+    sessionKey: "e2e-channel",
+    messages: [
+      { role: "user", content: userText },
+      { role: "assistant", content: assistantText },
+    ],
+  });
 }
 
 // Read every file under the spool dir and concatenate — used to assert what did
@@ -166,13 +179,13 @@ describe("dream e2e (hook → spool → dream over a real client)", () => {
 
     const text =
       "Please remember: the deploy key rotation is scheduled for next Tuesday and the runbook lives in the ops wiki.";
-    await captureTwoTurns(handlers, text);
+    await captureTurn(handlers, text, "Noted — I'll track the rotation.");
     // Gateway is down — force the buffered turn to flush now (skip the 5-min
     // silence timer). The failing upload must land on disk, not in RAM.
     await flushAllBuffers(client, api.logger);
 
     expect(getCaptureSpool().pendingSpoolCount()).toBeGreaterThan(0);
-    expect(ingestBodies.length).toBe(0);
+    expect(wikiBodies.length).toBe(0);
     expect(logs.some((l) => l.includes("spooled to disk"))).toBe(true);
 
     // Gateway recovers; drive the actual `membase dream` action registered by
@@ -185,8 +198,11 @@ describe("dream e2e (hook → spool → dream over a real client)", () => {
 
     await actions.dream();
 
-    expect(ingestBodies.length).toBe(1);
-    expect(ingestBodies[0]).toContain("deploy key rotation");
+    expect(wikiBodies.length).toBe(1);
+    const body = JSON.parse(wikiBodies[0] ?? "{}");
+    expect(body.content).toContain("deploy key rotation");
+    expect(body.title).toContain("OpenClaw conversation capture");
+    expect(body.source_metadata?.capture_kind).toBe("conversation_transcript");
     expect(getCaptureSpool().pendingSpoolCount()).toBe(0);
     expect(logs.some((l) => l.includes("Dream complete"))).toBe(true);
   });
@@ -199,9 +215,10 @@ describe("dream e2e (hook → spool → dream over a real client)", () => {
     // "dummy-" prefix keeps this fixture out of the secret-hygiene scanner while
     // still triggering capture-core redaction via the assignment shape.
     const secret = "dummy-SUPERSECRETVALUE1234567890";
-    await captureTwoTurns(
+    await captureTurn(
       handlers,
       `here is my OPENAI_API_KEY=${secret} and the deploy runbook context`,
+      "I will not store the key itself, only the runbook context.",
     );
     await flushAllBuffers(client, api.logger);
 
@@ -216,9 +233,10 @@ describe("dream e2e (hook → spool → dream over a real client)", () => {
     const client = authedClient();
     registerCaptureHook(api, client, api.logger);
 
-    await captureTwoTurns(
+    await captureTurn(
       handlers,
       "Remember the incident postmortem is due Friday and lives in the ops wiki.",
+      "Understood — postmortem deadline noted.",
     );
     await flushAllBuffers(client, api.logger);
     expect(getCaptureSpool().pendingSpoolCount()).toBeGreaterThan(0);
@@ -232,7 +250,8 @@ describe("dream e2e (hook → spool → dream over a real client)", () => {
 
     expect(flushed).toBe(1);
     expect(remaining).toBe(0);
-    expect(ingestBodies.length).toBe(1);
-    expect(ingestBodies[0]).toContain("incident postmortem");
+    expect(wikiBodies.length).toBe(1);
+    const body = JSON.parse(wikiBodies[0] ?? "{}");
+    expect(body.content).toContain("incident postmortem");
   });
 });

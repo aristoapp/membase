@@ -25,20 +25,46 @@ export function getCaptureSpool(): CaptureSpool {
 }
 
 /**
- * Persist a failed capture batch to disk so a restart can't lose it. Returns
- * true only if the record actually reached disk — enqueueCapture returns null
- * on a dedup hit or a lock timeout, and the caller must NOT drop its RAM copy
- * in that case (else the batch is lost from both places). `channelKey` is
- * threaded as the sessionId so identical text from two channels doesn't collide
- * on the capture_id hash (which falls back to "unknown" without it).
+ * One wiki capture document (a single part of a possibly multi-part
+ * transcript). Capture builds these; a failed upload spools each unuploaded
+ * part as its own record, so "which parts already succeeded" is simply
+ * "which parts were never enqueued" — the drain resumes from the first
+ * unuploaded part by re-creating exactly the spooled ones.
  */
-export function spoolFailedCapture(content: string, channelKey?: string): boolean {
+export interface CaptureDocumentPayload {
+  title: string;
+  content: string;
+  project?: string;
+  sourceMetadata?: Record<string, unknown>;
+}
+
+const WIKI_DOCUMENT_KIND = "wiki_document";
+
+/**
+ * Persist one failed capture document to disk so a restart can't lose it.
+ * Returns true only if the record actually reached disk — enqueueCapture
+ * returns null on a dedup hit or a lock timeout, and the caller must NOT drop
+ * its RAM copy in that case (else the part is lost from both places).
+ * `channelKey` is threaded as the sessionId so identical text from two
+ * channels doesn't collide on the capture_id hash.
+ */
+export function spoolFailedDocument(
+  doc: CaptureDocumentPayload,
+  channelKey?: string,
+): boolean {
   return (
     getCaptureSpool().enqueueCapture({
       sessionId: channelKey,
-      capture_kind: "conversation",
-      content,
-      metadata: { source: "openclaw", capture_kind: "conversation" },
+      capture_kind: WIKI_DOCUMENT_KIND,
+      content: doc.content,
+      display_summary: doc.title,
+      project: doc.project,
+      metadata: {
+        source: "openclaw",
+        capture_kind: WIKI_DOCUMENT_KIND,
+        title: doc.title,
+        source_metadata: doc.sourceMetadata ?? {},
+      },
     }) !== null
   );
 }
@@ -55,11 +81,31 @@ export async function flushCaptureSpool(
   client: MembaseClient,
 ): Promise<{ flushed: number; remaining: number }> {
   return getCaptureSpool().flushSpool(async (record) => {
-    // ingest throws on non-ok HTTP (transport rejects any !response.ok), and an
-    // explicit `{status:"error"}` body is also a failure — either way the record
-    // must stay spooled, not be marked sent. Any other resolved status (incl. a
-    // gateway that returns just an id) counts as success. Return void on success
-    // to match flushSpool's void|boolean contract; false on the error body.
+    if (record.capture_kind === WIKI_DOCUMENT_KIND) {
+      // Wiki-transcript capture record: resume document creation for this
+      // part. createWikiDocument throws on non-ok HTTP, so a failure keeps
+      // the record spooled.
+      const meta = record.metadata as
+        | { title?: unknown; source_metadata?: unknown }
+        | undefined;
+      const title =
+        typeof meta?.title === "string" && meta.title
+          ? meta.title
+          : `OpenClaw conversation capture - ${record.created_at}`;
+      const sourceMetadata =
+        meta?.source_metadata && typeof meta.source_metadata === "object"
+          ? (meta.source_metadata as Record<string, unknown>)
+          : undefined;
+      await client.createWikiDocument(title, record.content, {
+        project: record.project,
+        sourceMetadata,
+      });
+      return;
+    }
+    // Legacy record spooled before the wiki-transcript capture path shipped:
+    // keep it readable and drain it through /memory/ingest as before. ingest
+    // throws on non-ok HTTP, and an explicit `{status:"error"}` body is also a
+    // failure — either way the record must stay spooled, not be marked sent.
     const result = await client.ingest(record.content, {
       project: record.project,
     });

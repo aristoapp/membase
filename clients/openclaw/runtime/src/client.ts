@@ -7,8 +7,11 @@ import type {
   WikiSearchResponse,
 } from "./types";
 import { MembaseApiError } from "./types";
+import { resolveWikiProjectInput } from "./wiki-project";
 
-const DEFAULT_TIMEOUT_MS = 15_000;
+// Wiki writes can be slow server-side (capture transcripts are large and the
+// backend summarizes/routes synchronously); 15s aborted legitimate uploads.
+const DEFAULT_TIMEOUT_MS = 180_000;
 const USER_AGENT = `membase-openclaw/${pkg.version}`;
 
 export type TokenRefreshCallback = (tokens: {
@@ -211,38 +214,67 @@ export class MembaseClient {
     }
   }
 
+  async recordAgentUsage(): Promise<void> {
+    try {
+      await this.request("/agents/usage", {
+        method: "POST",
+        body: JSON.stringify({ source: "openclaw" }),
+      });
+    } catch {
+      // Best-effort dashboard signal; never fail the user-facing tool result.
+    }
+  }
+
   async searchWiki(
     query: string,
     limit?: number,
-    collection?: string,
-    collectionId?: string,
+    options?: {
+      project?: string;
+      collection?: string;
+      collectionId?: string;
+    },
   ): Promise<WikiSearchResponse> {
+    const projectInput = resolveWikiProjectInput(options ?? {});
+    if (projectInput.error) {
+      throw new MembaseApiError(projectInput.error, 400);
+    }
     const qs = new URLSearchParams({ query });
     if (limit !== undefined) qs.set("limit", String(limit));
-    // The API distinguishes collection_id (UUID) from collection (name;
-    // name filters are resolved by slug and lookup-or-create on write).
-    if (collectionId) qs.set("collection_id", collectionId);
-    else if (collection) qs.set("collection", collection);
+    if (projectInput.value) qs.set("project", projectInput.value);
+    if (options?.collectionId) qs.set("collection_id", options.collectionId);
     return this.request<WikiSearchResponse>(`/wiki/search?${qs.toString()}`);
+  }
+
+  async getKnownWikiProjects(): Promise<string[]> {
+    return this.request<string[]>("/wiki/collections/known");
   }
 
   async createWikiDocument(
     title: string,
     content: string,
-    collection?: string,
-    summarize?: boolean,
-    collectionId?: string,
+    options?: {
+      project?: string;
+      collection?: string;
+      sourceMetadata?: Record<string, unknown>;
+    },
   ): Promise<WikiDocumentResponse> {
+    const projectInput = resolveWikiProjectInput(options ?? {});
+    if (projectInput.error) {
+      throw new MembaseApiError(projectInput.error, 400);
+    }
     const body: Record<string, unknown> = {
       title,
       content,
       source: "openclaw",
-      summarize: summarize ?? false,
+      source_metadata: {
+        ...(options?.sourceMetadata ?? {}),
+        plugin_name: "openclaw-membase",
+        plugin_version: pkg.version,
+        host: "openclaw",
+      },
     };
-    if (collection) {
-      body.collection = collection;
-    } else if (collectionId) {
-      body.collection_id = collectionId;
+    if (projectInput.value) {
+      body.project = projectInput.value;
     }
     return this.request<WikiDocumentResponse>("/wiki/documents", {
       method: "POST",
@@ -252,11 +284,32 @@ export class MembaseClient {
 
   async updateWikiDocument(
     docId: string,
-    updates: { title?: string; content?: string; collection?: string },
+    updates: {
+      title?: string;
+      content?: string;
+      project?: string | null;
+      collection?: string;
+      collection_id?: null;
+    },
   ): Promise<WikiDocumentResponse> {
+    const projectInput = resolveWikiProjectInput(updates);
+    if (projectInput.error) {
+      throw new MembaseApiError(projectInput.error, 400);
+    }
+    // Whitelist the update body: only known fields go over the wire, and
+    // `collection_id: null` (or project: null) means "move to Basic".
+    const body: Record<string, unknown> = {};
+    if (updates.title !== undefined) body.title = updates.title;
+    if (updates.content !== undefined) body.content = updates.content;
+    if (updates.collection_id === null || projectInput.value === null) {
+      body.collection_id = null;
+    } else if (projectInput.value !== undefined) {
+      body.project = projectInput.value;
+    }
+
     return this.request<WikiDocumentResponse>(`/wiki/documents/${docId}`, {
       method: "PUT",
-      body: JSON.stringify(updates),
+      body: JSON.stringify(body),
     });
   }
 

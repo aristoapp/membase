@@ -21,11 +21,14 @@ which includes notes on translating the MCP JSON example into Hermes'
 
 ## Capabilities
 
-The Python provider registers `membase_search`, `membase_store`,
-`membase_profile`, `membase_forget`, `membase_handoff`, and the four wiki
-tools (`membase_add_wiki`, `membase_search_wiki`, `membase_update_wiki`,
-`membase_delete_wiki`), plus auto-capture and prefetch recall. No Membase server
-internals are exposed.
+The Python provider registers `membase_search`, `membase_get_current_date`,
+`membase_store`, `membase_profile`, `membase_forget`, `membase_handoff`, and
+the four wiki tools (`membase_add_wiki`, `membase_search_wiki`,
+`membase_update_wiki`, `membase_delete_wiki`), plus prefetch recall and
+auto-capture (conversation transcripts saved as wiki documents, with a disk
+spool + `hermes-membase dream` for failed uploads). Wiki tools accept a
+`project` filing location (`collection` stays as a legacy alias). No Membase
+server internals are exposed.
 
 ## For contributors
 

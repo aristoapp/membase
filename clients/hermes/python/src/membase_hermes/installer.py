@@ -45,7 +45,7 @@ def install_plugin_payload(target_dir: Path | None = None) -> Path:
 
     if destination.exists():
         shutil.rmtree(destination)
-    shutil.copytree(plugin_src, destination)
+    shutil.copytree(plugin_src, destination, ignore=shutil.ignore_patterns("__pycache__"))
 
     # Bundle the full membase_hermes package source as _membase_hermes/
     # so the plugin is self-contained without needing pip in Hermes's venv.

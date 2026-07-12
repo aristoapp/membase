@@ -189,6 +189,7 @@ def _cmd_status(config_path: Path) -> int:
 
 def _cmd_dream(config_path: Path) -> int:
     """Upload captures that failed to sync and are waiting on disk."""
+    from .capture import CAPTURE_KIND_TRANSCRIPT, part_title
     from .spool import default_capture_spool
 
     spool = default_capture_spool()
@@ -204,7 +205,26 @@ def _cmd_dream(config_path: Path) -> int:
             return 1
 
         def _send(record: dict[str, Any]) -> None:
-            # ingest raises on failure; a normal return counts as success.
+            # Both client calls raise on failure; a normal return counts as
+            # success.
+            metadata = record.get("metadata") or {}
+            if record.get("capture_kind") == CAPTURE_KIND_TRANSCRIPT:
+                # Wiki-transcript part spooled by capture.py: resume the
+                # document upload with the original part title/metadata.
+                base_title = str(metadata.get("title") or "Hermes conversation capture")
+                part_index = int(metadata.get("part_index") or 1)
+                part_total = int(metadata.get("part_total") or 1)
+                client.create_wiki_document(
+                    title=part_title(base_title, part_index, part_total),
+                    content=record["content"],
+                    project=record.get("project"),
+                    source_metadata={
+                        **{k: v for k, v in metadata.items() if k != "title"},
+                        "capture_kind": CAPTURE_KIND_TRANSCRIPT,
+                    },
+                )
+                return
+            # Legacy pre-wiki-capture spool record: upload as a memory episode.
             client.ingest(
                 record["content"],
                 display_summary=record.get("display_summary"),
@@ -363,9 +383,10 @@ def _patch_hermes_config(hermes_home: Path) -> Path:
 
 
 def _cmd_install(args: argparse.Namespace, config_path: Path) -> int:
-    from .installer import _get_hermes_home, install_plugin_payload
+    from .config import get_hermes_home
+    from .installer import install_plugin_payload
 
-    hermes_home = _get_hermes_home()
+    hermes_home = get_hermes_home()
 
     plugin_dir = install_plugin_payload()
     print(f"[1/4] Plugin installed: {plugin_dir}")
