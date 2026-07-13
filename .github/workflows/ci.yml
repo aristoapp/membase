@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# New commits on the same PR/branch cancel the previous run instead of
+# queuing behind it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Least privilege: pnpm install can run arbitrary postinstall scripts and this
 # runs on fork PRs, so don't hand the default token org-wide write scope.
 permissions:
