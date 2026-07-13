@@ -9,13 +9,26 @@ on:
     tags:
       - "openclaw-v*"
       - "hermes-v*"
+  # Manual redeploy (e.g. retrying a publish that failed midway, or
+  # republishing the current version without cutting a new tag). Pick the
+  # target and, for tag-triggered semantics, the tag to run against via the
+  # workflow_dispatch ref selector in the Actions UI.
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Package to publish
+        required: true
+        type: choice
+        options:
+          - openclaw
+          - hermes
 
 permissions:
   contents: read
 
 jobs:
   publish-openclaw:
-    if: startsWith(github.ref_name, 'openclaw-v')
+    if: startsWith(github.ref_name, 'openclaw-v') || inputs.target == 'openclaw'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,6 +47,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Verify tag matches package version
+        if: startsWith(github.ref_name, 'openclaw-v')
         working-directory: clients/openclaw/runtime
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
@@ -43,14 +57,28 @@ jobs:
             exit 1
           fi
 
+      - name: Note manual publish version
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: clients/openclaw/runtime
+        run: echo "Manual dispatch — publishing current package.json version $(node -p "require('./package.json').version") (no tag check)."
+
+      # Secrets are fetched live from the 1Password "AI Agent" vault via a
+      # scoped Service Account token — no long-lived npm/PyPI token sits in
+      # GitHub secrets. Exported into the job env for every later step.
+      - name: Load npm token from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          NODE_AUTH_TOKEN: op://AI Agent/NPM TOKEN/password
+
       # The runtime ships TS sources and depends on @membase/capture-core
       # (workspace:* → exact version at pack time), so the dependency must
       # exist on npm first. The guard refuses to silently skip a version whose
       # source changed without a bump (which would ship a stale sanitizer):
       #   exit 10 = not published → publish; 0 = unchanged → skip; 1 = drifted → fail.
       - name: Publish @membase/capture-core dependency
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           node scripts/check-capture-core-publish.mjs packages/capture-core && rc=0 || rc=$?
           if [ "$rc" = "10" ]; then
@@ -63,12 +91,10 @@ jobs:
 
       - name: Publish to npm
         working-directory: clients/openclaw/runtime
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm publish --access public --no-git-checks
 
   publish-hermes:
-    if: startsWith(github.ref_name, 'hermes-v')
+    if: startsWith(github.ref_name, 'hermes-v') || inputs.target == 'hermes'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -84,6 +110,7 @@ jobs:
           python -m pip install build twine
 
       - name: Verify tag matches package version
+        if: startsWith(github.ref_name, 'hermes-v')
         working-directory: clients/hermes/python
         run: |
           PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
@@ -93,14 +120,25 @@ jobs:
             exit 1
           fi
 
+      - name: Note manual publish version
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: clients/hermes/python
+        run: echo "Manual dispatch — publishing current pyproject.toml version $(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])") (no tag check)."
+
       - name: Build package
         working-directory: clients/hermes/python
         run: python -m build
 
+      - name: Load PyPI token from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          PYPI_API_TOKEN: op://AI Agent/hermes-membase pypi/password
+
       - name: Publish to PyPI
         working-directory: clients/hermes/python
-        env:
-          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           if [ -z "${PYPI_API_TOKEN}" ]; then
             echo "PYPI_API_TOKEN is not set." >&2
