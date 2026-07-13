@@ -557,12 +557,9 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
         .description("Search wiki documents")
         .option("-l, --limit <limit>", "Max results", "10")
         .option("--project <project>", "Optional Wiki filing location filter")
+        .option("--collection <collection>", "Deprecated alias for --project")
         .option(
-          "-c, --collection <collection>",
-          "Deprecated alias for --project",
-        )
-        .option(
-          "--collection-id <collectionId>",
+          "-c, --collection-id <collectionId>",
           "Optional wiki collection UUID filter",
         )
         .action(async (queryArg?: unknown, rawOpts?: unknown) => {
@@ -622,9 +619,10 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
         .description("Add a wiki document")
         .option("--content <content>", "Full markdown content")
         .option("--project <project>", "Optional Wiki filing location")
+        .option("--collection <collection>", "Deprecated alias for --project")
         .option(
-          "-c, --collection <collection>",
-          "Deprecated alias for --project",
+          "-c, --collection-id <collectionId>",
+          "Optional wiki collection UUID target",
         )
         .action(async (titleArg?: unknown, rawOpts?: unknown) => {
           if (!client.isAuthenticated()) {
@@ -639,6 +637,7 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
             content?: string;
             project?: string;
             collection?: string;
+            collectionId?: string;
           };
           const title = parsed.value || opts.title || "";
           if (!title.trim()) {
@@ -661,6 +660,7 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
             const doc = await client.createWikiDocument(title, opts.content, {
               project: opts.project,
               collection: opts.collection,
+              collectionId: opts.collectionId,
             });
             api.logger.info(
               formatWikiCreateResult(doc, opts.project ?? opts.collection),
@@ -823,15 +823,15 @@ export function registerCli(api: OpenClawPluginApi, client: MembaseClient) {
             // there is genuinely nothing to do.
             const { flushed, remaining } = await flushCaptureSpool(client);
             if (flushed === 0 && remaining === 0) {
-              api.logger.info(
-                "Nothing to dream — the capture spool is empty.",
-              );
+              api.logger.info("Nothing to dream — the capture spool is empty.");
               return;
             }
             api.logger.info(
-              `Dream complete: uploaded ${flushed} capture(s)${remaining > 0
+              `Dream complete: uploaded ${flushed} capture(s)${
+                remaining > 0
                   ? `, ${remaining} still pending (run 'membase dream' again to retry).`
-                  : "."}`,
+                  : "."
+              }`,
             );
           } catch (error) {
             api.logger.error(
