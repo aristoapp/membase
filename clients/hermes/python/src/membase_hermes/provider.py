@@ -473,14 +473,30 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             self._logger.debug("capture worker did not drain within %.1fs", timeout_s)
 
     def _flush_capture_if_needed(self, force: bool = False) -> None:
+        import os
+        if os.environ.get("MEMBASE_DIAG_FLUSH"):
+            print("DIAG _flush enter: config=%r auto_capture=%r buffer_len=%r force=%r" % (
+                self._config is not None,
+                self._config.auto_capture if self._config else None,
+                len(self._capture_buffer),
+                force,
+            ), flush=True)
         if not self._config or not self._config.auto_capture:
             return
         if not self._capture_buffer:
             return
         if not force and len(self._capture_buffer) < MIN_MESSAGES_TO_FLUSH:
+            if os.environ.get("MEMBASE_DIAG_FLUSH"):
+                print("DIAG _flush: bailed on MIN_MESSAGES_TO_FLUSH (buffer_len=%r < %r)" % (
+                    len(self._capture_buffer), MIN_MESSAGES_TO_FLUSH,
+                ), flush=True)
             return
         now = time.monotonic()
         timed_out = self._last_capture_ts > 0 and (now - self._last_capture_ts) >= SILENCE_TIMEOUT_S
+        if os.environ.get("MEMBASE_DIAG_FLUSH"):
+            print("DIAG _flush: last_capture_ts=%r now=%r delta=%r timed_out=%r buffer_len=%r" % (
+                self._last_capture_ts, now, now - self._last_capture_ts, timed_out, len(self._capture_buffer),
+            ), flush=True)
         if not force and not timed_out and len(self._capture_buffer) < MAX_BUFFER_SIZE:
             return
 

@@ -392,6 +392,8 @@ class ProviderCaptureTests(unittest.TestCase):
         self.assertTrue(client.pinged.wait(timeout=1.0))
 
     def test_silence_timeout_flushes_previous_capture_window(self) -> None:
+        import os
+        os.environ["MEMBASE_DIAG_FLUSH"] = "1"
         client = RecordingClient()
         provider = make_provider(client)
 
