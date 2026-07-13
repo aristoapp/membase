@@ -93,7 +93,9 @@ export function registerUpdateWikiTool(
         const doc = await client.updateWikiDocument(params.doc_id, {
           ...updates,
         });
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         return await toolResponse(
           formatWikiUpdateResult(doc, projectInput.value),
         );

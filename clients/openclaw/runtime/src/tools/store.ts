@@ -83,7 +83,9 @@ export function registerStoreTool(
           displaySummary: params.display_summary,
           project: params.project,
         });
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         return await toolResponse(`Stored in Membase (${result.status})`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
