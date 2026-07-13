@@ -396,15 +396,21 @@ class ProviderCaptureTests(unittest.TestCase):
         provider = make_provider(client)
 
         provider.sync_turn(memory_text(1), "", session_id="session")
+        print("DIAG after msg1: buffer=%r pending=%r" % (
+            provider._capture_buffer, getattr(provider._capture_worker, "_pending", None),
+        ), flush=True)
         provider._last_capture_ts = time.monotonic() - SILENCE_TIMEOUT_S - 1
         provider.sync_turn(memory_text(2), "", session_id="session")
-        # drain() is condition-variable driven, not polling, so a large bound
-        # costs nothing on a healthy run. CI's "pnpm check + smoke" job runs
-        # heavy bun/node build+lint steps for five other client packages
-        # immediately before hermes:test; confirmed via CI diagnostics that
-        # the runner is still under enough load at that point to starve this
-        # worker thread past 20s on ~75% of runs.
-        provider._drain_capture(timeout_s=60.0)
+        print("DIAG after msg2 (pre-drain): buffer=%r pending=%r accepting=%r" % (
+            provider._capture_buffer,
+            getattr(provider._capture_worker, "_pending", None),
+            getattr(provider._capture_worker, "_accepting", None),
+        ), flush=True)
+        worker = provider._capture_worker
+        drained = worker.drain(timeout_s=60.0) if worker else None
+        print("DIAG post-drain: drained=%r buffer=%r calls=%r" % (
+            drained, provider._capture_buffer, client.calls,
+        ), flush=True)
 
         self.assertEqual(len(client.calls), 1)
         self.assertIn("Important project context number 1", client.calls[0])
