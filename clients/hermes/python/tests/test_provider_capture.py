@@ -401,7 +401,7 @@ class ProviderCaptureTests(unittest.TestCase):
         # Generous grace window: drain() itself is event-driven (condition
         # variable, not polling), but a loaded CI runner can starve the
         # worker thread past a tight bound.
-        provider._drain_capture(timeout_s=5.0)
+        provider._drain_capture(timeout_s=20.0)
 
         self.assertEqual(len(client.calls), 1)
         self.assertIn("Important project context number 1", client.calls[0])
