@@ -32107,6 +32107,30 @@ function formatMemorySearchResults(bundles, options = {}) {
   return `${header}
 ${bundles.map(formatBundle).join("\n\n")}`;
 }
+function memorySearchResultsData(bundles) {
+  return bundles.map((bundle) => {
+    const episode = bundle.episode;
+    const facts = (bundle.edges ?? []).map((edge) => edge.fact).filter((fact) => Boolean(fact)).slice(0, 3).map((fact) => neutralizeInjection(truncateText2(fact, 180)));
+    return {
+      name: neutralizeInjection(
+        truncateText2(episode.name || episode.summary || "Memory", 180)
+      ),
+      summary: episode.summary ? neutralizeInjection(truncateText2(episode.summary, 240)) : void 0,
+      source: episode.source ?? void 0,
+      relevance_score: typeof bundle.relevance_score === "number" ? bundle.relevance_score : void 0,
+      valid_at: episode.valid_at || episode.created_at || void 0,
+      facts: facts.length > 0 ? facts : void 0
+    };
+  });
+}
+function wikiDocumentsData(docs) {
+  return docs.map((doc) => ({
+    id: doc.id,
+    title: neutralizeInjection(truncateText2(doc.title, 180)),
+    collection_name: doc.collection_name ?? void 0,
+    similarity: typeof doc.similarity === "number" ? doc.similarity : void 0
+  }));
+}
 function formatWikiDocument(doc, index) {
   const score = typeof doc.similarity === "number" ? ` score=${doc.similarity.toFixed(3)}` : "";
   const collection = doc.collection_name ? ` collection=${doc.collection_name}` : "";
@@ -32321,12 +32345,21 @@ async function success2(text) {
 }
 async function jsonSuccess(payload) {
   const notice = await consumeUpdateNotice().catch(() => null);
-  const text = JSON.stringify(
-    notice ? { ...payload, update_notice: notice } : payload,
-    null,
-    2
-  );
-  return { content: [{ type: "text", text }] };
+  const structuredContent = notice ? { ...payload, update_notice: notice } : payload;
+  return {
+    content: [
+      { type: "text", text: JSON.stringify(structuredContent, null, 2) }
+    ],
+    structuredContent
+  };
+}
+async function structuredSuccess(text, payload) {
+  const notice = await consumeUpdateNotice().catch(() => null);
+  const structuredContent = notice ? { ...payload, update_notice: notice } : payload;
+  return {
+    content: [{ type: "text", text }],
+    structuredContent
+  };
 }
 function duplicateMcpConfigs() {
   const candidates = [
@@ -32420,6 +32453,18 @@ async function main() {
           "Defaults to summary (bounded tool-metadata digests; conversation text is never captured). Use off to disable automatic capture; explicit memory and wiki saves still work."
         )
       },
+      outputSchema: {
+        message: external_exports.string(),
+        logged_in: external_exports.boolean(),
+        auto_capture: CaptureModeSchema,
+        session_start_context: external_exports.enum(["off", "minimal", "profile"]),
+        project: external_exports.string().nullable(),
+        profile: external_exports.record(external_exports.string(), external_exports.unknown()),
+        account_switched: external_exports.boolean(),
+        stale_session_context_warning: external_exports.string().optional(),
+        latest_context_note: external_exports.string(),
+        update_notice: external_exports.string().optional()
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -32456,6 +32501,13 @@ async function main() {
       title: "Disconnect Membase",
       description: "Remove local Membase OAuth credentials for this Claude Code plugin installation and disable auto-capture.",
       inputSchema: {},
+      outputSchema: {
+        message: external_exports.string(),
+        logged_in: external_exports.boolean(),
+        auto_capture: CaptureModeSchema,
+        stale_session_context_warning: external_exports.string().optional(),
+        update_notice: external_exports.string().optional()
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -32480,6 +32532,20 @@ async function main() {
       title: "Get Membase Plugin Status",
       description: "Check local Membase plugin auth, capture mode, session start context, project scope, pending spool count, safe account-identifying profile fields, and duplicate remote MCP config hints.",
       inputSchema: {},
+      outputSchema: {
+        plugin_version: external_exports.string(),
+        api_url: external_exports.string(),
+        logged_in: external_exports.boolean(),
+        auto_recall: external_exports.boolean(),
+        auto_wiki_recall: external_exports.boolean(),
+        auto_capture: CaptureModeSchema,
+        session_start_context: external_exports.enum(["off", "minimal", "profile"]),
+        pending_capture_spool: external_exports.number(),
+        project: external_exports.string().nullable(),
+        duplicate_remote_mcp_configs: external_exports.array(external_exports.string()),
+        profile: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+        update_notice: external_exports.string().optional()
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -32531,6 +32597,10 @@ async function main() {
         ),
         metadata: MemoryMetadataSchema.describe("Reserved for internal use.")
       },
+      outputSchema: {
+        message: external_exports.string(),
+        status: external_exports.string()
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -32554,7 +32624,8 @@ async function main() {
         project: args.project
       });
       await client.recordUsage().catch(() => void 0);
-      return success2(`Stored in Membase (${result.status}).`);
+      const message = `Stored in Membase (${result.status}).`;
+      return structuredSuccess(message, { message, status: result.status });
     }
   );
   server.registerTool(
@@ -32612,6 +32683,22 @@ async function main() {
         sources: external_exports.array(external_exports.string()).optional(),
         project: MemoryProjectSchema
       },
+      outputSchema: {
+        count: external_exports.number(),
+        limit: external_exports.number(),
+        offset: external_exports.number(),
+        has_more: external_exports.boolean(),
+        results: external_exports.array(
+          external_exports.object({
+            name: external_exports.string(),
+            summary: external_exports.string().optional(),
+            source: external_exports.string().optional(),
+            relevance_score: external_exports.number().optional(),
+            valid_at: external_exports.string().optional(),
+            facts: external_exports.array(external_exports.string()).optional()
+          })
+        )
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -32630,12 +32717,21 @@ async function main() {
       });
       await client.recordUsage().catch(() => void 0);
       const displayedBundles = bundles.slice(0, requestedLimit);
-      return success2(
+      const offset = args.offset ?? 0;
+      const hasMore = bundles.length > requestedLimit || probeLimit === requestedLimit && bundles.length >= requestedLimit;
+      return structuredSuccess(
         formatMemorySearchResults(displayedBundles, {
           limit: requestedLimit,
-          offset: args.offset ?? 0,
-          hasMore: bundles.length > requestedLimit || probeLimit === requestedLimit && bundles.length >= requestedLimit
-        })
+          offset,
+          hasMore
+        }),
+        {
+          count: displayedBundles.length,
+          limit: requestedLimit,
+          offset,
+          has_more: hasMore,
+          results: memorySearchResultsData(displayedBundles)
+        }
       );
     }
   );
@@ -32645,6 +32741,9 @@ async function main() {
       title: "Get Current Date",
       description: "Return current UTC date/time. Use before relative date memory searches.",
       inputSchema: {},
+      outputSchema: {
+        now_utc: external_exports.string()
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -32652,7 +32751,8 @@ async function main() {
       }
     },
     async () => {
-      return success2(`now_utc: ${(/* @__PURE__ */ new Date()).toISOString()}`);
+      const now_utc = (/* @__PURE__ */ new Date()).toISOString();
+      return structuredSuccess(`now_utc: ${now_utc}`, { now_utc });
     }
   );
   server.registerTool(
@@ -32665,6 +32765,17 @@ async function main() {
         limit: external_exports.number().int().min(1).max(20).optional().default(10),
         collection: external_exports.string().max(200).optional()
       },
+      outputSchema: {
+        count: external_exports.number(),
+        documents: external_exports.array(
+          external_exports.object({
+            id: external_exports.string(),
+            title: external_exports.string(),
+            collection_name: external_exports.string().optional(),
+            similarity: external_exports.number().optional()
+          })
+        )
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -32675,8 +32786,11 @@ async function main() {
       const { client } = requireClient();
       const docs = await client.searchWiki(args);
       await client.recordUsage().catch(() => void 0);
-      if (docs.length === 0) return success2("No wiki documents found.");
-      return success2(docs.map(formatWikiDocument).join("\n\n"));
+      const text = docs.length === 0 ? "No wiki documents found." : docs.map(formatWikiDocument).join("\n\n");
+      return structuredSuccess(text, {
+        count: docs.length,
+        documents: wikiDocumentsData(docs)
+      });
     }
   );
   server.registerTool(
@@ -32689,6 +32803,10 @@ async function main() {
         content: external_exports.string().min(1).max(1e5),
         collection: external_exports.string().max(200).optional(),
         summarize: external_exports.boolean().optional().default(false)
+      },
+      outputSchema: {
+        id: external_exports.string(),
+        title: external_exports.string()
       },
       annotations: {
         readOnlyHint: false,
@@ -32705,7 +32823,10 @@ async function main() {
       }
       const doc = await client.addWiki(args);
       await client.recordUsage().catch(() => void 0);
-      return success2(`Wiki document created: "${doc.title}" (ID: ${doc.id}).`);
+      return structuredSuccess(
+        `Wiki document created: "${doc.title}" (ID: ${doc.id}).`,
+        { id: doc.id, title: doc.title }
+      );
     }
   );
   server.registerTool(
@@ -32718,6 +32839,10 @@ async function main() {
         title: external_exports.string().min(1).max(500).optional(),
         content: external_exports.string().max(1e5).optional(),
         collection: external_exports.string().max(200).optional()
+      },
+      outputSchema: {
+        id: external_exports.string(),
+        title: external_exports.string()
       },
       annotations: {
         readOnlyHint: false,
@@ -32735,7 +32860,10 @@ async function main() {
       }
       const doc = await client.updateWiki(args);
       await client.recordUsage().catch(() => void 0);
-      return success2(`Wiki document updated: "${doc.title}" (ID: ${doc.id}).`);
+      return structuredSuccess(
+        `Wiki document updated: "${doc.title}" (ID: ${doc.id}).`,
+        { id: doc.id, title: doc.title }
+      );
     }
   );
   server.registerTool(
@@ -32748,6 +32876,10 @@ async function main() {
         confirm: external_exports.boolean().describe(
           "Must be true only after the user explicitly confirms this permanent deletion."
         )
+      },
+      outputSchema: {
+        doc_id: external_exports.string(),
+        deleted: external_exports.boolean()
       },
       annotations: {
         readOnlyHint: false,
@@ -32764,7 +32896,10 @@ async function main() {
       }
       await client.deleteWiki(args.doc_id);
       await client.recordUsage().catch(() => void 0);
-      return success2(`Wiki document deleted: ${args.doc_id}.`);
+      return structuredSuccess(`Wiki document deleted: ${args.doc_id}.`, {
+        doc_id: args.doc_id,
+        deleted: true
+      });
     }
   );
   server.registerResource(
