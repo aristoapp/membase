@@ -42,15 +42,6 @@
         "read_only_justification": "Tool modifies local plugin credentials and configuration state during OAuth flow.",
         "open_world_justification": "Tool initiates external OAuth authentication with membase.so, establishing connection to external API.",
         "destructive_justification": "Tool is non-destructive; it stores credentials and settings without deleting existing data."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "logged_in": {"type": "boolean", "description": "True if OAuth login succeeded"},
-          "email": {"type": "string", "description": "Authenticated user email"},
-          "profile": {"type": "object", "description": "User profile data"}
-        },
-        "required": ["logged_in"]
       }
     },
     "logout": {
@@ -63,14 +54,6 @@
         "read_only_justification": "Tool deletes local OAuth tokens and resets plugin configuration.",
         "open_world_justification": "Tool only operates on local plugin state; no external world access.",
         "destructive_justification": "Tool is non-destructive; it clears local credentials without affecting cloud data."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string", "description": "Logout confirmation message"},
-          "logged_in": {"type": "boolean", "description": "False after successful logout"}
-        },
-        "required": ["message", "logged_in"]
       }
     },
     "get_status": {
@@ -83,18 +66,6 @@
         "read_only_justification": "Tool retrieves current plugin state and configuration; no modifications.",
         "open_world_justification": "Tool only queries local plugin state and optional profile from authenticated API.",
         "destructive_justification": "Tool is read-only and non-destructive."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "plugin_version": {"type": "string"},
-          "logged_in": {"type": "boolean"},
-          "auto_recall": {"type": "boolean"},
-          "auto_wiki_recall": {"type": "boolean"},
-          "pending_capture_spool": {"type": "integer"},
-          "project": {"type": ["string", "null"]},
-          "profile": {"type": "object"}
-        }
       }
     },
     "set_project_config": {
@@ -107,13 +78,6 @@
         "read_only_justification": "Tool modifies local project scoping configuration (auto/manual/off mode).",
         "open_world_justification": "Tool only operates on local plugin configuration; constrained to predefined config modes.",
         "destructive_justification": "Tool is non-destructive; it updates settings without deleting data."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string"},
-          "current_project": {"type": ["string", "null"]}
-        }
       }
     },
     "add_memory": {
@@ -126,14 +90,6 @@
         "read_only_justification": "Tool creates and stores new long-term memories in Membase backend.",
         "open_world_justification": "Tool only operates on user's private Membase memory; no public internet state change.",
         "destructive_justification": "Tool is non-destructive; it appends new memories without modifying existing data."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string", "description": "Storage confirmation with status"},
-          "status": {"type": "string", "enum": ["stored", "indexed"]},
-          "timestamp": {"type": "string", "format": "date-time"}
-        }
       }
     },
     "store_handoff": {
@@ -146,14 +102,6 @@
         "read_only_justification": "Tool creates or replaces the current handoff summary for a project.",
         "open_world_justification": "Tool accepts arbitrary user-provided handoff content in any language.",
         "destructive_justification": "Tool destructively replaces any older handoff for the same project (keeps exactly one per project)."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string"},
-          "status": {"type": "string"},
-          "replaced": {"type": "integer", "description": "Number of older handoffs replaced"}
-        }
       }
     },
     "search_memory": {
@@ -166,26 +114,6 @@
         "read_only_justification": "Tool searches and retrieves memories without modification.",
         "open_world_justification": "Tool only queries user's private Membase memory; no public internet state change.",
         "destructive_justification": "Tool is read-only and non-destructive."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {"type": "string"},
-                "content": {"type": "string"},
-                "timestamp": {"type": "string"},
-                "project": {"type": ["string", "null"]},
-                "relevance": {"type": "number"}
-              }
-            }
-          },
-          "hasMore": {"type": "boolean"},
-          "total": {"type": "integer"}
-        }
       }
     },
     "get_current_date": {
@@ -198,12 +126,6 @@
         "read_only_justification": "Tool returns the current date/time in the user's Membase timezone and UTC; no state modification.",
         "open_world_justification": "Tool computes the time server-side for the authenticated user; no external world interaction.",
         "destructive_justification": "Tool is read-only and non-destructive."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "now_utc": {"type": "string", "format": "date-time", "description": "Current UTC timestamp"}
-        }
       }
     },
     "search_wiki": {
@@ -216,24 +138,6 @@
         "read_only_justification": "Tool searches and retrieves wiki documents without modification.",
         "open_world_justification": "Tool accepts optional collection filters; queries are constrained to user's wiki.",
         "destructive_justification": "Tool is read-only and non-destructive."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {"type": "string"},
-                "title": {"type": "string"},
-                "content": {"type": "string"},
-                "collection": {"type": "string"},
-                "updated_at": {"type": "string"}
-              }
-            }
-          }
-        }
       }
     },
     "add_wiki": {
@@ -246,15 +150,6 @@
         "read_only_justification": "Tool creates new wiki documents with user-provided title and content.",
         "open_world_justification": "Tool only stores content in user's private wiki; no external world state change.",
         "destructive_justification": "Tool is non-destructive; it appends new documents without modifying existing wiki."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string"},
-          "id": {"type": "string", "description": "Unique identifier for created document"},
-          "title": {"type": "string"},
-          "created_at": {"type": "string", "format": "date-time"}
-        }
       }
     },
     "update_wiki": {
@@ -267,15 +162,6 @@
         "read_only_justification": "Tool modifies existing wiki document title, content, or collection by ID.",
         "open_world_justification": "Tool requires specific document UUID; updates are constrained to user's wiki.",
         "destructive_justification": "Content updates replace the document body in place with no version history, so overwritten content is unrecoverable; flagged destructive accordingly."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string"},
-          "id": {"type": "string"},
-          "title": {"type": "string"},
-          "updated_at": {"type": "string", "format": "date-time"}
-        }
       }
     },
     "delete_wiki": {
@@ -288,14 +174,6 @@
         "read_only_justification": "Tool deletes a wiki document by ID from permanent storage.",
         "open_world_justification": "Tool operates only within the user's private Membase wiki; no external world interaction.",
         "destructive_justification": "Tool permanently and irreversibly deletes wiki documents; flagged destructive so host clients can require user confirmation, and the tool description instructs the model to confirm with the user first."
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "message": {"type": "string"},
-          "id": {"type": "string"},
-          "deleted": {"type": "boolean"}
-        }
       }
     }
   },

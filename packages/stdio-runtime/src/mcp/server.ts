@@ -515,7 +515,8 @@ async function main(): Promise<void> {
       },
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        // No version history; updates replace the document body in place.
+        destructiveHint: true,
         openWorldHint: false,
       },
     },
