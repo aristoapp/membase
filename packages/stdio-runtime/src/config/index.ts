@@ -24,7 +24,15 @@ export function getDataDir(): string {
     // state dir — or a shared one for a single machine-wide login. Without
     // it, each client's descriptor default keeps state per client.
     process.env.MEMBASE_DATA_DIR ||
-    process.env.CLAUDE_PLUGIN_DATA ||
+    // CLAUDE_PLUGIN_DATA is Claude Code's per-plugin data-dir channel — but
+    // codex sets the same variable on plugin hooks as an OOTB-compat alias,
+    // pointing at ITS plugin data root. Honoring it there silently moved the
+    // hook's state away from ~/.membase/codex (where login lives), so every
+    // codex plugin-hook run saw a fresh, logged-out dir (2026-07-12). Only
+    // the detected Claude host may use this channel.
+    (MEMORY_SOURCE === "claude-code"
+      ? process.env.CLAUDE_PLUGIN_DATA
+      : undefined) ||
     join(homedir(), ...homeDataDirSegments(MEMORY_SOURCE));
   // MCP-client env entries are not shell-expanded, so `~/...` arrives literal.
   return dir.startsWith("~/") ? join(homedir(), dir.slice(2)) : dir;
