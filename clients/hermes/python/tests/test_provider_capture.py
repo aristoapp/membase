@@ -5,6 +5,9 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import httpx
 
 from membase_hermes.capture import CaptureJob, CaptureWorker
 from membase_hermes.config import MembaseConfig
@@ -275,14 +278,139 @@ class ProviderCaptureTests(unittest.TestCase):
                 self.assertEqual(record["project"], "Docs")
                 self.assertIn("Hermes conversation capture", record["metadata"]["title"])
 
+    def test_declined_spool_parts_retained_and_session_id_threaded(self) -> None:
+        # Every part fails to upload, and the spool declines each one (dedup or
+        # lock timeout). The declined parts must be retained in RAM (not lost
+        # from both disk and memory), and the real session id must reach the
+        # spool so its dedup key isn't the 'unknown' fallback.
+        class DecliningSpool:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def enqueue_capture(self, **kwargs: object) -> None:
+                self.calls.append(kwargs)
+                return None
+
+        class AlwaysFailClient(RecordingClient):
+            def create_wiki_document(
+                self,
+                title: str,
+                content: str,
+                *,
+                project: str | None = None,
+                source_metadata: dict[str, object] | None = None,
+            ) -> dict[str, str]:
+                raise RuntimeError("persistent wiki outage")
+
+        spool = DecliningSpool()
+        worker = CaptureWorker(
+            client=AlwaysFailClient(),  # type: ignore[arg-type]
+            max_retries=0,
+            retry_delay_s=0,
+            spool=spool,  # type: ignore[arg-type]
+        )
+        worker.start()
+        self.assertTrue(worker.enqueue(CaptureJob(content="B" * 140_000, session_id="sess-42")))
+        self.assertTrue(worker.drain(timeout_s=1.0))
+        worker.stop()
+
+        self.assertTrue(spool.calls)
+        # Nothing dropped: every declined part is kept in RAM for retry.
+        self.assertEqual(len(worker._pending_declined), len(spool.calls))
+        self.assertTrue(all(call["session_id"] == "sess-42" for call in spool.calls))
+        self.assertTrue(all(rec["session_id"] == "sess-42" for rec in worker._pending_declined))
+
+    def test_timeout_retry_probes_and_skips_persisted_part(self) -> None:
+        # Part 1's create times out client-side after the server write landed.
+        # The retry must probe by title and skip it instead of duplicating it.
+        class TimeoutThenClient(RecordingClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.timed_out = False
+
+            def create_wiki_document(
+                self,
+                title: str,
+                content: str,
+                *,
+                project: str | None = None,
+                source_metadata: dict[str, object] | None = None,
+            ) -> dict[str, str]:
+                if not self.timed_out and source_metadata and source_metadata.get("part_index") == 1:
+                    self.timed_out = True
+                    raise httpx.ReadTimeout("client-side timeout")
+                return super().create_wiki_document(
+                    title, content, project=project, source_metadata=source_metadata
+                )
+
+            def search_wiki(self, query: str, limit: int = 10, project: str | None = None, **_: object) -> dict[str, object]:
+                # The timed-out part-1 write actually persisted server-side.
+                return {"documents": [{"title": query}]}
+
+        client = TimeoutThenClient()
+        worker = CaptureWorker(
+            client=client,  # type: ignore[arg-type]
+            max_retries=1,
+            retry_delay_s=0,
+        )
+        worker.start()
+        self.assertTrue(worker.enqueue(CaptureJob(content="A" * 140_000)))
+        self.assertTrue(worker.drain(timeout_s=1.0))
+        worker.stop()
+
+        created = [m.get("part_index") for m in client.source_metadata if m is not None]
+        self.assertEqual(created.count(1), 0)
+        self.assertIn(2, created)
+
+    def test_success_text_does_not_block_on_slow_usage_ping(self) -> None:
+        # _success_text decorates all 16 successful tool responses; the ambient
+        # usage ping must run off-thread so a slow POST never delays the reply.
+        class SlowUsageClient:
+            def __init__(self) -> None:
+                self.pinged = threading.Event()
+
+            def is_authenticated(self) -> bool:
+                return True
+
+            def record_agent_usage(self) -> None:
+                self.pinged.set()
+                time.sleep(2.0)
+
+            def close(self) -> None:
+                return None
+
+        client = SlowUsageClient()
+        provider = MembaseMemoryProvider()
+        provider._client = client  # type: ignore[assignment]
+
+        started = time.perf_counter()
+        result = provider._success_text("done")
+        elapsed = time.perf_counter() - started
+
+        self.assertEqual(result, "done")
+        self.assertLess(elapsed, 0.3)
+        # It really fired, just on the daemon thread.
+        self.assertTrue(client.pinged.wait(timeout=1.0))
+
     def test_silence_timeout_flushes_previous_capture_window(self) -> None:
         client = RecordingClient()
         provider = make_provider(client)
 
         provider.sync_turn(memory_text(1), "", session_id="session")
-        provider._last_capture_ts = time.monotonic() - SILENCE_TIMEOUT_S - 1
-        provider.sync_turn(memory_text(2), "", session_id="session")
-        provider._drain_capture(timeout_s=1.0)
+        # Fixed, comfortably-large monotonic baseline instead of subtracting
+        # from the real time.monotonic(): on a freshly booted CI container
+        # the real value can be under SILENCE_TIMEOUT_S (300s) since boot,
+        # so the subtraction went negative and silently defeated the ">0"
+        # unset-sentinel guard in _flush_capture_if_needed (timed_out then
+        # evaluated False no matter how stale the timestamp actually was).
+        stale_ts = 10_000.0
+        provider._last_capture_ts = stale_ts
+        with patch(
+            "membase_hermes.provider.time.monotonic",
+            return_value=stale_ts + SILENCE_TIMEOUT_S + 1,
+        ):
+            provider.sync_turn(memory_text(2), "", session_id="session")
+        provider._drain_capture(timeout_s=3.0)
 
         self.assertEqual(len(client.calls), 1)
         self.assertIn("Important project context number 1", client.calls[0])

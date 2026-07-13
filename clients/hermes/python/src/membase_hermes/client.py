@@ -13,9 +13,11 @@ import httpx
 from . import __version__ as _HERMES_VERSION
 from .wiki_project import resolve_wiki_project_input
 
-# Wiki-transcript capture uploads whole conversation chunks (up to ~95k chars)
-# through create_wiki_document; the old 15s budget aborted them on slow links.
-DEFAULT_TIMEOUT_S = 180.0
+# Snappy default for the interactive calls (recall/search/profile/usage) that
+# gate a tool response. Only wiki-document uploads (whole conversation chunks up
+# to ~95k chars) need a long budget and get it via a per-request timeout below.
+DEFAULT_TIMEOUT_S = 15.0
+WIKI_UPLOAD_TIMEOUT_S = 180.0
 USER_AGENT = f"membase-hermes/{_HERMES_VERSION}"
 TokenRefreshCallback = Callable[[str, str], None]
 
@@ -190,6 +192,7 @@ class MembaseClient:
         json_body: dict[str, Any] | None = None,
         form_body: dict[str, Any] | None = None,
         expect_json: bool = True,
+        timeout: float | None = None,
     ) -> Any:
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -201,6 +204,9 @@ class MembaseClient:
             headers["Content-Type"] = "application/json"
 
         url = f"{self.api_url}{path}"
+        # Omit `timeout` to inherit the client's snappy default; a caller passes
+        # one only for the slow wiki-upload path (httpx honors per-request timeout).
+        request_kwargs: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
         self._log("%s %s", method, path)
         # Snapshot the refresh generation of the token we're about to sign with,
         # BEFORE sending. If this request 401s and another thread refreshed in
@@ -214,6 +220,7 @@ class MembaseClient:
             params=params,
             json=json_body,
             data=form_body,
+            **request_kwargs,
         )
         can_remint = bool(self.service_client_id and self.service_client_secret)
         if response.status_code == 401 and (self.refresh_token or can_remint):
@@ -229,6 +236,7 @@ class MembaseClient:
                 params=params,
                 json=json_body,
                 data=form_body,
+                **request_kwargs,
             )
 
         if response.status_code >= 400:
@@ -439,12 +447,19 @@ class MembaseClient:
                 "host": "hermes",
             },
         }
+        # Project/collection-name routing wins when both are given; collection_id
+        # is the fallback (matches the pre-rewrite precedence).
         if project_value:
             body["project"] = project_value
+        elif collection_id:
+            body["collection_id"] = collection_id
         payload = self._request(
             "POST",
             "/wiki/documents",
             json_body=body,
+            # Wiki uploads carry whole conversation chunks; only this call gets
+            # the long budget so slow links don't abort a large document.
+            timeout=WIKI_UPLOAD_TIMEOUT_S,
         )
         return payload if isinstance(payload, dict) else {}
 

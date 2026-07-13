@@ -22,6 +22,7 @@ from membase_hermes.sanitize import (
     SECRET_ASSIGNMENT_RE,
     SIMPLE_TAG_RE,
     is_casual_chat,
+    looks_sensitive,
     neutralize_injection,
     MEMBASE_HANDOFF_BLOCK_RE,
     sanitize_membase_text,
@@ -92,6 +93,30 @@ class SanitizeVectorTests(unittest.TestCase):
             self.assertEqual(
                 neutralize_injection(case["in"]), case["out"], case["in"]
             )
+
+    def test_looks_sensitive_ignores_legitimate_docs(self) -> None:
+        # False positives the over-broad gates used to flag: TOKEN as an infix of
+        # a lowercase word, and a JS `process.env.X` property access. A
+        # `.env.example` is a placeholder filename carrying no secret, so it is
+        # deliberately NOT flagged.
+        for text in (
+            "max_tokens=4096",
+            "process.env.NODE_ENV",
+            "process.env.PORT",
+            "see .env.example",
+        ):
+            self.assertFalse(looks_sensitive(text), text)
+
+    def test_looks_sensitive_still_flags_real_secrets(self) -> None:
+        # Values use placeholder prefixes so the repo secret-hygiene gate treats
+        # them as fixtures; detection keys on the `keyword=` shape, not the value.
+        for text in (
+            "token=example-abc123def456",
+            "password=example-hunter2xyz",
+            "AWS_SECRET_ACCESS_KEY=example-wJalrXUtnFEMIK7MDENG",
+            "config lives in .env.local",
+        ):
+            self.assertTrue(looks_sensitive(text), text)
 
     def test_sanitize_membase_text_neutralizes_unbalanced_tags(self) -> None:
         # Pair-removal alone misses standalone closing tags; the recall path

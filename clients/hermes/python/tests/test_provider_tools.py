@@ -455,6 +455,38 @@ class ProviderToolTests(unittest.TestCase):
         self.assertEqual(client.created, [])
         self.assertEqual(client.updated, [])
 
+    def test_create_wiki_sends_collection_id_when_no_project(self) -> None:
+        # The legacy collection_id must reach the request body as the fallback
+        # when no project/collection name is given.
+        bodies: list[dict[str, Any] | None] = []
+        client = MembaseClient(
+            "https://api.test",
+            AuthState(access_token="a", refresh_token="r", client_id="c"),
+        )
+
+        def fake_request(
+            method: str,
+            path: str,
+            *,
+            params: Any = None,
+            json_body: dict[str, Any] | None = None,
+            form_body: dict[str, Any] | None = None,
+            expect_json: bool = True,
+            timeout: float | None = None,
+        ) -> dict[str, Any]:
+            bodies.append(json_body)
+            return {"id": "doc-1"}
+
+        client._request = fake_request  # type: ignore[method-assign]
+        try:
+            client.create_wiki_document("Title", "Body", collection_id="col-xyz")
+        finally:
+            client.close()
+
+        assert bodies[0] is not None
+        self.assertEqual(bodies[0].get("collection_id"), "col-xyz")
+        self.assertNotIn("project", bodies[0])
+
     def test_client_wiki_methods_send_project_payloads(self) -> None:
         calls: list[dict[str, Any]] = []
         client = MembaseClient(
@@ -470,6 +502,7 @@ class ProviderToolTests(unittest.TestCase):
             json_body: dict[str, Any] | None = None,
             form_body: dict[str, Any] | None = None,
             expect_json: bool = True,
+            timeout: float | None = None,
         ) -> dict[str, Any]:
             calls.append(
                 {
@@ -479,6 +512,7 @@ class ProviderToolTests(unittest.TestCase):
                     "json_body": json_body,
                     "form_body": form_body,
                     "expect_json": expect_json,
+                    "timeout": timeout,
                 },
             )
             return {"id": "doc-1", "title": "Title"}
