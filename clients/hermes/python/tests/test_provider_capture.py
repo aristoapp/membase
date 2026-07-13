@@ -5,6 +5,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 
@@ -392,27 +393,24 @@ class ProviderCaptureTests(unittest.TestCase):
         self.assertTrue(client.pinged.wait(timeout=1.0))
 
     def test_silence_timeout_flushes_previous_capture_window(self) -> None:
-        import os
-        os.environ["MEMBASE_DIAG_FLUSH"] = "1"
         client = RecordingClient()
         provider = make_provider(client)
 
         provider.sync_turn(memory_text(1), "", session_id="session")
-        print("DIAG after msg1: buffer=%r pending=%r" % (
-            provider._capture_buffer, getattr(provider._capture_worker, "_pending", None),
-        ), flush=True)
-        provider._last_capture_ts = time.monotonic() - SILENCE_TIMEOUT_S - 1
-        provider.sync_turn(memory_text(2), "", session_id="session")
-        print("DIAG after msg2 (pre-drain): buffer=%r pending=%r accepting=%r" % (
-            provider._capture_buffer,
-            getattr(provider._capture_worker, "_pending", None),
-            getattr(provider._capture_worker, "_accepting", None),
-        ), flush=True)
-        worker = provider._capture_worker
-        drained = worker.drain(timeout_s=60.0) if worker else None
-        print("DIAG post-drain: drained=%r buffer=%r calls=%r" % (
-            drained, provider._capture_buffer, client.calls,
-        ), flush=True)
+        # Fixed, comfortably-large monotonic baseline instead of subtracting
+        # from the real time.monotonic(): on a freshly booted CI container
+        # the real value can be under SILENCE_TIMEOUT_S (300s) since boot,
+        # so the subtraction went negative and silently defeated the ">0"
+        # unset-sentinel guard in _flush_capture_if_needed (timed_out then
+        # evaluated False no matter how stale the timestamp actually was).
+        stale_ts = 10_000.0
+        provider._last_capture_ts = stale_ts
+        with patch(
+            "membase_hermes.provider.time.monotonic",
+            return_value=stale_ts + SILENCE_TIMEOUT_S + 1,
+        ):
+            provider.sync_turn(memory_text(2), "", session_id="session")
+        provider._drain_capture(timeout_s=3.0)
 
         self.assertEqual(len(client.calls), 1)
         self.assertIn("Important project context number 1", client.calls[0])
