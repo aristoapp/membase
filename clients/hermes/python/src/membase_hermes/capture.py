@@ -4,14 +4,22 @@ import logging
 import queue
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
+
+import httpx
 
 from .client import MembaseClient
 from .spool import CaptureSpool
 
 MAX_WIKI_CAPTURE_CHARS = 95_000
 CAPTURE_KIND_TRANSCRIPT = "conversation_transcript"
+# Cap on document parts the disk spool declined (dedup hit or lock timeout) that
+# we keep in RAM to retry; oldest dropped once full so the list can't grow
+# unbounded on a long-lived host.
+MAX_PENDING_DECLINED = 64
 
 
 @dataclass(frozen=True)
@@ -19,6 +27,7 @@ class CaptureJob:
     content: str
     title: str | None = None
     project: str | None = None
+    session_id: str | None = None
     source_metadata: dict[str, object] | None = None
 
 
@@ -87,6 +96,9 @@ class CaptureWorker:
         # `hermes-membase dream` can upload them later. Optional so
         # tests/callers without disk state still work.
         self._spool = spool
+        # Parts the spool declined after a failed upload; retried on the next
+        # failure cycle so they aren't lost from both disk and RAM.
+        self._pending_declined: deque[dict[str, Any]] = deque(maxlen=MAX_PENDING_DECLINED)
         self._queue: queue.Queue[CaptureJob | None] = queue.Queue(maxsize=max_queue_size)
         self._thread: threading.Thread | None = None
         self._accepting = False
@@ -191,12 +203,25 @@ class CaptureWorker:
         base_title = job.title or f"Hermes conversation capture - {captured_at}"
 
         next_chunk_index = 0
+        # A client-side timeout leaves the last part's server write in doubt:
+        # create_wiki_document is not idempotent, so re-POSTing a part that
+        # actually persisted would duplicate it. After a timeout only, probe for
+        # that one part by title before re-sending.
+        probe_resume = False
         for attempt in range(self.max_retries + 1):
             try:
                 for offset, chunk in enumerate(chunks[next_chunk_index:], start=next_chunk_index):
                     index = offset + 1
+                    title = part_title(base_title, index, len(chunks))
+                    if probe_resume and offset == next_chunk_index and self._wiki_part_exists(title, job.project):
+                        # Prior attempt timed out on this part but the write
+                        # landed; skip+advance instead of creating a duplicate.
+                        next_chunk_index = index
+                        probe_resume = False
+                        continue
+                    probe_resume = False
                     self.client.create_wiki_document(
-                        title=part_title(base_title, index, len(chunks)),
+                        title=title,
                         content=chunk,
                         project=job.project,
                         source_metadata={
@@ -212,11 +237,36 @@ class CaptureWorker:
                     next_chunk_index = index
                 return
             except Exception as error:
+                # Timeout = outcome-unknown, so the next attempt must probe.
+                # Any other error means the write did not land: no probe needed.
+                probe_resume = isinstance(error, httpx.TimeoutException)
                 if attempt >= self.max_retries:
                     self._spool_remaining(job, chunks, next_chunk_index, captured_at, base_title, error)
                     return
                 if self.retry_delay_s > 0:
                     time.sleep(self.retry_delay_s * (attempt + 1))
+
+    def _wiki_part_exists(self, title: str, project: str | None) -> bool:
+        """Best-effort idempotency probe for the timeout-retry path: is a wiki
+        doc with this exact title already present?"""
+        # ponytail: hybrid wiki search is not an exactness oracle — a busy
+        # collection could bury the just-written title past the probe limit and
+        # we'd re-create it. The real fix is a server-side idempotency key on
+        # create_wiki_document; this only collapses the common duplicate.
+        search = getattr(self.client, "search_wiki", None)
+        if not callable(search):
+            return False
+        try:
+            result = search(query=title, limit=5, project=project)
+        except Exception:
+            return False
+        docs = result.get("documents") if isinstance(result, dict) else None
+        if not isinstance(docs, list):
+            return False
+        return any(
+            isinstance(doc, dict) and str(doc.get("title", "")).strip() == title
+            for doc in docs
+        )
 
     def _spool_remaining(
         self,
@@ -228,25 +278,55 @@ class CaptureWorker:
         error: Exception,
     ) -> None:
         """Failure path: persist each unuploaded document part as its own spool
-        record so the dream drain resumes from the first unuploaded part."""
+        record so the dream drain resumes from the first unuploaded part. Parts
+        the spool declines (content-hash dedup or lock timeout) are kept in RAM
+        and retried on the next failure cycle instead of vanishing from both
+        disk and memory. Mirrors the OpenClaw runtime's declined-document
+        retention."""
         if self._spool is None:
             self.logger.debug("capture wiki save failed after retries: %s", error)
             return
+        # Retry anything a previous cycle's spool declined before adding more.
+        self._retry_pending_declined()
+        spooled = 0
         for offset, chunk in enumerate(chunks[next_chunk_index:], start=next_chunk_index):
-            self._spool.enqueue_capture(
-                content=chunk,
-                capture_kind=CAPTURE_KIND_TRANSCRIPT,
-                project=job.project,
-                metadata={
+            record: dict[str, Any] = {
+                "content": chunk,
+                "capture_kind": CAPTURE_KIND_TRANSCRIPT,
+                # Per-session dedup key: without this the spool falls back to
+                # 'unknown' and identical parts from the same session collide.
+                "session_id": job.session_id,
+                "project": job.project,
+                "metadata": {
                     **(job.source_metadata or {}),
                     "title": base_title,
                     "captured_at": captured_at,
                     "part_index": offset + 1,
                     "part_total": len(chunks),
                 },
-            )
+            }
+            if self._spool.enqueue_capture(**record) is None:
+                self._pending_declined.append(record)
+                self.logger.warning(
+                    "capture part %d/%d declined by spool (dedup or lock); retained in RAM for retry",
+                    offset + 1,
+                    len(chunks),
+                )
+            else:
+                spooled += 1
         self.logger.debug(
             "capture wiki save failed after retries; spooled %d part(s) for dream: %s",
-            len(chunks) - next_chunk_index,
+            spooled,
             error,
         )
+
+    def _retry_pending_declined(self) -> None:
+        """Re-offer previously declined parts to the spool; keep the ones still
+        declined (bounded by the deque's maxlen, oldest dropped)."""
+        if self._spool is None or not self._pending_declined:
+            return
+        pending = list(self._pending_declined)
+        self._pending_declined.clear()
+        for record in pending:
+            if self._spool.enqueue_capture(**record) is None:
+                self._pending_declined.append(record)
