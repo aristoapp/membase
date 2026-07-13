@@ -45,17 +45,20 @@ jobs:
 
       # The runtime ships TS sources and depends on @membase/capture-core
       # (workspace:* → exact version at pack time), so the dependency must
-      # exist on npm first. Idempotent: skipped when the version is already up.
+      # exist on npm first. The guard refuses to silently skip a version whose
+      # source changed without a bump (which would ship a stale sanitizer):
+      #   exit 10 = not published → publish; 0 = unchanged → skip; 1 = drifted → fail.
       - name: Publish @membase/capture-core dependency
-        working-directory: packages/capture-core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          V=$(node -p "require('./package.json').version")
-          if npm view "@membase/capture-core@$V" version >/dev/null 2>&1; then
-            echo "@membase/capture-core@$V already on npm — skipping"
+          node scripts/check-capture-core-publish.mjs packages/capture-core && rc=0 || rc=$?
+          if [ "$rc" = "10" ]; then
+            pnpm --filter @membase/capture-core publish --access public --no-git-checks
+          elif [ "$rc" = "0" ]; then
+            echo "capture-core already published and unchanged — skipping"
           else
-            pnpm publish --access public --no-git-checks
+            exit "$rc"
           fi
 
       - name: Publish to npm
