@@ -46,12 +46,16 @@ export function registerForgetTool(
       try {
         if (params.confirm && params.uuid) {
           await client.deleteMemory(params.uuid);
-          await client.recordAgentUsage();
+          // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+          // result (recordAgentUsage swallows its own errors).
+          void client.recordAgentUsage();
           return await toolResponse(`Memory deleted (${params.uuid}).`);
         }
 
         const bundles = await client.search(params.query, 5);
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         if (bundles.length === 0) {
           return await toolResponse("No matching memory found to forget.");
         }

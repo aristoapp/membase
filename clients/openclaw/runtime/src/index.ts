@@ -10,6 +10,7 @@ import {
 import {
   isInsideExtensionsDir,
   isRedactedTokenValue,
+  migrateLegacyStateDir,
   parseConfig,
   readTokenFile,
   resolveDefaultTokenFilePath,
@@ -142,6 +143,15 @@ export default {
   register(api: OpenClawPluginApi) {
     const rawPluginConfig = api.pluginConfig ?? {};
 
+    // ── Legacy state-dir migration ───────────────────────────────────────────
+    // When OPENCLAW_STATE_DIR points away from ~/.openclaw, an install that
+    // predates that support left its token file and capture spool under the old
+    // location. Bring them forward first so token resolution below finds them.
+    const hasExplicitTokenFile =
+      typeof rawPluginConfig.tokenFile === "string" &&
+      rawPluginConfig.tokenFile.trim() !== "";
+    migrateLegacyStateDir(hasExplicitTokenFile, api.logger);
+
     // ── Token file path migration ────────────────────────────────────────────
     // extensions/ is fully replaced on every plugin update/reinstall, so any
     // token file stored there will be silently deleted. Detect that pattern and
@@ -272,7 +282,6 @@ export default {
           ),
         );
     }
-
 
     const client = new MembaseClient(
       cfg.apiUrl.replace(/\/$/, ""),

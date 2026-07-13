@@ -350,6 +350,43 @@ describe("OpenClaw CLI commands", () => {
     );
     expect(fetchCalls).toBe(0);
   });
+
+  test("wiki-add forwards a -c collection UUID as collection_id, not a project name", async () => {
+    let handler: ((...args: unknown[]) => Promise<void> | void) | undefined;
+    const api = makeCliApi({
+      onHandler: (name, nextHandler) => {
+        if (name === "membase wiki-add <title>") handler = nextHandler;
+      },
+    });
+    let requestBody: unknown;
+    mockFetch((_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({
+        id: "doc-1",
+        user_id: "user-1",
+        collection_id: "00000000-0000-0000-0000-000000000001",
+        title: "CLI Title",
+        content: "CLI Body",
+        metadata: {},
+        status: "active",
+        source: "openclaw",
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T00:00:00Z",
+      });
+    });
+
+    registerCli(api, makeClient());
+    // commander maps `-c <uuid>` to opts.collectionId (never a project name).
+    await handler?.("CLI Title", {
+      content: "CLI Body",
+      collectionId: "00000000-0000-0000-0000-000000000001",
+    });
+
+    expect(requestBody).toMatchObject({
+      collection_id: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(requestBody).not.toHaveProperty("project");
+  });
 });
 
 describe("wiki client payloads", () => {
@@ -504,6 +541,61 @@ describe("wiki client payloads", () => {
       project: "Legacy Docs",
     });
     expect(requestBody).not.toHaveProperty("collection");
+  });
+
+  test("createWikiDocument files into a collection UUID when only an id is given", async () => {
+    let requestBody: unknown;
+    mockFetch((_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({
+        id: "doc-1",
+        user_id: "user-1",
+        collection_id: "00000000-0000-0000-0000-000000000001",
+        title: "Title",
+        content: "Content",
+        metadata: {},
+        status: "active",
+        source: "openclaw",
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T00:00:00Z",
+      });
+    });
+
+    await makeClient().createWikiDocument("Title", "Content", {
+      collectionId: "00000000-0000-0000-0000-000000000001",
+    });
+
+    expect(requestBody).toMatchObject({
+      collection_id: "00000000-0000-0000-0000-000000000001",
+    });
+    expect(requestBody).not.toHaveProperty("project");
+  });
+
+  test("a Project name takes precedence over a collection UUID", async () => {
+    let requestBody: unknown;
+    mockFetch((_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({
+        id: "doc-1",
+        user_id: "user-1",
+        collection_id: "collection-1",
+        title: "Title",
+        content: "Content",
+        metadata: {},
+        status: "active",
+        source: "openclaw",
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T00:00:00Z",
+      });
+    });
+
+    await makeClient().createWikiDocument("Title", "Content", {
+      project: "Docs",
+      collectionId: "00000000-0000-0000-0000-000000000001",
+    });
+
+    expect(requestBody).toMatchObject({ project: "Docs" });
+    expect(requestBody).not.toHaveProperty("collection_id");
   });
 });
 

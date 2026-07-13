@@ -9,9 +9,14 @@ import type {
 import { MembaseApiError } from "./types";
 import { resolveWikiProjectInput } from "./wiki-project";
 
-// Wiki writes can be slow server-side (capture transcripts are large and the
-// backend summarizes/routes synchronously); 15s aborted legitimate uploads.
-const DEFAULT_TIMEOUT_MS = 180_000;
+// Default per-request abort for interactive calls (recall, search, profile,
+// usage). Keep it short so a hung connection fails fast instead of stalling a
+// tool call for minutes.
+const DEFAULT_TIMEOUT_MS = 15_000;
+// Wiki document writes are the exception: capture transcripts are large and the
+// backend summarizes/routes them synchronously, so this one write gets a much
+// longer per-request timeout (applied via options.signal, not the whole client).
+const WIKI_WRITE_TIMEOUT_MS = 180_000;
 const USER_AGENT = `membase-openclaw/${pkg.version}`;
 
 export type TokenRefreshCallback = (tokens: {
@@ -255,6 +260,7 @@ export class MembaseClient {
     options?: {
       project?: string;
       collection?: string;
+      collectionId?: string;
       sourceMetadata?: Record<string, unknown>;
     },
   ): Promise<WikiDocumentResponse> {
@@ -275,10 +281,17 @@ export class MembaseClient {
     };
     if (projectInput.value) {
       body.project = projectInput.value;
+    } else if (options?.collectionId?.trim()) {
+      // Legacy: file into a specific collection by UUID when no Project name
+      // was given (project/collection-name takes precedence when both are set).
+      body.collection_id = options.collectionId.trim();
     }
     return this.request<WikiDocumentResponse>("/wiki/documents", {
       method: "POST",
       body: JSON.stringify(body),
+      // Wiki writes carry large capture transcripts and are summarized/routed
+      // synchronously — give this request the long timeout, not the whole client.
+      signal: AbortSignal.timeout(WIKI_WRITE_TIMEOUT_MS),
     });
   }
 

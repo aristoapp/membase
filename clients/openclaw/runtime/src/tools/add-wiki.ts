@@ -73,7 +73,9 @@ export function registerAddWikiTool(
             project: projectInput.value ?? undefined,
           },
         );
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         return await toolResponse(
           formatWikiCreateResult(doc, projectInput.value ?? undefined),
         );
