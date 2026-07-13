@@ -1,4 +1,4 @@
-import { chmodSync, readFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { writeJsonAtomic } from "@membase/capture-core";
@@ -39,11 +39,87 @@ export function membaseStateDir(): string {
   return join(resolveOpenClawStateDir(), "membase");
 }
 
-// Returns true if a path is inside extensions/ — that directory is fully replaced
-// whenever openclaw plugins update/reinstall, so token files stored there will be lost.
+// Returns true if a path is inside OpenClaw's own extensions/ — that directory
+// is fully replaced whenever openclaw plugins update/reinstall, so token files
+// stored there will be lost. Only the real OpenClaw extensions locations count
+// (state dir and the legacy ~/.openclaw); a generic "/extensions/" segment in an
+// operator-chosen path (e.g. ~/Dropbox/extensions/) must NOT be treated as
+// volatile plugin storage.
 export function isInsideExtensionsDir(tokenFile: string): boolean {
   const normalized = tokenFile.split("\\").join("/");
-  return normalized.includes("/extensions/");
+  const toExtensions = (dir: string) =>
+    `${dir.split("\\").join("/")}/extensions/`;
+  const stateExtensions = toExtensions(resolveOpenClawStateDir());
+  const legacyExtensions = toExtensions(join(homedir(), ".openclaw"));
+  return (
+    normalized.includes(stateExtensions) ||
+    normalized.includes(legacyExtensions)
+  );
+}
+
+// When OPENCLAW_STATE_DIR relocates the state dir away from the legacy
+// ~/.openclaw location, an older install left its token file and capture spool
+// behind. Copy them into the new location (never overwriting anything already
+// there) so an upgraded gateway stays authenticated and still drains the old
+// spool. No-op when the state dir already is ~/.openclaw.
+export function migrateLegacyStateDir(
+  hasExplicitTokenFile: boolean,
+  logger?: OpenClawPluginApi["logger"],
+): void {
+  const legacyStateDir = join(homedir(), ".openclaw");
+  if (resolveOpenClawStateDir() === legacyStateDir) return;
+
+  // Token file — only for the default path; an explicit tokenFile is the
+  // operator's own choice and is resolved directly.
+  if (!hasExplicitTokenFile) {
+    const newTokenFile = resolveDefaultTokenFilePath();
+    const legacyTokenFile = join(
+      legacyStateDir,
+      "credentials",
+      "openclaw-membase.json",
+    );
+    if (!existsSync(newTokenFile) && existsSync(legacyTokenFile)) {
+      const legacyTokens = readTokenFile(legacyTokenFile, logger);
+      if (legacyTokens.accessToken || legacyTokens.refreshToken) {
+        try {
+          writeTokenFile(newTokenFile, legacyTokens);
+          logger?.info(
+            "membase: migrated token file from ~/.openclaw to OPENCLAW_STATE_DIR",
+          );
+        } catch (err) {
+          logger?.error(
+            "membase: failed to migrate token file to OPENCLAW_STATE_DIR",
+            err,
+          );
+        }
+      }
+    }
+  }
+
+  // Capture spool — skip when MEMBASE_DATA_DIR pins it somewhere unrelated.
+  if (!process.env.MEMBASE_DATA_DIR?.trim()) {
+    const legacyMembaseDir = join(legacyStateDir, "membase");
+    const newMembaseDir = membaseStateDir();
+    if (legacyMembaseDir !== newMembaseDir && existsSync(legacyMembaseDir)) {
+      try {
+        // force:false + errorOnExist:false copies missing files and leaves any
+        // already present in the new dir untouched.
+        cpSync(legacyMembaseDir, newMembaseDir, {
+          recursive: true,
+          force: false,
+          errorOnExist: false,
+        });
+        logger?.info(
+          "membase: migrated capture spool from ~/.openclaw to OPENCLAW_STATE_DIR",
+        );
+      } catch (err) {
+        logger?.error(
+          "membase: failed to migrate capture spool to OPENCLAW_STATE_DIR",
+          err,
+        );
+      }
+    }
+  }
 }
 
 const KNOWN_KEYS = new Set([

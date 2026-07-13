@@ -131,7 +131,9 @@ export function registerSearchTool(
           params.sources,
           params.project,
         );
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         return await toolResponse(formatBundles(bundles));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

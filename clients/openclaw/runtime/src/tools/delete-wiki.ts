@@ -51,7 +51,9 @@ export function registerDeleteWikiTool(
       try {
         if (params.confirm && params.doc_id) {
           await client.deleteWikiDocument(params.doc_id);
-          await client.recordAgentUsage();
+          // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+          // result (recordAgentUsage swallows its own errors).
+          void client.recordAgentUsage();
           return await toolResponse(
             `Wiki document deleted (ID: ${params.doc_id})`,
           );
@@ -66,7 +68,9 @@ export function registerDeleteWikiTool(
         const result = await client.searchWiki(params.query, 5, {
           collectionId: params.collection_id,
         });
-        await client.recordAgentUsage();
+        // Fire-and-forget: a slow /agents/usage ping must never delay the tool
+        // result (recordAgentUsage swallows its own errors).
+        void client.recordAgentUsage();
         if (result.documents.length === 0) {
           return await toolResponse("No matching wiki document found.");
         }
