@@ -100,4 +100,42 @@ describe("stdio bundle client parameterization", () => {
       else process.env.CLAUDE_PLUGIN_DATA = prevClaude;
     }
   });
+
+  it("CLAUDE_PLUGIN_DATA is honored for Claude only — codex sets it too, at ITS plugin data root", () => {
+    const dataDirWithEnv = (env: Record<string, string | undefined>) => {
+      const childEnv: Record<string, string | undefined> = {
+        ...process.env,
+        MEMBASE_DATA_DIR: undefined,
+        ...env,
+      };
+      for (const [key, value] of Object.entries(childEnv)) {
+        if (value === undefined) delete childEnv[key];
+      }
+      const result = spawnSync(
+        "bun",
+        [
+          "-e",
+          'const c = await import("./src/config/index.ts"); console.log(c.getDataDir());',
+        ],
+        { cwd: RUNTIME_DIR, env: childEnv, encoding: "utf-8" },
+      );
+      return result.stdout.trim();
+    };
+    // Claude host: the variable is Claude's official per-plugin channel.
+    expect(
+      dataDirWithEnv({
+        MEMBASE_CLIENT_SOURCE: undefined,
+        CLAUDE_PLUGIN_DATA: "/tmp/claude-plugin-data",
+      }),
+    ).toBe("/tmp/claude-plugin-data");
+    // Codex host: codex injects the same variable as a compat alias pointing
+    // at its own plugin data root — honoring it moved hook state away from
+    // ~/.membase/codex, where login lives (2026-07-12 regression).
+    expect(
+      dataDirWithEnv({
+        MEMBASE_CLIENT_SOURCE: "codex",
+        CLAUDE_PLUGIN_DATA: "/tmp/codex-plugin-data",
+      }),
+    ).toEndWith(join(".membase", "codex"));
+  });
 });
