@@ -66,6 +66,61 @@ export function formatMemorySearchResults(
   return `${header}\n${bundles.map(formatBundle).join("\n\n")}`;
 }
 
+export interface MemorySearchResultData {
+  name: string;
+  summary?: string;
+  source?: string;
+  relevance_score?: number;
+  valid_at?: string;
+  facts?: string[];
+}
+
+// Mirrors formatBundle's field selection so the structured payload and the
+// human-readable text never drift.
+export function memorySearchResultsData(
+  bundles: EpisodeBundle[],
+): MemorySearchResultData[] {
+  return bundles.map((bundle) => {
+    const episode = bundle.episode;
+    const facts = (bundle.edges ?? [])
+      .map((edge) => edge.fact)
+      .filter((fact): fact is string => Boolean(fact))
+      .slice(0, 3)
+      .map((fact) => neutralizeInjection(truncateText(fact, 180)));
+    return {
+      name: neutralizeInjection(
+        truncateText(episode.name || episode.summary || "Memory", 180),
+      ),
+      summary: episode.summary
+        ? neutralizeInjection(truncateText(episode.summary, 240))
+        : undefined,
+      source: episode.source ?? undefined,
+      relevance_score:
+        typeof bundle.relevance_score === "number"
+          ? bundle.relevance_score
+          : undefined,
+      valid_at: episode.valid_at || episode.created_at || undefined,
+      facts: facts.length > 0 ? facts : undefined,
+    };
+  });
+}
+
+export interface WikiDocumentData {
+  id: string;
+  title: string;
+  collection_name?: string;
+  similarity?: number;
+}
+
+export function wikiDocumentsData(docs: WikiDocument[]): WikiDocumentData[] {
+  return docs.map((doc) => ({
+    id: doc.id,
+    title: neutralizeInjection(truncateText(doc.title, 180)),
+    collection_name: doc.collection_name ?? undefined,
+    similarity: typeof doc.similarity === "number" ? doc.similarity : undefined,
+  }));
+}
+
 export function formatWikiDocument(doc: WikiDocument, index: number): string {
   const score =
     typeof doc.similarity === "number"

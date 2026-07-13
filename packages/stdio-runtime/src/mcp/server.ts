@@ -25,6 +25,8 @@ import {
 import {
   formatMemorySearchResults,
   formatWikiDocument,
+  memorySearchResultsData,
+  wikiDocumentsData,
 } from "../format/index.js";
 import {
   accountProfileFields,
@@ -66,12 +68,32 @@ async function success(text: string) {
 
 async function jsonSuccess(payload: Record<string, unknown>) {
   const notice = await consumeUpdateNotice().catch(() => null);
-  const text = JSON.stringify(
-    notice ? { ...payload, update_notice: notice } : payload,
-    null,
-    2,
-  );
-  return { content: [{ type: "text" as const, text }] };
+  const structuredContent = notice
+    ? { ...payload, update_notice: notice }
+    : payload;
+  return {
+    content: [
+      { type: "text" as const, text: JSON.stringify(structuredContent, null, 2) },
+    ],
+    structuredContent,
+  };
+}
+
+// Like jsonSuccess, but keeps the existing human-readable text as the content
+// block (better for models to read) while still attaching structuredContent
+// for tools with an outputSchema.
+async function structuredSuccess(
+  text: string,
+  payload: Record<string, unknown>,
+) {
+  const notice = await consumeUpdateNotice().catch(() => null);
+  const structuredContent = notice
+    ? { ...payload, update_notice: notice }
+    : payload;
+  return {
+    content: [{ type: "text" as const, text }],
+    structuredContent,
+  };
 }
 
 function duplicateMcpConfigs(): string[] {
@@ -176,6 +198,18 @@ async function main(): Promise<void> {
           "Defaults to summary (bounded tool-metadata digests; conversation text is never captured). Use off to disable automatic capture; explicit memory and wiki saves still work.",
         ),
       },
+      outputSchema: {
+        message: z.string(),
+        logged_in: z.boolean(),
+        auto_capture: CaptureModeSchema,
+        session_start_context: z.enum(["off", "minimal", "profile"]),
+        project: z.string().nullable(),
+        profile: z.record(z.string(), z.unknown()),
+        account_switched: z.boolean(),
+        stale_session_context_warning: z.string().optional(),
+        latest_context_note: z.string(),
+        update_notice: z.string().optional(),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -220,6 +254,13 @@ async function main(): Promise<void> {
       description:
         "Remove local Membase OAuth credentials for this Claude Code plugin installation and disable auto-capture.",
       inputSchema: {},
+      outputSchema: {
+        message: z.string(),
+        logged_in: z.boolean(),
+        auto_capture: CaptureModeSchema,
+        stale_session_context_warning: z.string().optional(),
+        update_notice: z.string().optional(),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -248,6 +289,20 @@ async function main(): Promise<void> {
       description:
         "Check local Membase plugin auth, capture mode, session start context, project scope, pending spool count, safe account-identifying profile fields, and duplicate remote MCP config hints.",
       inputSchema: {},
+      outputSchema: {
+        plugin_version: z.string(),
+        api_url: z.string(),
+        logged_in: z.boolean(),
+        auto_recall: z.boolean(),
+        auto_wiki_recall: z.boolean(),
+        auto_capture: CaptureModeSchema,
+        session_start_context: z.enum(["off", "minimal", "profile"]),
+        pending_capture_spool: z.number(),
+        project: z.string().nullable(),
+        duplicate_remote_mcp_configs: z.array(z.string()),
+        profile: z.record(z.string(), z.unknown()).optional(),
+        update_notice: z.string().optional(),
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -305,6 +360,10 @@ async function main(): Promise<void> {
         ),
         metadata: MemoryMetadataSchema.describe("Reserved for internal use."),
       },
+      outputSchema: {
+        message: z.string(),
+        status: z.string(),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -333,7 +392,8 @@ async function main(): Promise<void> {
         project: args.project,
       });
       await client.recordUsage().catch(() => undefined);
-      return success(`Stored in Membase (${result.status}).`);
+      const message = `Stored in Membase (${result.status}).`;
+      return structuredSuccess(message, { message, status: result.status });
     },
   );
 
@@ -395,6 +455,22 @@ async function main(): Promise<void> {
         sources: z.array(z.string()).optional(),
         project: MemoryProjectSchema,
       },
+      outputSchema: {
+        count: z.number(),
+        limit: z.number(),
+        offset: z.number(),
+        has_more: z.boolean(),
+        results: z.array(
+          z.object({
+            name: z.string(),
+            summary: z.string().optional(),
+            source: z.string().optional(),
+            relevance_score: z.number().optional(),
+            valid_at: z.string().optional(),
+            facts: z.array(z.string()).optional(),
+          }),
+        ),
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -414,14 +490,23 @@ async function main(): Promise<void> {
       });
       await client.recordUsage().catch(() => undefined);
       const displayedBundles = bundles.slice(0, requestedLimit);
-      return success(
+      const offset = args.offset ?? 0;
+      const hasMore =
+        bundles.length > requestedLimit ||
+        (probeLimit === requestedLimit && bundles.length >= requestedLimit);
+      return structuredSuccess(
         formatMemorySearchResults(displayedBundles, {
           limit: requestedLimit,
-          offset: args.offset ?? 0,
-          hasMore:
-            bundles.length > requestedLimit ||
-            (probeLimit === requestedLimit && bundles.length >= requestedLimit),
+          offset,
+          hasMore,
         }),
+        {
+          count: displayedBundles.length,
+          limit: requestedLimit,
+          offset,
+          has_more: hasMore,
+          results: memorySearchResultsData(displayedBundles),
+        },
       );
     },
   );
@@ -433,6 +518,9 @@ async function main(): Promise<void> {
       description:
         "Return current UTC date/time. Use before relative date memory searches.",
       inputSchema: {},
+      outputSchema: {
+        now_utc: z.string(),
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -440,7 +528,8 @@ async function main(): Promise<void> {
       },
     },
     async () => {
-      return success(`now_utc: ${new Date().toISOString()}`);
+      const now_utc = new Date().toISOString();
+      return structuredSuccess(`now_utc: ${now_utc}`, { now_utc });
     },
   );
 
@@ -455,6 +544,17 @@ async function main(): Promise<void> {
         limit: z.number().int().min(1).max(20).optional().default(10),
         collection: z.string().max(200).optional(),
       },
+      outputSchema: {
+        count: z.number(),
+        documents: z.array(
+          z.object({
+            id: z.string(),
+            title: z.string(),
+            collection_name: z.string().optional(),
+            similarity: z.number().optional(),
+          }),
+        ),
+      },
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -465,8 +565,14 @@ async function main(): Promise<void> {
       const { client } = requireClient();
       const docs = await client.searchWiki(args);
       await client.recordUsage().catch(() => undefined);
-      if (docs.length === 0) return success("No wiki documents found.");
-      return success(docs.map(formatWikiDocument).join("\n\n"));
+      const text =
+        docs.length === 0
+          ? "No wiki documents found."
+          : docs.map(formatWikiDocument).join("\n\n");
+      return structuredSuccess(text, {
+        count: docs.length,
+        documents: wikiDocumentsData(docs),
+      });
     },
   );
 
@@ -481,6 +587,10 @@ async function main(): Promise<void> {
         content: z.string().min(1).max(100_000),
         collection: z.string().max(200).optional(),
         summarize: z.boolean().optional().default(false),
+      },
+      outputSchema: {
+        id: z.string(),
+        title: z.string(),
       },
       annotations: {
         readOnlyHint: false,
@@ -497,7 +607,10 @@ async function main(): Promise<void> {
       }
       const doc = await client.addWiki(args);
       await client.recordUsage().catch(() => undefined);
-      return success(`Wiki document created: "${doc.title}" (ID: ${doc.id}).`);
+      return structuredSuccess(
+        `Wiki document created: "${doc.title}" (ID: ${doc.id}).`,
+        { id: doc.id, title: doc.title },
+      );
     },
   );
 
@@ -512,6 +625,10 @@ async function main(): Promise<void> {
         title: z.string().min(1).max(500).optional(),
         content: z.string().max(100_000).optional(),
         collection: z.string().max(200).optional(),
+      },
+      outputSchema: {
+        id: z.string(),
+        title: z.string(),
       },
       annotations: {
         readOnlyHint: false,
@@ -532,7 +649,10 @@ async function main(): Promise<void> {
       }
       const doc = await client.updateWiki(args);
       await client.recordUsage().catch(() => undefined);
-      return success(`Wiki document updated: "${doc.title}" (ID: ${doc.id}).`);
+      return structuredSuccess(
+        `Wiki document updated: "${doc.title}" (ID: ${doc.id}).`,
+        { id: doc.id, title: doc.title },
+      );
     },
   );
 
@@ -550,6 +670,10 @@ async function main(): Promise<void> {
             "Must be true only after the user explicitly confirms this permanent deletion.",
           ),
       },
+      outputSchema: {
+        doc_id: z.string(),
+        deleted: z.boolean(),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -565,7 +689,10 @@ async function main(): Promise<void> {
       }
       await client.deleteWiki(args.doc_id);
       await client.recordUsage().catch(() => undefined);
-      return success(`Wiki document deleted: ${args.doc_id}.`);
+      return structuredSuccess(`Wiki document deleted: ${args.doc_id}.`, {
+        doc_id: args.doc_id,
+        deleted: true,
+      });
     },
   );
 
