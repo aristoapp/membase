@@ -57,8 +57,24 @@ OPENCLAW_TIMESTAMP_PREFIX_RE = re.compile(
     r"^\[[A-Za-z]{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+GMT[+-]\d+\]\s*",
     re.IGNORECASE | re.MULTILINE,
 )
+# The keyword must be a whole UPPER_SNAKE segment: optional PREFIX_ segments,
+# the keyword, optional _SUFFIX segments, then a non-identifier boundary. This
+# keeps whole-token secret names (MEMBASE_API_KEY, TOKEN) matching but rejects
+# max_tokens (TOKEN as an infix of a longer lowercase word).
 SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*[^\s`]+",
+    r"(?<![A-Za-z0-9_])"
+    r"((?:[A-Za-z0-9]+_)*(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY)(?:_[A-Za-z0-9]+)*)"
+    r"(?![A-Za-z0-9])"
+    r"\s*=\s*[^\s`]+",
+    re.IGNORECASE,
+)
+# A real dotenv reference (`.env`, `.env.local`), not a `process.env.X` property
+# access (keyword preceded by an alnum) nor a `.env.example` placeholder file.
+DOTENV_REF_RE = re.compile(
+    r"(?<![A-Za-z0-9])\.env"
+    r"(?!\.(?:example|sample|template)\b)"
+    r"(?:\.[A-Za-z0-9_-]+)?"
+    r"(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
 PRIVATE_BLOCK_RE = re.compile(r"<(private|membase-private)>[\s\S]*?</\1>\s*", re.IGNORECASE)
@@ -161,7 +177,7 @@ def looks_sensitive(text: str) -> bool:
         or CLI_SECRET_FLAG_RE.search(text)
         or COMMON_TOKEN_RE.search(text)
         or PRIVATE_KEY_RE.search(text)
-        or re.search(r"\.env(\.|$|\s)", text, re.IGNORECASE)
+        or DOTENV_REF_RE.search(text)
     )
 
 

@@ -227,6 +227,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         self._prefetch_running = False
         self._prefetch_lock = threading.Lock()
         self._known_wiki_projects: list[str] = []
+        # Per-session id threaded into captured jobs so the spool's dedup key is
+        # per-session rather than the 'unknown' fallback.
+        self._session_id: str = ""
 
     @property
     def name(self) -> str:
@@ -277,6 +280,8 @@ class MembaseMemoryProvider(HermesMemoryProvider):
             mirror_index_path.write_text("{}\n", encoding="utf-8")
 
     def initialize(self, session_id: str, **kwargs: Any) -> None:
+        if session_id:
+            self._session_id = session_id
         hermes_home_raw = kwargs.get("hermes_home")
         # Hermes passes agent_context through initialize kwargs only
         # ("primary" | "subagent" | "cron" | "flush"). Store for downstream
@@ -456,7 +461,9 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         if not self._capture_worker:
             self._logger.debug("capture worker unavailable; dropping auto-capture batch")
             return False
-        if not self._capture_worker.enqueue(CaptureJob(content=content)):
+        if not self._capture_worker.enqueue(
+            CaptureJob(content=content, session_id=self._session_id or None),
+        ):
             self._logger.debug("capture batch was not queued")
             return False
         return True
@@ -530,6 +537,8 @@ class MembaseMemoryProvider(HermesMemoryProvider):
     ) -> None:
         if self._agent_context != "primary":
             return
+        if session_id:
+            self._session_id = session_id
         # Capture path: redact secrets before the text ever enters the upload
         # buffer, not only when it falls back to the disk spool.
         safe_user_text = sanitize_capture_text(user_content or "")
@@ -931,13 +940,21 @@ class MembaseMemoryProvider(HermesMemoryProvider):
         return "Membase is disconnected. Run 'hermes membase login'."
 
     def _success_text(self, text: str) -> str:
-        """Single seam for decorating successful tool responses; also records
-        the ambient agents-usage signal (fire-and-forget)."""
-        try:
-            if self._client and self._client.is_authenticated():
-                self._client.record_agent_usage()
-        except Exception as error:
-            self._logger.debug("agent usage recording failed: %s", error)
+        """Single seam for decorating successful tool responses; also fires the
+        ambient agents-usage ping. record_agent_usage does a blocking POST, so
+        run it on a daemon thread with errors swallowed — the tool response must
+        never wait on it."""
+        client = self._client
+        if not (client and client.is_authenticated()):
+            return text
+
+        def _ping() -> None:
+            try:
+                client.record_agent_usage()
+            except Exception as error:  # pragma: no cover - defensive
+                self._logger.debug("agent usage recording failed: %s", error)
+
+        threading.Thread(target=_ping, name="membase-agent-usage", daemon=True).start()
         return text
 
     def _profile_text(self, client: MembaseClient) -> str:
