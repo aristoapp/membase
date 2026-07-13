@@ -398,22 +398,13 @@ class ProviderCaptureTests(unittest.TestCase):
         provider.sync_turn(memory_text(1), "", session_id="session")
         provider._last_capture_ts = time.monotonic() - SILENCE_TIMEOUT_S - 1
         provider.sync_turn(memory_text(2), "", session_id="session")
-        # Generous grace window: drain() itself is event-driven (condition
-        # variable, not polling), but a loaded CI runner can starve the
-        # worker thread past a tight bound.
-        worker = provider._capture_worker
-        drained = worker.drain(timeout_s=20.0) if worker else None
-        print(
-            "DIAG drained=%r pending=%r thread_alive=%r buffer=%r calls=%r"
-            % (
-                drained,
-                getattr(worker, "_pending", None),
-                bool(worker and worker._thread and worker._thread.is_alive()),
-                provider._capture_buffer,
-                client.calls,
-            ),
-            flush=True,
-        )
+        # drain() is condition-variable driven, not polling, so a large bound
+        # costs nothing on a healthy run. CI's "pnpm check + smoke" job runs
+        # heavy bun/node build+lint steps for five other client packages
+        # immediately before hermes:test; confirmed via CI diagnostics that
+        # the runner is still under enough load at that point to starve this
+        # worker thread past 20s on ~75% of runs.
+        provider._drain_capture(timeout_s=60.0)
 
         self.assertEqual(len(client.calls), 1)
         self.assertIn("Important project context number 1", client.calls[0])
