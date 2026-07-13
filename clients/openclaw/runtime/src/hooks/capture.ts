@@ -31,6 +31,42 @@ const pendingDocumentBuffers = new Map<string, CaptureDocumentPayload[]>();
 const silenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let flushSequence = 0;
 
+// Ceiling on RAM held by spool-declined capture parts across all channels. A
+// combined gateway+spool outage keeps declining parts and rescheduling flushes;
+// without a cap a busy channel grows pendingDocumentBuffers (each part up to
+// MAX_WIKI_CAPTURE_CHARS ≈ 95 KB) and its retry timers without bound until the
+// gateway is OOM-killed. When exceeded, the least-recently-retained keys are
+// dropped first (their timers cleared) — those parts are already gone from disk
+// too, so this is the last-resort loss the old MAX_RETAINED_MESSAGES cap named.
+export const MAX_RETAINED_DOCUMENTS = 16;
+
+// Retain (or clear) the spool-declined parts for one channel under a global
+// bound. Re-inserting moves the key to the most-recent position so eviction
+// drops the stalest channels first.
+export function retainDeclinedDocuments(
+  channelKey: string,
+  docs: CaptureDocumentPayload[],
+): void {
+  pendingDocumentBuffers.delete(channelKey);
+  if (docs.length === 0) return;
+  pendingDocumentBuffers.set(channelKey, docs);
+
+  let total = 0;
+  for (const retained of pendingDocumentBuffers.values()) {
+    total += retained.length;
+  }
+  for (const key of pendingDocumentBuffers.keys()) {
+    if (total <= MAX_RETAINED_DOCUMENTS) break;
+    total -= pendingDocumentBuffers.get(key)?.length ?? 0;
+    pendingDocumentBuffers.delete(key);
+    const timer = silenceTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      silenceTimers.delete(key);
+    }
+  }
+}
+
 function getChannelKey(event: Record<string, unknown>): string {
   // Newer OpenClaw gateways send a top-level sessionKey; prefer it.
   // Fall back to the legacy session object shape, then to "default".
@@ -191,6 +227,11 @@ async function flushBuffer(
         completedDocumentCount += 1;
         continue;
       }
+      // ponytail: createWikiDocument is not idempotent — a client-side timeout
+      // after the server already persisted the part makes the retry (spool
+      // drain or the next flush) re-create it, so a slow link can duplicate one
+      // part. Ceiling: at most one duplicate per timed-out part. Upgrade path:
+      // send a stable idempotency key in source_metadata and dedup server-side.
       await client.createWikiDocument(doc.title, doc.content, {
         sourceMetadata: doc.sourceMetadata,
       });
@@ -212,11 +253,7 @@ async function flushBuffer(
     const declinedDocuments = remainingDocuments.filter(
       (doc) => !spoolFailedDocument(doc, channelKey),
     );
-    if (declinedDocuments.length > 0) {
-      pendingDocumentBuffers.set(channelKey, declinedDocuments);
-    } else {
-      pendingDocumentBuffers.delete(channelKey);
-    }
+    retainDeclinedDocuments(channelKey, declinedDocuments);
     // Every remaining part landed on disk or in pendingDocumentBuffers, so the
     // source messages are no longer needed.
     if (!pendingDocuments || pendingDocuments.length === 0) {
@@ -285,6 +322,25 @@ function scheduleSilenceFlush(
       }
     }, SILENCE_TIMEOUT_MS),
   );
+}
+
+// Test-only: inspect and reset the bounded declined-document retention state.
+export function retainedStateForTest(): {
+  documentCount: number;
+  keyCount: number;
+} {
+  let documentCount = 0;
+  for (const docs of pendingDocumentBuffers.values()) {
+    documentCount += docs.length;
+  }
+  return { documentCount, keyCount: pendingDocumentBuffers.size };
+}
+
+export function clearRetainedForTest(): void {
+  for (const timer of silenceTimers.values()) clearTimeout(timer);
+  silenceTimers.clear();
+  pendingDocumentBuffers.clear();
+  messageBuffers.clear();
 }
 
 export function registerCaptureHook(
