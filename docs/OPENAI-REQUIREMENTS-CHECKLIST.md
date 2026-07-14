@@ -12,7 +12,7 @@ Based on: https://learn.chatgpt.com/docs/submit-plugins
 - [x] Developer or business identity verified
 - [x] "Apps Management" write access configured
 - [x] Support email: support@membase.so
-- [x] Organization: Membase (Aristo Technologies)
+- [x] Organization: Membase (Aristo Intelligence)
 
 **Reference:** Contact OpenAI support if identity verification needed
 
@@ -153,7 +153,7 @@ curl -X POST https://mcp.membase.so/mcp \
 | Category | Productivity |
 | Short Description | Persistent memory over MCP for ChatGPT — search, store, wiki, and handoffs. |
 | Long Description | Membase provides persistent long-term memory for ChatGPT using hybrid vector search and knowledge graphs. Share context across sessions, remember your preferences and past decisions, and maintain project continuity without re-explaining everything. |
-| Developer | Membase (Aristo Technologies) |
+| Developer | Membase (Aristo Intelligence) |
 | Website | https://membase.so |
 | Support Email | support@membase.so |
 | Privacy Policy | https://membase.so/privacy |

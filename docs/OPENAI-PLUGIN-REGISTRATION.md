@@ -92,7 +92,7 @@ The plugin supports:
 | **Plugin Name** | Membase |
 | **Description** | Connect ChatGPT to Membase persistent memory over MCP — memory search and store, wiki, and cross-session handoffs. |
 | **Category** | Productivity |
-| **Developer** | Membase (Aristo Technologies) |
+| **Developer** | Membase (Aristo Intelligence) |
 | **Website** | https://membase.so |
 | **Support Email** | support@membase.so |
 | **Privacy Policy URL** | https://membase.so/privacy |
