@@ -81,7 +81,7 @@ OAuth in under a minute.
 
 **Developer/Company Name:**
 ```
-Membase (Aristo Technologies)
+Membase (Aristo Intelligence)
 ```
 
 **Website URL:**
