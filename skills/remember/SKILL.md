@@ -12,8 +12,13 @@ Use `add_memory` when the user shares durable context worth remembering:
 - decisions and corrections
 - recurring technical setup or workflow facts
 
-When storing repository-specific context through MCP, read `membase://project`
-and pass the project slug explicitly.
+When storing repository-specific context, scope it to the project by passing a
+`project` slug to `add_memory`. Derive the slug from the repository — its git
+remote name or the working-directory name (e.g. `aristoapp/membase-plugin-mcp`
+→ `membase-plugin-mcp`). If you can't determine a slug, omit `project` rather
+than guessing. On the Claude Code plugin only, the `membase://project` resource
+returns the already-resolved slug; other clients (remote MCP) do not expose it,
+so don't depend on reading it.
 
 Do not store:
 
